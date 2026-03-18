@@ -2,19 +2,19 @@
 
 원격 서버의 날짜별 디렉토리를 SSH로 조회해 파일을 처리하는 배치 프로그램이다.
 
-현재 구현의 메인은 `Rubi(txt)` 파이프라인이며, `Rubp(tif)`도 날짜 폴더를 스캔하고 처리 이력 테이블을 거쳐 파일별로 stub를 호출하는 상태다.
+현재 구현의 메인은 `Rubi(txt)` 파이프라인이며, `Rubp(tif)`도 날짜 폴더를 스캔하고 처리 이력 테이블을 거쳐 `png` 변환까지 수행하는 상태다.
 
 ## 핵심 변경 사항
 
 - `Rubi`와 `Rubp`를 역할별로 분리했다.
   - `Rubi`: txt 파일을 원격에서 직접 읽고 파싱 후 DB 적재
-  - `Rubp`: tif 파일 목록을 조회하고, 처리 이력을 남기면서 서버 내 처리로 확장할 수 있게 분리
+  - `Rubp`: tif 파일 목록을 조회하고, 처리 이력을 남기면서 PNG 변환 처리로 확장할 수 있게 분리
 - 디렉토리 구조를 도메인 기준으로 재구성했다.
   - `remote_batch/app`: CLI, 실행 흐름
   - `remote_batch/common`: 공통 상수, 모델, 파일명 규칙
   - `remote_batch/infra`: SSH, DB, 공통 CRUD
   - `remote_batch/domains/rubi`: txt 파싱/처리
-  - `remote_batch/domains/rubp`: tif stub 처리
+  - `remote_batch/domains/rubp`: tif -> png 변환 처리
 - DB 접근은 `SQLAlchemy Engine` 기반으로 정리했다.
 - 파싱 결과 적재 전 `pandas DataFrame`으로 정규화한다.
 - 반복 SQL은 `CrudClient` 공통 계층으로 모았다.
@@ -61,7 +61,7 @@ flowchart LR
 
     A3 --> E1["Rubp tif 목록 조회"]
     E1 --> E2["처리 이력 조회"]
-    E2 --> E3["process_tif_stub() 호출"]
+    E2 --> E3["tif -> 축소 -> png 변환"]
     E3 --> E4["DONE 또는 FAIL 갱신"]
 ```
 
@@ -171,21 +171,23 @@ txt 파일은 로컬로 다운로드하지 않는다.
 - [`CrudClient`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/infra/crud.py#L23)
 - [`remote_batch/infra/db.py`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/infra/db.py#L19)
 
-### 7. Rubp(tif)는 이력 관리 후 stub 호출
+### 7. Rubp(tif)는 이력 관리 후 png 변환
 
-현재는 실제 tif 처리 전체를 구현하지 않았지만, 날짜 폴더 조회와 처리 이력 관리, 파일별 stub 호출까지는 연결해뒀다.
+현재는 `Rubp`를 실제로 `tif -> 해상도 축소 -> png 변환`까지 처리한다.
 
-- 로컬 다운로드 대신 서버 내 처리 방향 유지
+- 로컬 모드에서는 `OpenCV`로 직접 변환
+- 원격 모드에서는 `SSH`로 원격 `magick` 명령 실행
 - `.tif` 파일을 최근 N일 폴더에서 조회
 - `file_processing_history` 기준으로 `DONE/FAIL/PROCESSING` 상태 관리
-- 파일마다 `process_tif_stub()` 호출
-- 나중에 서버 명령 실행이나 서버 내 이미지 처리 로직을 붙일 수 있게 분리
+- 기본 출력 확장자는 `.png`
+- 기본 축소 비율은 `50%`
+- 결과는 `RUBP_OUTPUT_BASE_DIR/YYYYMMDD/*.png` 경로에 저장
 
 관련 코드:
 
 - [`run_batch()`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/app/runner.py#L13)
 - [`process_rubp_file()`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/domains/rubp/service.py#L19)
-- [`process_tif_stub()`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/domains/rubp/service.py#L8)
+- [`remote_batch/domains/rubp/service.py`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/domains/rubp/service.py)
 
 ## 실행 진입점
 
@@ -213,6 +215,9 @@ DB_PASSWORD=
 DB_NAME=pythonstudy_demo
 RUBI_BASE_DIR=/Users/parkjunho/PycharmProjects/PythonStudy/local_remote_data/Rubi
 RUBP_BASE_DIR=/Users/parkjunho/PycharmProjects/PythonStudy/local_remote_data/Rubp
+RUBP_OUTPUT_BASE_DIR=/Users/parkjunho/PycharmProjects/PythonStudy/local_remote_data/Rubp_png
+RUBP_SCALE_PERCENT=50
+RUBP_REMOTE_MAGICK_BIN=magick
 DAYS_BACK=3
 PROCESSING_TIMEOUT_MINUTES=120
 LOG_LEVEL=INFO
@@ -259,8 +264,7 @@ Rubi 대상 txt 파일 수: 3
 처리 이력에 DONE 또는 최근 PROCESSING 상태가 있어 skip: .../sw3qaG_20260317_193738.txt
 처리 이력에 DONE 또는 최근 PROCESSING 상태가 있어 skip: .../sw3qaG_20260318_193738.txt
 Rubp 대상 tif 파일 수: 1
-Rubp tif stub. 향후 서버 내 명령 실행으로 확장 예정: .../sw3qaG_20260318_233000.tif
-Rubp tif 처리 완료: .../sw3qaG_20260318_233000.tif
+Rubp tif 처리 완료: .../sw3qaG_20260318_233000.tif -> .../sw3qaG_20260318_233000.png
 ```
 
 ### 다시 처리 로그를 보고 싶을 때

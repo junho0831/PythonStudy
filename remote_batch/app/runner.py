@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from remote_batch.common.constants import SOURCE_RUBI_TXT, SOURCE_RUBP_TIF
-from remote_batch.domains.rubp.service import process_rubp_file, process_tif_stub
+from remote_batch.domains.rubp.service import process_rubp_file
 from remote_batch.domains.rubi.service import process_rubi_file
 from remote_batch.infra.db import connect_db
 from remote_batch.infra.local_fs import list_local_files, read_local_text_file
@@ -57,7 +57,9 @@ def run_batch(args: argparse.Namespace, *, build_recent_date_dirs) -> None:
                     engine=engine,
                     remote_file=remote_file,
                     processing_timeout_minutes=args.processing_timeout_minutes,
-                    process_tif=process_tif_stub,
+                    output_base_dir=args.rubp_output_base_dir,
+                    scale_percent=args.rubp_scale_percent,
+                    remote_magick_bin=args.rubp_remote_magick_bin,
                     ssh_client=None,
                 )
         else:
@@ -92,7 +94,9 @@ def run_batch(args: argparse.Namespace, *, build_recent_date_dirs) -> None:
                         engine=engine,
                         remote_file=remote_file,
                         processing_timeout_minutes=args.processing_timeout_minutes,
-                        process_tif=process_tif_stub,
+                        output_base_dir=args.rubp_output_base_dir,
+                        scale_percent=args.rubp_scale_percent,
+                        remote_magick_bin=args.rubp_remote_magick_bin,
                         ssh_client=ssh_client,
                     )
     finally:

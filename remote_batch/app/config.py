@@ -80,6 +80,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--db-name", default=get_setting("DB_NAME", "DB_NAME"))
     parser.add_argument("--rubi-base-dir", default=get_setting("RUBI_BASE_DIR", "RUBI_BASE_DIR", "/data/Rubi"))
     parser.add_argument("--rubp-base-dir", default=get_setting("RUBP_BASE_DIR", "RUBP_BASE_DIR", "/data/Rubp"))
+    parser.add_argument(
+        "--rubp-output-base-dir",
+        default=get_setting("RUBP_OUTPUT_BASE_DIR", "RUBP_OUTPUT_BASE_DIR", "/data/Rubp_png"),
+    )
+    parser.add_argument(
+        "--rubp-scale-percent",
+        type=int,
+        default=int(get_setting("RUBP_SCALE_PERCENT", "RUBP_SCALE_PERCENT", 50)),
+    )
+    parser.add_argument(
+        "--rubp-remote-magick-bin",
+        default=get_setting("RUBP_REMOTE_MAGICK_BIN", "RUBP_REMOTE_MAGICK_BIN", "magick"),
+    )
     parser.add_argument("--days-back", type=int, default=int(get_setting("DAYS_BACK", "DAYS_BACK", 3)))
     parser.add_argument(
         "--processing-timeout-minutes",
@@ -112,6 +125,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError(f"필수 인자가 비어 있습니다: {', '.join(missing)}")
     if args.days_back < 1:
         raise ValueError("days_back은 1 이상이어야 합니다.")
+    if args.rubp_scale_percent <= 0 or args.rubp_scale_percent > 100:
+        raise ValueError("rubp_scale_percent는 1 이상 100 이하여야 합니다.")
 
 
 def build_recent_date_dirs(days_back: int, today: date | None = None) -> list[str]:
