@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import stat
 from pathlib import PurePosixPath
 
@@ -78,3 +79,26 @@ def read_remote_text_file(sftp: paramiko.SFTPClient, remote_path: str) -> str:
             continue
     LOGGER.warning("utf-8/cp949 디코딩 실패. replace 모드로 진행합니다: %s", remote_path)
     return raw_bytes.decode("utf-8", errors="replace")
+
+
+def read_remote_binary_file(sftp: paramiko.SFTPClient, remote_path: str) -> bytes:
+    with sftp.open(remote_path, "rb") as remote_file:
+        return remote_file.read()
+
+
+def ensure_remote_dir(sftp: paramiko.SFTPClient, remote_dir: str) -> None:
+    current = PurePosixPath("/")
+    for part in PurePosixPath(remote_dir).parts:
+        if part == "/":
+            continue
+        current = current / part
+        try:
+            sftp.stat(str(current))
+        except FileNotFoundError:
+            sftp.mkdir(str(current))
+
+
+def write_remote_binary_file(sftp: paramiko.SFTPClient, remote_path: str, content: bytes) -> None:
+    ensure_remote_dir(sftp, os.path.dirname(remote_path))
+    with sftp.open(remote_path, "wb") as remote_file:
+        remote_file.write(content)

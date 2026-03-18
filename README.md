@@ -1,6 +1,6 @@
 # Remote Batch Processor
 
-원격 서버의 날짜별 디렉토리를 SSH로 조회해 파일을 처리하는 배치 프로그램이다.
+원격 서버의 날짜별 디렉토리를 SSH/SFTP로 조회해 파일을 처리하는 배치 프로그램이다.
 
 현재 구현의 메인은 `Rubi(txt)` 파이프라인이며, `Rubp(tif)`도 날짜 폴더를 스캔하고 처리 이력 테이블을 거쳐 `png` 변환까지 수행하는 상태다.
 
@@ -8,11 +8,11 @@
 
 - `Rubi`와 `Rubp`를 역할별로 분리했다.
   - `Rubi`: txt 파일을 원격에서 직접 읽고 파싱 후 DB 적재
-  - `Rubp`: tif 파일 목록을 조회하고, 처리 이력을 남기면서 PNG 변환 처리로 확장할 수 있게 분리
+  - `Rubp`: tif 파일 목록을 조회하고, 처리 이력을 남기면서 SFTP 기반 PNG 변환 처리로 확장할 수 있게 분리
 - 디렉토리 구조를 도메인 기준으로 재구성했다.
   - `remote_batch/app`: CLI, 실행 흐름
   - `remote_batch/common`: 공통 상수, 모델, 파일명 규칙
-  - `remote_batch/infra`: SSH, DB, 공통 CRUD
+  - `remote_batch/infra`: SSH/SFTP, DB, 공통 CRUD
   - `remote_batch/domains/rubi`: txt 파싱/처리
   - `remote_batch/domains/rubp`: tif -> png 변환 처리
 - DB 접근은 `SQLAlchemy Engine` 기반으로 정리했다.
@@ -22,6 +22,15 @@
   - 테이블은 사전에 한 번만 생성해 두고, 배치는 처리만 수행한다.
 
 ## 핵심 로직
+
+본 프로그램은 `Rubi(txt)`와 `Rubp(tif)` 두 가지 도메인 데이터를 처리합니다. 
+
+1. **파일 스캔**: `io_mode` 설정에 따라 로컬 디렉토리 또는 SSH/SFTP를 통해 원격 디렉토리의 최근 N일치 폴더를 스캔합니다.
+2. **이력 제어**: DB의 `file_processing_history` 테이블을 조회하여 이미 성공(`DONE`)했거나 현재 진행 중(`PROCESSING`)인 파일은 건너뜁니다.
+3. **도메인 작업**:
+   - **Rubi**: 텍스트 파일을 읽어 파싱한 후 결과를 DB에 저장합니다.
+   - **Rubp**: TIF 파일을 SFTP로 읽어 설정된 비율로 리사이즈한 후 PNG 형식으로 저장합니다. 원격 모드에서는 로컬에서 변환한 뒤 SFTP로 다시 업로드합니다.
+4. **상태 업데이트**: 작업 성공 시 `DONE`, 예외 발생 시 `FAIL`로 이력을 업데이트합니다.
 
 ## 처리 흐름도
 
@@ -61,7 +70,7 @@ flowchart LR
 
     A3 --> E1["Rubp tif 목록 조회"]
     E1 --> E2["처리 이력 조회"]
-    E2 --> E3["tif -> 축소 -> png 변환"]
+    E2 --> E3["SFTP download -> 축소 -> png -> upload"]
     E3 --> E4["DONE 또는 FAIL 갱신"]
 ```
 
@@ -176,7 +185,7 @@ txt 파일은 로컬로 다운로드하지 않는다.
 현재는 `Rubp`를 실제로 `tif -> 해상도 축소 -> png 변환`까지 처리한다.
 
 - 로컬 모드에서는 `OpenCV`로 직접 변환
-- 원격 모드에서는 `SSH`로 원격 `magick` 명령 실행
+- 원격 모드에서는 `SFTP`로 tif를 읽어 로컬에서 변환한 뒤 결과 png를 다시 업로드
 - `.tif` 파일을 최근 N일 폴더에서 조회
 - `file_processing_history` 기준으로 `DONE/FAIL/PROCESSING` 상태 관리
 - 기본 출력 확장자는 `.png`
@@ -217,7 +226,6 @@ RUBI_BASE_DIR=/Users/parkjunho/PycharmProjects/PythonStudy/local_remote_data/Rub
 RUBP_BASE_DIR=/Users/parkjunho/PycharmProjects/PythonStudy/local_remote_data/Rubp
 RUBP_OUTPUT_BASE_DIR=/Users/parkjunho/PycharmProjects/PythonStudy/local_remote_data/Rubp_png
 RUBP_SCALE_PERCENT=50
-RUBP_REMOTE_MAGICK_BIN=magick
 DAYS_BACK=3
 PROCESSING_TIMEOUT_MINUTES=120
 LOG_LEVEL=INFO

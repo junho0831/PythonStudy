@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import logging
-import shlex
 from pathlib import Path, PurePosixPath
 
+import cv2
+import numpy as np
 from sqlalchemy.engine import Engine
 
-from remote_batch.infra.db import acquire_processing_slot, begin_transaction, mark_history_done, mark_history_fail
+from remote_batch.infra.db import acquire_processing_slot, mark_history_done, mark_history_fail
+from remote_batch.infra.ssh import read_remote_binary_file, write_remote_binary_file
 
 LOGGER = logging.getLogger("remote_batch")
 
@@ -18,53 +20,33 @@ def _build_output_path(file_path: str, output_base_dir: str, *, is_remote: bool)
     return str(path_cls(output_base_dir) / dated_dir / f"{input_path.stem}.png")
 
 
-def _convert_local_tif_to_png(input_path: str, output_path: str, scale_percent: int) -> None:
-    import cv2
-
-    image = cv2.imread(input_path, cv2.IMREAD_UNCHANGED)
+def _convert_tif_bytes_to_png_bytes(raw_bytes: bytes, scale_percent: int) -> bytes:
+    tif_buffer = np.frombuffer(raw_bytes, dtype=np.uint8)
+    image = cv2.imdecode(tif_buffer, cv2.IMREAD_UNCHANGED)
     if image is None:
-        raise ValueError(f"TIF 이미지를 읽지 못했습니다: {input_path}")
+        raise ValueError("TIF 이미지를 읽지 못했습니다.")
     height, width = image.shape[:2]
     new_width = max(1, round(width * scale_percent / 100))
     new_height = max(1, round(height * scale_percent / 100))
     resized = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_AREA)
+    success, png_buffer = cv2.imencode(".png", resized, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+    if not success:
+        raise OSError("PNG 바이너리 인코딩 실패")
+    return png_buffer.tobytes()
+
+
+def _convert_local_tif_to_png(input_path: str, output_path: str, scale_percent: int) -> None:
+    png_bytes = _convert_tif_bytes_to_png_bytes(Path(input_path).read_bytes(), scale_percent)
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    write_ok = cv2.imwrite(output_path, resized, [cv2.IMWRITE_PNG_COMPRESSION, 9])
-    if not write_ok:
-        raise OSError(f"PNG 저장 실패: {output_path}")
+    Path(output_path).write_bytes(png_bytes)
 
 
-def _convert_remote_tif_to_png(
-    ssh_client,
-    input_path: str,
-    output_path: str,
-    scale_percent: int,
-    remote_magick_bin: str,
-) -> None:
-    output_dir = str(PurePosixPath(output_path).parent)
-    quoted_magick = shlex.quote(remote_magick_bin)
-    command = (
-        f"mkdir -p {shlex.quote(output_dir)} && "
-        f"{quoted_magick} {shlex.quote(input_path)} "
-        f"-resize {scale_percent}% "
-        f"-strip "
-        f"-define png:compression-level=9 "
-        f"{shlex.quote(output_path)}"
+def _convert_remote_tif_to_png(sftp, input_path: str, output_path: str, scale_percent: int) -> None:
+    png_bytes = _convert_tif_bytes_to_png_bytes(
+        read_remote_binary_file(sftp, input_path),
+        scale_percent,
     )
-    _stdin, stdout, stderr = ssh_client.exec_command(command)
-    exit_code = stdout.channel.recv_exit_status()
-    std_out = stdout.read().decode("utf-8", errors="replace").strip()
-    std_err = stderr.read().decode("utf-8", errors="replace").strip()
-    if exit_code != 0:
-        raise RuntimeError(
-            f"원격 PNG 변환 실패(exit={exit_code}): {std_err or std_out or command}"
-        )
-    check_command = f"test -f {shlex.quote(output_path)}"
-    _stdin, stdout, stderr = ssh_client.exec_command(check_command)
-    exit_code = stdout.channel.recv_exit_status()
-    std_err = stderr.read().decode("utf-8", errors="replace").strip()
-    if exit_code != 0:
-        raise RuntimeError(f"원격 PNG 결과 파일이 없습니다: {output_path} {std_err}".strip())
+    write_remote_binary_file(sftp, output_path, png_bytes)
 
 
 def process_rubp_file(
@@ -74,8 +56,7 @@ def process_rubp_file(
     processing_timeout_minutes: int,
     output_base_dir: str,
     scale_percent: int,
-    remote_magick_bin: str,
-    ssh_client=None,
+    sftp=None,
 ) -> None:
     history_id = acquire_processing_slot(engine, remote_file, processing_timeout_minutes)
     if history_id is None:
@@ -87,23 +68,17 @@ def process_rubp_file(
     output_path = _build_output_path(
         remote_file.file_path,
         output_base_dir,
-        is_remote=ssh_client is not None,
+        is_remote=sftp is not None,
     )
     try:
-        if ssh_client is None:
+        if sftp is None:
             _convert_local_tif_to_png(remote_file.file_path, output_path, scale_percent)
         else:
-            _convert_remote_tif_to_png(
-                ssh_client,
-                remote_file.file_path,
-                output_path,
-                scale_percent,
-                remote_magick_bin,
-            )
-        with begin_transaction(engine) as conn:
+            _convert_remote_tif_to_png(sftp, remote_file.file_path, output_path, scale_percent)
+        with engine.begin() as conn:
             mark_history_done(conn, history_id)
         LOGGER.info("Rubp tif 처리 완료: %s -> %s", remote_file.file_path, output_path)
     except Exception as exc:
         LOGGER.exception("Rubp tif 처리 실패: %s", remote_file.file_path)
-        with begin_transaction(engine) as conn:
+        with engine.begin() as conn:
             mark_history_fail(conn, history_id, exc)

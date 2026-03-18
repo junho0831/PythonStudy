@@ -27,9 +27,6 @@ class CrudClient:
     def fetch_one(self, query: str, params: Mapping[str, Any] | None = None):
         return self.bind.execute(text(query), dict(params or {})).fetchone()
 
-    def fetch_all(self, query: str, params: Mapping[str, Any] | None = None):
-        return self.bind.execute(text(query), dict(params or {})).fetchall()
-
     def execute(self, query: str, params: Mapping[str, Any] | None = None) -> Result:
         return self.bind.execute(text(query), dict(params or {}))
 

@@ -89,10 +89,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=int(get_setting("RUBP_SCALE_PERCENT", "RUBP_SCALE_PERCENT", 50)),
     )
-    parser.add_argument(
-        "--rubp-remote-magick-bin",
-        default=get_setting("RUBP_REMOTE_MAGICK_BIN", "RUBP_REMOTE_MAGICK_BIN", "magick"),
-    )
     parser.add_argument("--days-back", type=int, default=int(get_setting("DAYS_BACK", "DAYS_BACK", 3)))
     parser.add_argument(
         "--processing-timeout-minutes",

@@ -72,10 +72,6 @@ def acquire_processing_slot(
         return int(history_id)
 
 
-def begin_transaction(engine: Engine):
-    return engine.begin()
-
-
 def is_missing_value(value: object) -> bool:
     if value is None:
         return True

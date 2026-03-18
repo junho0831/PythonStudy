@@ -59,8 +59,7 @@ def run_batch(args: argparse.Namespace, *, build_recent_date_dirs) -> None:
                     processing_timeout_minutes=args.processing_timeout_minutes,
                     output_base_dir=args.rubp_output_base_dir,
                     scale_percent=args.rubp_scale_percent,
-                    remote_magick_bin=args.rubp_remote_magick_bin,
-                    ssh_client=None,
+                    sftp=None,
                 )
         else:
             LOGGER.info("I/O 모드: remote (SSH 사용)")
@@ -96,8 +95,7 @@ def run_batch(args: argparse.Namespace, *, build_recent_date_dirs) -> None:
                         processing_timeout_minutes=args.processing_timeout_minutes,
                         output_base_dir=args.rubp_output_base_dir,
                         scale_percent=args.rubp_scale_percent,
-                        remote_magick_bin=args.rubp_remote_magick_bin,
-                        ssh_client=ssh_client,
+                        sftp=sftp,
                     )
     finally:
         engine.dispose()
