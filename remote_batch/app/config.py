@@ -6,7 +6,6 @@ import os
 from datetime import date, datetime, timedelta
 
 from remote_batch.common.constants import LOCAL_TZ
-from remote_batch.common.file_rules import extract_file_datetime
 
 try:
     from remote_batch.app import local_settings

@@ -26,7 +26,10 @@ def process_rubi_file(
 ) -> None:
     history_id = acquire_processing_slot(engine, remote_file, processing_timeout_minutes)
     if history_id is None:
-        LOGGER.info("이미 처리 중이거나 완료된 파일이라 skip: %s", remote_file.file_path)
+        LOGGER.info(
+            "처리 이력에 DONE 또는 최근 PROCESSING 상태가 있어 skip: %s",
+            remote_file.file_path,
+        )
         return
     try:
         text = read_text_file(remote_file.file_path)
