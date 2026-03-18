@@ -1,4 +1,3 @@
 .idea/
 __pycache__/
 *.py[cod]
-remote_batch/app/local_settings.py

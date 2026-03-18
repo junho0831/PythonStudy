@@ -193,6 +193,27 @@ txt 파일은 로컬로 다운로드하지 않는다.
 
 - [`remote_batch_processor.py`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch_processor.py#L1)
 
+터미널 인자 없이 로컬에서 실행하려면 아래 프로퍼티 파일에 값을 넣으면 된다.
+
+- [`local.properties`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/app/local.properties)
+
+현재 로컬 테스트 기준 기본값:
+
+```properties
+IO_MODE=local
+SSH_HOST=127.0.0.1
+SSH_PORT=22
+SSH_USERNAME=parkjunho
+SSH_PASSWORD=
+SSH_KEY_FILE=/Users/parkjunho/.ssh/id_rsa
+DB_DSN=postgresql://parkjunho@127.0.0.1:5432/pythonstudy_demo
+RUBI_BASE_DIR=/Users/parkjunho/PycharmProjects/PythonStudy/local_remote_data/Rubi
+RUBP_BASE_DIR=/Users/parkjunho/PycharmProjects/PythonStudy/local_remote_data/Rubp
+DAYS_BACK=3
+PROCESSING_TIMEOUT_MINUTES=120
+LOG_LEVEL=INFO
+```
+
 예시:
 
 ```bash

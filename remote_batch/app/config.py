@@ -4,23 +4,35 @@ import argparse
 import logging
 import os
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from remote_batch.common.constants import LOCAL_TZ
+PROPERTIES_PATH = Path(__file__).with_name("local.properties")
 
-try:
-    from remote_batch.app import local_settings
-except ImportError:  # pragma: no cover
-    local_settings = None
+
+def load_properties(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+LOCAL_PROPERTIES = load_properties(PROPERTIES_PATH)
 
 
 def get_setting(name: str, env_name: str, default=None):
     env_value = os.getenv(env_name)
     if env_value not in (None, ""):
         return env_value
-    if local_settings is not None:
-        local_value = getattr(local_settings, name, default)
-        if local_value not in (None, ""):
-            return local_value
+    local_value = LOCAL_PROPERTIES.get(name, default)
+    if local_value not in (None, ""):
+        return local_value
     return default
 
 
