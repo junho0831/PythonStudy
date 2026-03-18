@@ -206,13 +206,19 @@ SSH_PORT=22
 SSH_USERNAME=parkjunho
 SSH_PASSWORD=
 SSH_KEY_FILE=/Users/parkjunho/.ssh/id_rsa
-DB_DSN=postgresql://parkjunho@127.0.0.1:5432/pythonstudy_demo
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_USER=parkjunho
+DB_PASSWORD=
+DB_NAME=pythonstudy_demo
 RUBI_BASE_DIR=/Users/parkjunho/PycharmProjects/PythonStudy/local_remote_data/Rubi
 RUBP_BASE_DIR=/Users/parkjunho/PycharmProjects/PythonStudy/local_remote_data/Rubp
 DAYS_BACK=3
 PROCESSING_TIMEOUT_MINUTES=120
 LOG_LEVEL=INFO
 ```
+
+`DB_DSN` 한 줄로도 줄 수 있지만, 현재 기본 설정은 위처럼 분리된 DB 프로퍼티를 조합해 사용한다.
 
 예시:
 

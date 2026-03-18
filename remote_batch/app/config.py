@@ -5,6 +5,7 @@ import logging
 import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from remote_batch.common.constants import LOCAL_TZ
 PROPERTIES_PATH = Path(__file__).with_name("local.properties")
@@ -36,6 +37,21 @@ def get_setting(name: str, env_name: str, default=None):
     return default
 
 
+def build_db_dsn(
+    *,
+    host: str | None,
+    port: int | None,
+    user: str | None,
+    password: str | None,
+    name: str | None,
+) -> str | None:
+    if not all([host, port, user, name]):
+        return None
+    user_part = quote_plus(str(user))
+    password_part = f":{quote_plus(str(password))}" if password else ""
+    return f"postgresql://{user_part}{password_part}@{host}:{port}/{name}"
+
+
 def configure_logging(level: str) -> None:
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
@@ -57,6 +73,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ssh-password", default=get_setting("SSH_PASSWORD", "SSH_PASSWORD"))
     parser.add_argument("--ssh-key-file", default=get_setting("SSH_KEY_FILE", "SSH_KEY_FILE"))
     parser.add_argument("--db-dsn", default=get_setting("DB_DSN", "DB_DSN"))
+    parser.add_argument("--db-host", default=get_setting("DB_HOST", "DB_HOST", "127.0.0.1"))
+    parser.add_argument("--db-port", type=int, default=int(get_setting("DB_PORT", "DB_PORT", 5432)))
+    parser.add_argument("--db-user", default=get_setting("DB_USER", "DB_USER"))
+    parser.add_argument("--db-password", default=get_setting("DB_PASSWORD", "DB_PASSWORD"))
+    parser.add_argument("--db-name", default=get_setting("DB_NAME", "DB_NAME"))
     parser.add_argument("--rubi-base-dir", default=get_setting("RUBI_BASE_DIR", "RUBI_BASE_DIR", "/data/Rubi"))
     parser.add_argument("--rubp-base-dir", default=get_setting("RUBP_BASE_DIR", "RUBP_BASE_DIR", "/data/Rubp"))
     parser.add_argument("--days-back", type=int, default=int(get_setting("DAYS_BACK", "DAYS_BACK", 3)))
@@ -67,6 +88,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--log-level", default=get_setting("LOG_LEVEL", "LOG_LEVEL", "INFO"))
     return parser
+
+
+def finalize_args(args: argparse.Namespace) -> argparse.Namespace:
+    if not args.db_dsn:
+        args.db_dsn = build_db_dsn(
+            host=args.db_host,
+            port=args.db_port,
+            user=args.db_user,
+            password=args.db_password,
+            name=args.db_name,
+        )
+    return args
 
 
 def validate_args(args: argparse.Namespace) -> None:
