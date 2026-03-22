@@ -8,7 +8,7 @@
 
 - `Rubi`와 `Rubp`를 역할별로 분리했다.
   - `Rubi`: txt 파일을 FTP로 읽고 파싱 후 DB 적재
-  - `Rubp`: tif 파일 목록을 조회하고, 처리 이력을 남기면서 FTP 기반 PNG 변환 처리로 확장할 수 있게 분리
+  - `Rubp`: tif 파일을 FTP로 읽어 로컬에서 축소 후 png로 변환하고 결과를 다시 업로드
 - 디렉토리 구조를 도메인 기준으로 재구성했다.
   - `remote_batch/app`: CLI, 실행 흐름
   - `remote_batch/common`: 공통 상수, 모델, 파일명 규칙
@@ -271,7 +271,7 @@ Rubi 대상 txt 파일 수: 3
 처리 이력에 DONE 또는 최근 PROCESSING 상태가 있어 skip: .../sw3qaG_20260317_193738.txt
 처리 이력에 DONE 또는 최근 PROCESSING 상태가 있어 skip: .../sw3qaG_20260318_193738.txt
 Rubp 대상 tif 파일 수: 1
-Rubp tif 처리 완료: .../sw3qaG_20260318_233000.tif -> .../sw3qaG_20260318_233000.png
+Rubp 처리 이력에 DONE 또는 최근 PROCESSING 상태가 있어 skip: .../sw3qaG_20260318_233000.tif
 ```
 
 ### 다시 처리 로그를 보고 싶을 때
