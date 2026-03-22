@@ -8,7 +8,7 @@ import numpy as np
 from sqlalchemy.engine import Engine
 
 from remote_batch.infra.db import acquire_processing_slot, mark_history_done, mark_history_fail
-from remote_batch.infra.ssh import read_remote_binary_file, write_remote_binary_file
+from remote_batch.infra.ftp import read_remote_binary_file, write_remote_binary_file
 
 LOGGER = logging.getLogger("remote_batch")
 
@@ -41,12 +41,12 @@ def _convert_local_tif_to_png(input_path: str, output_path: str, scale_percent: 
     Path(output_path).write_bytes(png_bytes)
 
 
-def _convert_remote_tif_to_png(sftp, input_path: str, output_path: str, scale_percent: int) -> None:
+def _convert_remote_tif_to_png(ftp, input_path: str, output_path: str, scale_percent: int) -> None:
     png_bytes = _convert_tif_bytes_to_png_bytes(
-        read_remote_binary_file(sftp, input_path),
+        read_remote_binary_file(ftp, input_path),
         scale_percent,
     )
-    write_remote_binary_file(sftp, output_path, png_bytes)
+    write_remote_binary_file(ftp, output_path, png_bytes)
 
 
 def process_rubp_file(
@@ -56,7 +56,7 @@ def process_rubp_file(
     processing_timeout_minutes: int,
     output_base_dir: str,
     scale_percent: int,
-    sftp=None,
+    ftp=None,
 ) -> None:
     history_id = acquire_processing_slot(engine, remote_file, processing_timeout_minutes)
     if history_id is None:
@@ -68,13 +68,13 @@ def process_rubp_file(
     output_path = _build_output_path(
         remote_file.file_path,
         output_base_dir,
-        is_remote=sftp is not None,
+        is_remote=ftp is not None,
     )
     try:
-        if sftp is None:
+        if ftp is None:
             _convert_local_tif_to_png(remote_file.file_path, output_path, scale_percent)
         else:
-            _convert_remote_tif_to_png(sftp, remote_file.file_path, output_path, scale_percent)
+            _convert_remote_tif_to_png(ftp, remote_file.file_path, output_path, scale_percent)
         with engine.begin() as conn:
             mark_history_done(conn, history_id)
         LOGGER.info("Rubp tif 처리 완료: %s -> %s", remote_file.file_path, output_path)

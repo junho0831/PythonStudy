@@ -27,6 +27,12 @@ def load_properties(path: Path) -> dict[str, str]:
 LOCAL_PROPERTIES = load_properties(PROPERTIES_PATH)
 
 
+def to_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 def get_setting(name: str, env_name: str, default=None):
     env_value = os.getenv(env_name)
     if env_value not in (None, ""):
@@ -60,18 +66,22 @@ def configure_logging(level: str) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Rubi txt 원격 배치 프로그램")
+    parser = argparse.ArgumentParser(description="Rubi/Rubp 원격 배치 프로그램")
     parser.add_argument(
         "--io-mode",
         choices=("auto", "local", "remote"),
         default=get_setting("IO_MODE", "IO_MODE", "auto"),
         help="파일 접근 모드(auto/local/remote). auto는 localhost 설정일 때 local 우선.",
     )
-    parser.add_argument("--ssh-host", default=get_setting("SSH_HOST", "SSH_HOST"))
-    parser.add_argument("--ssh-port", type=int, default=int(get_setting("SSH_PORT", "SSH_PORT", 22)))
-    parser.add_argument("--ssh-username", default=get_setting("SSH_USERNAME", "SSH_USERNAME"))
-    parser.add_argument("--ssh-password", default=get_setting("SSH_PASSWORD", "SSH_PASSWORD"))
-    parser.add_argument("--ssh-key-file", default=get_setting("SSH_KEY_FILE", "SSH_KEY_FILE"))
+    parser.add_argument("--ftp-host", default=get_setting("FTP_HOST", "FTP_HOST"))
+    parser.add_argument("--ftp-port", type=int, default=int(get_setting("FTP_PORT", "FTP_PORT", 21)))
+    parser.add_argument("--ftp-username", default=get_setting("FTP_USERNAME", "FTP_USERNAME"))
+    parser.add_argument("--ftp-password", default=get_setting("FTP_PASSWORD", "FTP_PASSWORD"))
+    parser.add_argument(
+        "--ftp-passive",
+        default=to_bool(get_setting("FTP_PASSIVE", "FTP_PASSIVE", "true")),
+        type=to_bool,
+    )
     parser.add_argument("--db-dsn", default=get_setting("DB_DSN", "DB_DSN"))
     parser.add_argument("--db-host", default=get_setting("DB_HOST", "DB_HOST", "127.0.0.1"))
     parser.add_argument("--db-port", type=int, default=int(get_setting("DB_PORT", "DB_PORT", 5432)))
@@ -114,8 +124,8 @@ def finalize_args(args: argparse.Namespace) -> argparse.Namespace:
 def validate_args(args: argparse.Namespace) -> None:
     required = {"db_dsn": args.db_dsn}
     if args.io_mode != "local":
-        required["ssh_host"] = args.ssh_host
-        required["ssh_username"] = args.ssh_username
+        required["ftp_host"] = args.ftp_host
+        required["ftp_username"] = args.ftp_username
     missing = [name for name, value in required.items() if not value]
     if missing:
         raise ValueError(f"필수 인자가 비어 있습니다: {', '.join(missing)}")

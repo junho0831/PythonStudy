@@ -7,7 +7,6 @@ dependencies = [
     "numpy",
     "opencv-python",
     "pandas",
-    "paramiko",
     "pillow",
     "psycopg2-binary",
     "sqlalchemy",

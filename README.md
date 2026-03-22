@@ -1,18 +1,18 @@
 # Remote Batch Processor
 
-원격 서버의 날짜별 디렉토리를 SSH/SFTP로 조회해 파일을 처리하는 배치 프로그램이다.
+원격 서버의 날짜별 디렉토리를 FTP로 조회해 파일을 처리하는 배치 프로그램이다.
 
 현재 구현의 메인은 `Rubi(txt)` 파이프라인이며, `Rubp(tif)`도 날짜 폴더를 스캔하고 처리 이력 테이블을 거쳐 `png` 변환까지 수행하는 상태다.
 
 ## 핵심 변경 사항
 
 - `Rubi`와 `Rubp`를 역할별로 분리했다.
-  - `Rubi`: txt 파일을 원격에서 직접 읽고 파싱 후 DB 적재
-  - `Rubp`: tif 파일 목록을 조회하고, 처리 이력을 남기면서 SFTP 기반 PNG 변환 처리로 확장할 수 있게 분리
+  - `Rubi`: txt 파일을 FTP로 읽고 파싱 후 DB 적재
+  - `Rubp`: tif 파일 목록을 조회하고, 처리 이력을 남기면서 FTP 기반 PNG 변환 처리로 확장할 수 있게 분리
 - 디렉토리 구조를 도메인 기준으로 재구성했다.
   - `remote_batch/app`: CLI, 실행 흐름
   - `remote_batch/common`: 공통 상수, 모델, 파일명 규칙
-  - `remote_batch/infra`: SSH/SFTP, DB, 공통 CRUD
+  - `remote_batch/infra`: FTP, DB, 공통 CRUD
   - `remote_batch/domains/rubi`: txt 파싱/처리
   - `remote_batch/domains/rubp`: tif -> png 변환 처리
 - DB 접근은 `SQLAlchemy Engine` 기반으로 정리했다.
@@ -25,11 +25,11 @@
 
 본 프로그램은 `Rubi(txt)`와 `Rubp(tif)` 두 가지 도메인 데이터를 처리합니다. 
 
-1. **파일 스캔**: `io_mode` 설정에 따라 로컬 디렉토리 또는 SSH/SFTP를 통해 원격 디렉토리의 최근 N일치 폴더를 스캔합니다.
+1. **파일 스캔**: `io_mode` 설정에 따라 로컬 디렉토리 또는 FTP를 통해 원격 디렉토리의 최근 N일치 폴더를 스캔합니다.
 2. **이력 제어**: DB의 `file_processing_history` 테이블을 조회하여 이미 성공(`DONE`)했거나 현재 진행 중(`PROCESSING`)인 파일은 건너뜁니다.
 3. **도메인 작업**:
    - **Rubi**: 텍스트 파일을 읽어 파싱한 후 결과를 DB에 저장합니다.
-   - **Rubp**: TIF 파일을 SFTP로 읽어 설정된 비율로 리사이즈한 후 PNG 형식으로 저장합니다. 원격 모드에서는 로컬에서 변환한 뒤 SFTP로 다시 업로드합니다.
+   - **Rubp**: TIF 파일을 FTP로 읽어 설정된 비율로 리사이즈한 후 PNG 형식으로 저장합니다. 원격 모드에서는 로컬에서 변환한 뒤 FTP로 다시 업로드합니다.
 4. **상태 업데이트**: 작업 성공 시 `DONE`, 예외 발생 시 `FAIL`로 이력을 업데이트합니다.
 
 ## 처리 흐름도
@@ -38,7 +38,7 @@
 flowchart LR
     subgraph A["1. 수집"]
         A1["배치 시작"] --> A2["최근 3일 폴더 계산"]
-        A2 --> A3["SSH/SFTP 접속"]
+        A2 --> A3["FTP 접속"]
         A3 --> A4["Rubi txt 목록 조회"]
         A4 --> A5["파일명 datetime 추출"]
     end
@@ -70,7 +70,7 @@ flowchart LR
 
     A3 --> E1["Rubp tif 목록 조회"]
     E1 --> E2["처리 이력 조회"]
-    E2 --> E3["SFTP download -> 축소 -> png -> upload"]
+    E2 --> E3["FTP download -> 축소 -> png -> upload"]
     E3 --> E4["DONE 또는 FAIL 갱신"]
 ```
 
@@ -104,22 +104,22 @@ flowchart LR
 관련 코드:
 
 - [`extract_file_datetime()`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/common/file_rules.py#L7)
-- [`list_remote_files()`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/infra/ssh.py#L28)
+- [`list_remote_files()`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/infra/ftp.py#L38)
 
 ### 3. Rubi(txt)는 원격에서 직접 읽음
 
 txt 파일은 로컬로 다운로드하지 않는다.
 
-- `SFTP`로 파일 목록 조회
-- `sftp.open()`으로 원격에서 직접 읽기
+- `FTP`로 파일 목록 조회
+- 원격 파일 바이트를 메모리로 읽기
 - `utf-8` 우선
 - 실패 시 `cp949` fallback
 - 그래도 실패하면 `errors="replace"`로 진행하고 warning 로그 남김
 
 관련 코드:
 
-- [`list_remote_files()`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/infra/ssh.py#L28)
-- [`read_remote_text_file()`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/infra/ssh.py#L64)
+- [`list_remote_files()`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/infra/ftp.py#L38)
+- [`read_remote_text_file()`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/infra/ftp.py#L71)
 - [`process_rubi_file()`](/Users/parkjunho/PycharmProjects/PythonStudy/remote_batch/domains/rubi/service.py#L19)
 
 ### 4. 중복 방지와 재실행 안전성
@@ -167,7 +167,6 @@ txt 파일은 로컬로 다운로드하지 않는다.
 제공 기능:
 
 - `fetch_one`
-- `fetch_all`
 - `insert`
 - `update`
 - `delete`
@@ -185,7 +184,7 @@ txt 파일은 로컬로 다운로드하지 않는다.
 현재는 `Rubp`를 실제로 `tif -> 해상도 축소 -> png 변환`까지 처리한다.
 
 - 로컬 모드에서는 `OpenCV`로 직접 변환
-- 원격 모드에서는 `SFTP`로 tif를 읽어 로컬에서 변환한 뒤 결과 png를 다시 업로드
+- 원격 모드에서는 `FTP`로 tif를 읽어 로컬에서 변환한 뒤 결과 png를 다시 업로드
 - `.tif` 파일을 최근 N일 폴더에서 조회
 - `file_processing_history` 기준으로 `DONE/FAIL/PROCESSING` 상태 관리
 - 기본 출력 확장자는 `.png`
@@ -212,11 +211,11 @@ txt 파일은 로컬로 다운로드하지 않는다.
 
 ```properties
 IO_MODE=local
-SSH_HOST=127.0.0.1
-SSH_PORT=22
-SSH_USERNAME=parkjunho
-SSH_PASSWORD=
-SSH_KEY_FILE=/Users/parkjunho/.ssh/id_rsa
+FTP_HOST=127.0.0.1
+FTP_PORT=21
+FTP_USERNAME=parkjunho
+FTP_PASSWORD=
+FTP_PASSIVE=true
 DB_HOST=127.0.0.1
 DB_PORT=5432
 DB_USER=parkjunho
@@ -237,9 +236,9 @@ LOG_LEVEL=INFO
 
 ```bash
 python3 remote_batch_processor.py \
-  --ssh-host your-host \
-  --ssh-username your-user \
-  --ssh-key-file /path/to/key \
+  --ftp-host your-host \
+  --ftp-username your-user \
+  --ftp-password your-password \
   --db-dsn 'postgresql://user:pass@host:5432/dbname' \
   --rubi-base-dir /data/Rubi \
   --rubp-base-dir /data/Rubp \
@@ -266,7 +265,7 @@ python3 remote_batch_processor.py \
 즉 아래처럼 나오면 정상이다.
 
 ```text
-I/O 모드: local (SSH 미사용)
+I/O 모드: local (FTP 미사용)
 Rubi 대상 txt 파일 수: 3
 처리 이력에 DONE 또는 최근 PROCESSING 상태가 있어 skip: .../sw3qaG_20260316_193738.txt
 처리 이력에 DONE 또는 최근 PROCESSING 상태가 있어 skip: .../sw3qaG_20260317_193738.txt
@@ -296,7 +295,6 @@ Rubp tif 처리 완료: .../sw3qaG_20260318_233000.tif -> .../sw3qaG_20260318_23
 
 의존성:
 
-- `paramiko`
 - `sqlalchemy`
 - `psycopg2-binary`
 - `pandas`
