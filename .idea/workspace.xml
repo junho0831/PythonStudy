@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AIAssistantCustomInstructionsStorage">
+    <option name="instructions">
+      <map>
+        <entry key="AIAssistant.VCS.GenerateCommitMessage">
+          <value>
+            <AIAssistantStoredInstruction>
+              <option name="actionId" value="AIAssistant.VCS.GenerateCommitMessage" />
+              <option name="content" value="한국어로 깃 내용 적어" />
+            </AIAssistantStoredInstruction>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="9fc81ff4-5cda-47d6-ad9b-ac08b12c0f95" name="변경" comment="README 수정: Rubp TIF 파일 처리 동작 및 이력 로직 내용 업데이트">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/TABLES.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/local_remote_data/Rubi/20260316/sw3qaG_20260316_193738.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/local_remote_data/Rubi/20260317/sw3qaG_20260317_193738.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/local_remote_data/Rubi/20260318/sw3qaG_20260318_193738.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/local_remote_data/Rubp/20260318/sw3qaG_20260318_233000.tif" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/local_remote_data/Rubp/20260318/sw3qaG_20260318_234500.tif" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/local_remote_data/Rubp/20260318/sw3qaG_20260318_235500.tif" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/local_remote_data/Rubp_png/20260318/sw3qaG_20260318_234500.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/local_remote_data/Rubp_png/20260318/sw3qaG_20260318_235500.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/app/cli.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/app/config.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/app/local.properties" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/app/runner.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/common/constants.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/common/file_rules.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/common/models.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/domains/rubi/parser.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/domains/rubi/service.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/domains/rubp/service.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/infra/crud.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/infra/db.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/infra/ftp.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch/infra/local_fs.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/remote_batch_processor.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/test.py" beforeDir="false" afterPath="$PROJECT_DIR$/test.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/uv.lock" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="EmbeddingIndexingInfo">
+    <option name="cachedIndexableFilesCount" value="43" />
+    <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;junho0831&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/junho0831/PythonStudy.git&quot;,
+    &quot;accountId&quot;: &quot;4f9592ae-b4a6-4f0f-bf07-d03b2ead5df2&quot;
+  }
+}</component>
+  <component name="KubernetesApiPersistence">{}</component>
+  <component name="KubernetesApiProvider">{
+  &quot;isMigrated&quot;: true
+}</component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 3
+}</component>
+  <component name="ProjectId" id="3AyEXwOwbnIWAlWqbtxeHwbrj0h" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.generate_troubleshooting_docs.executor&quot;: &quot;Run&quot;,
+    &quot;Python.remote_batch_processor.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;ai.playground.ignore.import.keys.banner.in.settings&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;ml.llm.AIAssistantPromptsLibrary&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  },
+  &quot;keyToStringList&quot;: {
+    &quot;DatabaseDriversLRU&quot;: [
+      &quot;postgresql&quot;
+    ]
+  }
+}</component>
+  <component name="RunManager" selected="Python.remote_batch_processor">
+    <configuration name="generate_troubleshooting_docs" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="PythonStudy" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="RUN_TOOL" value="" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/generate_troubleshooting_docs.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="remote_batch_processor" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="PythonStudy" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="RUN_TOOL" value="" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/remote_batch_processor.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.remote_batch_processor" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-PY-253.31033.139" />
+        <option value="bundled-python-sdk-2653e85de345-6d6dccd035ac-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.31033.139" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="디폴트 작업">
+      <changelist id="9fc81ff4-5cda-47d6-ad9b-ac08b12c0f95" name="변경" comment="" />
+      <created>1773556452807</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1773556452807</updated>
+      <workItem from="1773556453824" duration="583000" />
+      <workItem from="1773557041132" duration="995000" />
+      <workItem from="1773558045052" duration="15152000" />
+      <workItem from="1773826810822" duration="3000" />
+      <workItem from="1773826820808" duration="2746000" />
+      <workItem from="1773830318203" duration="5171000" />
+      <workItem from="1774154839478" duration="3047000" />
+    </task>
+    <task id="LOCAL-00001" summary="`.gitignore`, `README.md`, `pyproject.toml`, 및 `test.py` 파일 추가: OpenCV 기반 16-bit TIFF 무손실 압축 및 이미지 처리 기능 초기 구현">
+      <option name="closed" value="true" />
+      <created>1773569382185</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1773569382185</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Rubi txt 원격 배치 및 파싱을 위한 초기 기능 구현:  &#10;- Rubi txt 파일 처리 CLI 및 배치 기능 추가  &#10;- 파일 파싱, 검증 및 데이터 적재를 위한 도메인 서비스 및 데이터베이스 CRUD 구현  &#10;- 로컬 파일과 원격 SSH 파일 읽기 지원  &#10;- 처리 workflow 관리 및 실패/재처리 로그를 위한 데이터베이스 테이블 설계">
+      <option name="closed" value="true" />
+      <created>1773830772780</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1773830772780</updated>
+    </task>
+    <task id="LOCAL-00003" summary="Rubp tif 파일 처리 초기 구현:&#10;- Rubp tif 파일의 날짜 폴더 조회 및 처리 이력 테이블 기반 중복 방지 로직 추가&#10;- 처리 대상 별 `process_tif_stub()` 호출 및 완료/실패 상태 갱신 기능 추가&#10;- CLI에서 Rubi(txt)와 함께 Rubp(tif) 작업 동시 실행 지원&#10;- README에 Rubp 처리 워크플로 상세 설명 및 사용 예시 추가">
+      <option name="closed" value="true" />
+      <created>1773832087544</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1773832087544</updated>
+    </task>
+    <task id="LOCAL-00004" summary="로컬 테스트용 `local.properties` 지원 추가 및 설정 로딩 방식 개선:  &#10;- 로컬 실행 시 사용할 기본 설정값(`local.properties`) 파일 추가  &#10;- 환경변수 미설정 시 프로퍼티 파일에서 설정값 로드하도록 수정  &#10;- `README.md`에 로컬 실행 테스트 방법 및 기본 설정값 예시 추가  &#10;- `.gitignore`에 `local.properties` 관련 항목 관리  &#10;- 기존 `local_settings` 임포트 방식 제거 및 설정 로직 간소화">
+      <option name="closed" value="true" />
+      <created>1773832654569</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1773832654569</updated>
+    </task>
+    <task id="LOCAL-00005" summary="DB 연결 설정 세분화 및 동적 DSN 생성 로직 추가:  &#10;- `local.properties` 내 DB 설정을 기존 DSN에서 개별 속성(`host`, `port`, `user`, `password`, `name`)으로 분리  &#10;- DSN 미설정 시 개별 DB 설정값을 조합하여 동적으로 생성하는 함수 추가(`build_db_dsn`)  &#10;- CLI 인자 파싱 시 DB 속성 처리 및 DSN 생성 로직 반영(`finalize_args`)  &#10;- `README.md`에 DB 설정 관련 변경사항 및 기본값 사용 방법 추가">
+      <option name="closed" value="true" />
+      <created>1773832909390</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1773832909390</updated>
+    </task>
+    <task id="LOCAL-00006" summary="Rubp TIF 파일 PNG 변환 기능 추가:  &#10;- 로컬/원격 모드에서 TIF -&gt; PNG 변환 처리 완전 구현  &#10;  - 로컬: OpenCV 기반 해상도 축소 및 PNG 저장  &#10;  - 원격: SSH로 ImageMagick 실행 및 PNG 생성  &#10;- 출력 파일 경로 및 날짜 기반 디렉토리 구조 구성 로직 추가  &#10;- CLI 및 `local.properties`에 출력 디렉토리, 축소 비율, 원격 ImageMagick 경로 설정 지원  &#10;- README 업데이트: 변경된 Rubp 워크플로 및 사용 가이드 반영">
+      <option name="closed" value="true" />
+      <created>1773834531316</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1773834531316</updated>
+    </task>
+    <task id="LOCAL-00007" summary="Rubp 원격 모드 SFTP 기반으로 전환 및 관련 리팩터링:  &#10;- SFTP를 사용해 원격 TIF 파일 다운로드 및 PNG 업로드로 원격 Rubp 처리 방식 변경  &#10;- `remote_magick_bin` 제거 및 관련 설정, 로직, CLI 인자 삭제  &#10;- TIF -&gt; PNG 변환 로직 공통 함수화 (`_convert_tif_bytes_to_png_bytes`)  &#10;- 원격 및 로컬 변환 함수 재구성 (`_convert_remote_tif_to_png`)  &#10;- `read_remote_binary_file`, `write_remote_binary_file`, `ensure_remote_dir` 함수 추가로 SFTP 유틸리티 확장  &#10;- DB 트랜잭션 처리 방식을 `begin_transaction`에서 컨텍스트 매니저 기반 (`engine.begin`)으로 대체  &#10;- README 및 설정 파일 (`local.properties`) 업데이트: SFTP 적용 및 변경된 Rubp 워크플로 반영">
+      <option name="closed" value="true" />
+      <created>1773835459710</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1773835459710</updated>
+    </task>
+    <task id="LOCAL-00008" summary="FTP 원격 모드 지원 및 SSH 모드 제거:&#10;- SSH 기반 유틸리티 (`create_ssh_client`, `read_remote_binary_file`, `write_remote_binary_file`) 및 관련 기능 삭제&#10;- FTP 기반 유틸리티 (`create_ftp_client`, `read_remote_binary_file`, `write_remote_binary_file`) 추가&#10;- `list_remote_files`, `ensure_remote_dir` 등 기존 SSH 함수 FTP 전용으로 재구현&#10;- `bcrypt` 및 불필요한 패키지 의존성 제거 (`uv.lock` 업데이트)">
+      <option name="closed" value="true" />
+      <created>1774164228550</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1774164228550</updated>
+    </task>
+    <task id="LOCAL-00009" summary="README 수정: Rubp TIF 파일 처리 동작 및 이력 로직 내용 업데이트">
+      <option name="closed" value="true" />
+      <created>1774164295283</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1774164295283</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Add `.gitignore`, `README.md`, and initial implementation of image compression and processing utilities." />
+    <MESSAGE value="`.gitignore`, `README.md`, `pyproject.toml`, 및 `test.py` 파일 추가: OpenCV 기반 16-bit TIFF 무손실 압축 및 이미지 처리 기능 초기 구현" />
+    <MESSAGE value="OpenCV 기반 16-bit TIFF 이미지 압축/처리 기능 삭제 및 원격 처리를 위한 새로운 pipeline 작성: SSH 기반 Rubi/Rubp 배치 프로세스 초기 구현, DB 연동 및 텍스트 파싱 지원 추가" />
+    <MESSAGE value="Rubi txt 로컬 및 원격 처리 배치 프로그램 초기 구현" />
+    <MESSAGE value="Rubi txt 원격 배치 및 파싱을 위한 초기 기능 구현:  &#10;- Rubi txt 파일 처리 CLI 및 배치 기능 추가  &#10;- 파일 파싱, 검증 및 데이터 적재를 위한 도메인 서비스 및 데이터베이스 CRUD 구현  &#10;- 로컬 파일과 원격 SSH 파일 읽기 지원  &#10;- 처리 workflow 관리 및 실패/재처리 로그를 위한 데이터베이스 테이블 설계" />
+    <MESSAGE value="Rubp tif 파일 처리 초기 구현:&#10;- Rubp tif 파일의 날짜 폴더 조회 및 처리 이력 테이블 기반 중복 방지 로직 추가&#10;- 처리 대상 별 `process_tif_stub()` 호출 및 완료/실패 상태 갱신 기능 추가&#10;- CLI에서 Rubi(txt)와 함께 Rubp(tif) 작업 동시 실행 지원&#10;- README에 Rubp 처리 워크플로 상세 설명 및 사용 예시 추가" />
+    <MESSAGE value="로컬 테스트용 `local.properties` 지원 추가 및 설정 로딩 방식 개선:  &#10;- 로컬 실행 시 사용할 기본 설정값(`local.properties`) 파일 추가  &#10;- 환경변수 미설정 시 프로퍼티 파일에서 설정값 로드하도록 수정  &#10;- `README.md`에 로컬 실행 테스트 방법 및 기본 설정값 예시 추가  &#10;- `.gitignore`에 `local.properties` 관련 항목 관리  &#10;- 기존 `local_settings` 임포트 방식 제거 및 설정 로직 간소화" />
+    <MESSAGE value="DB 연결 설정 세분화 및 동적 DSN 생성 로직 추가:  &#10;- `local.properties` 내 DB 설정을 기존 DSN에서 개별 속성(`host`, `port`, `user`, `password`, `name`)으로 분리  &#10;- DSN 미설정 시 개별 DB 설정값을 조합하여 동적으로 생성하는 함수 추가(`build_db_dsn`)  &#10;- CLI 인자 파싱 시 DB 속성 처리 및 DSN 생성 로직 반영(`finalize_args`)  &#10;- `README.md`에 DB 설정 관련 변경" />
+    <MESSAGE value="Rubp TIF 파일 PNG 변환 기능 추가:  &#10;- 로컬/원격 모드에서 TIF -&gt; PNG 변환 처리 완전 구현  &#10;  - 로컬: OpenCV 기반 해상도 축소 및 PNG 저장  &#10;  - 원격: SSH로 ImageMagick 실행 및 PNG 생성  &#10;- 출력 파일 경로 및 날짜 기반 디렉토리 구조 구성 로직 추가  &#10;- CLI 및 `local.properties`에 출력 디렉토리, 축소 비율, 원격 ImageMagick 경로 설정 지원  &#10;- README 업데이트: 변경된 Rubp 워크플로 및 사용 가이드 반영" />
+    <MESSAGE value="Rubp 원격 모드 SFTP 기반으로 전환 및 관련 리팩터링:  &#10;- SFTP를 사용해 원격 TIF 파일 다운로드 및 PNG 업로드로 원격 Rubp 처리 방식 변경  &#10;- `remote_magick_bin` 제거 및 관련 설정, 로직, CLI 인자 삭제  &#10;- TIF -&gt; PNG 변환 로직 공통 함수화 (`_convert_tif_bytes_to_png_bytes`)  &#10;- 원격 및 로컬 변환 함수 재구성 (`_convert_remote_tif_to_png`)  &#10;- `read_remote_binary_file`, `write_remote_binary_file`, `ensure_remote_dir` 함수 추가로 SFTP 유틸리티 확장  &#10;- DB 트랜잭션 처리 방식을 `begin_transaction`에서 컨텍스트 매니저 기반 (`engine.begin`)으로 대체  &#10;- README 및 설정 파일 (`local.properties`) 업데이트: SFTP 적용 및 변경된 Rubp 워크플로 반영" />
+    <MESSAGE value="FTP 원격 모드 지원 및 SSH 모드 제거:&#10;- SSH 기반 유틸리티 (`create_ssh_client`, `read_remote_binary_file`, `write_remote_binary_file`) 및 관련 기능 삭제&#10;- FTP 기반 유틸리티 (`create_ftp_client`, `read_remote_binary_file`, `write_remote_binary_file`) 추가&#10;- `list_remote_files`, `ensure_remote_dir` 등 기존 SSH 함수 FTP 전용으로 재구현&#10;- `bcrypt` 및 불필요한 패키지 의존성 제거 (`uv.lock` 업데이트)" />
+    <MESSAGE value="README 수정: Rubp TIF 파일 처리 동작 및 이력 로직 내용 업데이트" />
+    <option name="LAST_COMMIT_MESSAGE" value="README 수정: Rubp TIF 파일 처리 동작 및 이력 로직 내용 업데이트" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/generate_troubleshooting_docs_py$remote_batch_processor.coverage" NAME="remote_batch_processor 커버리지 결과" MODIFIED="1773832293382" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PythonStudy$generate_troubleshooting_docs.coverage" NAME="generate_troubleshooting_docs 커버리지 결과" MODIFIED="1773662192634" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+  </component>
+  <component name="github-copilot-workspace">
+    <instructionFileLocations>
+      <option value=".github/instructions" />
+    </instructionFileLocations>
+    <promptFileLocations>
+      <option value=".github/prompts" />
+    </promptFileLocations>
+  </component>
+</project>
