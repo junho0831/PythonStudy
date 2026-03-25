@@ -18,7 +18,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9fc81ff4-5cda-47d6-ad9b-ac08b12c0f95" name="변경" comment="소스 코드 및 설정 파일 전체 삭제: 프로젝트 초기화">
+    <list default="true" id="9fc81ff4-5cda-47d6-ad9b-ac08b12c0f95" name="변경" comment="로컬 테스트용 FTP 서버 구현 및 관련 설정 파일 추가:&#10;- pyftpdlib 기반 LocalFTPServer 클래스 추가&#10;- 기본 사용자, 디렉토리, 권한 설정 지원 및 서버 start/stop 메서드 구현&#10;- `local_test_settings.py`에 FTP 관련 기본 설정값 정의&#10;  - 호스트, 포트, 사용자 이름/암호, 작업 디렉토리 등&#10;- test.py에서 FTP 설정값을 `local_test_settings.py`로 분리하여 코드 간소화 및 재사용성 향상&#10;- 기본 테스트 디렉토리 구조 및 샘플 파일 추가 (e.g., `ftp_root`)">
+      <change beforePath="$PROJECT_DIR$/batch_runner.py" beforeDir="false" afterPath="$PROJECT_DIR$/batch_runner.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ftp_scanner.py" beforeDir="false" afterPath="$PROJECT_DIR$/ftp_scanner.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/local_ftp_server.py" beforeDir="false" afterPath="$PROJECT_DIR$/local_ftp_server.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/local_test_settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/local_test_settings.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/rupi_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/rupi_processor.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/test.py" beforeDir="false" afterPath="$PROJECT_DIR$/test.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -59,6 +64,9 @@
   <component name="McpProjectServerCommands">
     <commands />
     <urls />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="AISelfReview" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 3
@@ -170,7 +178,7 @@
       <workItem from="1773826810822" duration="3000" />
       <workItem from="1773826820808" duration="2746000" />
       <workItem from="1773830318203" duration="5171000" />
-      <workItem from="1774154839478" duration="4281000" />
+      <workItem from="1774154839478" duration="7340000" />
     </task>
     <task id="LOCAL-00001" summary="`.gitignore`, `README.md`, `pyproject.toml`, 및 `test.py` 파일 추가: OpenCV 기반 16-bit TIFF 무손실 압축 및 이미지 처리 기능 초기 구현">
       <option name="closed" value="true" />
@@ -252,7 +260,23 @@
       <option name="project" value="LOCAL" />
       <updated>1774345942676</updated>
     </task>
-    <option name="localTasksCounter" value="11" />
+    <task id="LOCAL-00011" summary="BatchRunner, FTPScanner, RubiProcessor, RupiProcessor 클래스 추가 및 test.py 리팩터링:  &#10;- FTP 기반 날짜 폴더 스캔 및 파일 다운로드/처리 로직 관리 BatchRunner 구현  &#10;- Rubi(txt) 및 Rupi(tif) 개별 파일 처리 담당 프로세서 클래스 (RubiProcessor/RupiProcessor) 추가  &#10;- FTP 유틸리티 클래스 FTPScanner 분리 및 리팩터링  &#10;- `argparse` 기반 CLI 파싱 추가 및 기존 test.py 코드 전면 리팩터링">
+      <option name="closed" value="true" />
+      <created>1774355942042</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1774355942042</updated>
+    </task>
+    <task id="LOCAL-00012" summary="로컬 테스트용 FTP 서버 구현 및 관련 설정 파일 추가:&#10;- pyftpdlib 기반 LocalFTPServer 클래스 추가&#10;- 기본 사용자, 디렉토리, 권한 설정 지원 및 서버 start/stop 메서드 구현&#10;- `local_test_settings.py`에 FTP 관련 기본 설정값 정의&#10;  - 호스트, 포트, 사용자 이름/암호, 작업 디렉토리 등&#10;- test.py에서 FTP 설정값을 `local_test_settings.py`로 분리하여 코드 간소화 및 재사용성 향상&#10;- 기본 테스트 디렉토리 구조 및 샘플 파일 추가 (e.g., `ftp_root`)">
+      <option name="closed" value="true" />
+      <created>1774430896802</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1774430896802</updated>
+    </task>
+    <option name="localTasksCounter" value="13" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -272,7 +296,10 @@
     <MESSAGE value="FTP 원격 모드 지원 및 SSH 모드 제거:&#10;- SSH 기반 유틸리티 (`create_ssh_client`, `read_remote_binary_file`, `write_remote_binary_file`) 및 관련 기능 삭제&#10;- FTP 기반 유틸리티 (`create_ftp_client`, `read_remote_binary_file`, `write_remote_binary_file`) 추가&#10;- `list_remote_files`, `ensure_remote_dir` 등 기존 SSH 함수 FTP 전용으로 재구현&#10;- `bcrypt` 및 불필요한 패키지 의존성 제거 (`uv.lock` 업데이트)" />
     <MESSAGE value="README 수정: Rubp TIF 파일 처리 동작 및 이력 로직 내용 업데이트" />
     <MESSAGE value="소스 코드 및 설정 파일 전체 삭제: 프로젝트 초기화" />
-    <option name="LAST_COMMIT_MESSAGE" value="소스 코드 및 설정 파일 전체 삭제: 프로젝트 초기화" />
+    <MESSAGE value="BatchRunner 및 관련 Processor 클래스 구현: FTP 파일 스캔, Rubi 텍스트 및 Rupi 이미지 처리 워크플로 추가." />
+    <MESSAGE value="BatchRunner, FTPScanner, RubiProcessor, RupiProcessor 클래스 추가 및 test.py 리팩터링:  &#10;- FTP 기반 날짜 폴더 스캔 및 파일 다운로드/처리 로직 관리 BatchRunner 구현  &#10;- Rubi(txt) 및 Rupi(tif) 개별 파일 처리 담당 프로세서 클래스 (RubiProcessor/RupiProcessor) 추가  &#10;- FTP 유틸리티 클래스 FTPScanner 분리 및 리팩터링  &#10;- `argparse` 기반 CLI 파싱 추가 및 기존 test.py 코드 전면 리팩터링" />
+    <MESSAGE value="로컬 테스트용 FTP 서버 구현 및 관련 설정 파일 추가:&#10;- pyftpdlib 기반 LocalFTPServer 클래스 추가&#10;- 기본 사용자, 디렉토리, 권한 설정 지원 및 서버 start/stop 메서드 구현&#10;- `local_test_settings.py`에 FTP 관련 기본 설정값 정의&#10;  - 호스트, 포트, 사용자 이름/암호, 작업 디렉토리 등&#10;- test.py에서 FTP 설정값을 `local_test_settings.py`로 분리하여 코드 간소화 및 재사용성 향상&#10;- 기본 테스트 디렉토리 구조 및 샘플 파일 추가 (e.g., `ftp_root`)" />
+    <option name="LAST_COMMIT_MESSAGE" value="로컬 테스트용 FTP 서버 구현 및 관련 설정 파일 추가:&#10;- pyftpdlib 기반 LocalFTPServer 클래스 추가&#10;- 기본 사용자, 디렉토리, 권한 설정 지원 및 서버 start/stop 메서드 구현&#10;- `local_test_settings.py`에 FTP 관련 기본 설정값 정의&#10;  - 호스트, 포트, 사용자 이름/암호, 작업 디렉토리 등&#10;- test.py에서 FTP 설정값을 `local_test_settings.py`로 분리하여 코드 간소화 및 재사용성 향상&#10;- 기본 테스트 디렉토리 구조 및 샘플 파일 추가 (e.g., `ftp_root`)" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/generate_troubleshooting_docs_py$remote_batch_processor.coverage" NAME="remote_batch_processor 커버리지 결과" MODIFIED="1773832293382" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />

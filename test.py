@@ -1,29 +1,27 @@
 import argparse
 from batch_runner import BatchRunner
 from local_test_settings import (
-    LOCAL_FTP_HOST,
-    LOCAL_FTP_PASSWORD,
-    LOCAL_FTP_PORT,
-    LOCAL_FTP_ROOT_PATH,
-    LOCAL_FTP_USERNAME,
-    LOCAL_OUTPUT_DIR,
-    LOCAL_TEMP_DIR,
+    CLIENT_FTP_HOST,
+    CLIENT_FTP_PASSWORD,
+    CLIENT_FTP_PORT,
+    CLIENT_FTP_ROOT_PATH,
+    CLIENT_FTP_USERNAME,
+    FTP_PASSIVE_MODE,
+    LOCAL_DONE_FILE,
+    LOCAL_WORK_DIR,
+    RUPI_SCALE_PERCENT,
+    SERVER_FTP_HOST,
+    SERVER_FTP_PASSWORD,
+    SERVER_FTP_PORT,
+    SERVER_FTP_ROOT_PATH,
+    SERVER_FTP_USERNAME,
 )
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(description="FTP 날짜 폴더 스캔 및 파일 처리")
+    parser = argparse.ArgumentParser(description="날짜와 RUBI/RUPI만 받아 FTP 파일을 처리합니다")
     parser.add_argument("--input-date", required=True, help="YYYY-MM-DD 형식")
-    parser.add_argument("--parser", required=True, help="rubi 또는 rupi(rubp)")
-    parser.add_argument("--host", default=LOCAL_FTP_HOST)
-    parser.add_argument("--port", type=int, default=LOCAL_FTP_PORT)
-    parser.add_argument("--username", default=LOCAL_FTP_USERNAME)
-    parser.add_argument("--password", default=LOCAL_FTP_PASSWORD)
-    parser.add_argument("--root-path", default=LOCAL_FTP_ROOT_PATH)
-    parser.add_argument("--temp-dir", default=str(LOCAL_TEMP_DIR))
-    parser.add_argument("--output-dir", default=str(LOCAL_OUTPUT_DIR))
-    parser.add_argument("--scale-percent", type=int, default=50)
-    parser.add_argument("--active", action="store_true")
+    parser.add_argument("--parser", required=True, help="RUBI 또는 RUPI")
     return parser
 
 
@@ -32,15 +30,20 @@ def main():
     runner = BatchRunner(
         input_date=args.input_date,
         parser_name=args.parser,
-        host=args.host,
-        port=args.port,
-        username=args.username,
-        password=args.password,
-        root_path=args.root_path,
-        temp_dir=args.temp_dir,
-        output_dir=args.output_dir,
-        scale_percent=args.scale_percent,
-        passive=not args.active,
+        client_host=CLIENT_FTP_HOST,
+        client_port=CLIENT_FTP_PORT,
+        client_username=CLIENT_FTP_USERNAME,
+        client_password=CLIENT_FTP_PASSWORD,
+        client_root_path=CLIENT_FTP_ROOT_PATH,
+        server_host=SERVER_FTP_HOST,
+        server_port=SERVER_FTP_PORT,
+        server_username=SERVER_FTP_USERNAME,
+        server_password=SERVER_FTP_PASSWORD,
+        server_root_path=SERVER_FTP_ROOT_PATH,
+        done_file_path=LOCAL_DONE_FILE,
+        work_dir=LOCAL_WORK_DIR,
+        scale_percent=RUPI_SCALE_PERCENT,
+        passive=FTP_PASSIVE_MODE,
     )
     runner.run()
     return 0

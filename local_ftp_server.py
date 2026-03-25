@@ -3,22 +3,23 @@ from pyftpdlib.handlers import FTPHandler
 from pyftpdlib.servers import FTPServer
 
 from local_test_settings import (
+    CLIENT_FTP_HOST,
+    CLIENT_FTP_PASSWORD,
+    CLIENT_FTP_PORT,
+    CLIENT_FTP_USERNAME,
     LOCAL_FTP_HOME_DIR,
-    LOCAL_FTP_HOST,
-    LOCAL_FTP_PASSWORD,
-    LOCAL_FTP_PORT,
-    LOCAL_FTP_SCAN_DIR,
-    LOCAL_FTP_USERNAME,
+    LOCAL_CLIENT_SCAN_DIR,
+    LOCAL_SERVER_SCAN_DIR,
 )
 
 
 class LocalFTPServer:
     def __init__(
         self,
-        host=LOCAL_FTP_HOST,
-        port=LOCAL_FTP_PORT,
-        username=LOCAL_FTP_USERNAME,
-        password=LOCAL_FTP_PASSWORD,
+        host=CLIENT_FTP_HOST,
+        port=CLIENT_FTP_PORT,
+        username=CLIENT_FTP_USERNAME,
+        password=CLIENT_FTP_PASSWORD,
         home_dir=str(LOCAL_FTP_HOME_DIR),
         perm="elradfmw",
     ):
@@ -33,7 +34,8 @@ class LocalFTPServer:
     def start(self):
         try:
             LOCAL_FTP_HOME_DIR.mkdir(parents=True, exist_ok=True)
-            LOCAL_FTP_SCAN_DIR.mkdir(parents=True, exist_ok=True)
+            LOCAL_CLIENT_SCAN_DIR.mkdir(parents=True, exist_ok=True)
+            LOCAL_SERVER_SCAN_DIR.mkdir(parents=True, exist_ok=True)
 
             authorizer = DummyAuthorizer()
             authorizer.add_user(

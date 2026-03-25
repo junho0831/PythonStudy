@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from io import BytesIO
 from ftplib import FTP, all_errors
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 class FTPScanner:
@@ -42,6 +43,39 @@ class FTPScanner:
         local_path.parent.mkdir(parents=True, exist_ok=True)
         with open(local_path, "wb") as file_obj:
             self.ftp.retrbinary(f"RETR {remote_path}", file_obj.write)
+
+    def download_bytes(self, remote_path):
+        buffer = BytesIO()
+        self.ftp.retrbinary(f"RETR {remote_path}", buffer.write)
+        return buffer.getvalue()
+
+    def read_text_file(self, remote_path, *, encoding="utf-8"):
+        try:
+            return self.download_bytes(remote_path).decode(encoding)
+        except all_errors:
+            return ""
+
+    def _ensure_remote_dir(self, remote_dir):
+        current = PurePosixPath("/")
+        for part in PurePosixPath(remote_dir).parts:
+            if part in {"", "/"}:
+                continue
+            current = current / part
+            try:
+                self.ftp.mkd(current.as_posix())
+            except all_errors:
+                pass
+
+    def upload_file(self, local_path, remote_path):
+        local_path = Path(local_path)
+        self._ensure_remote_dir(PurePosixPath(remote_path).parent.as_posix())
+        with local_path.open("rb") as file_obj:
+            self.ftp.storbinary(f"STOR {remote_path}", file_obj)
+
+    def append_text_line(self, remote_path, line, *, encoding="utf-8"):
+        self._ensure_remote_dir(PurePosixPath(remote_path).parent.as_posix())
+        payload = BytesIO((line.rstrip("\n") + "\n").encode(encoding))
+        self.ftp.storbinary(f"APPE {remote_path}", payload)
 
     def close(self):
         try:
