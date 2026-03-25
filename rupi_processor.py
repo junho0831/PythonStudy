@@ -4,13 +4,8 @@ from pathlib import Path
 
 
 class RupiProcessor:
-    EXTENSIONS = {".tif", ".tiff"}
-
     def __init__(self, scale_percent=50):
         self.scale_percent = scale_percent
-
-    def can_process(self, local_path):
-        return local_path.suffix.lower() in self.EXTENSIONS
 
     def build_output_path(self, local_path):
         return Path(local_path).with_suffix(".png")

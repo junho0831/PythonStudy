@@ -20,23 +20,16 @@ class FTPScanner:
         except all_errors:
             print(f"[SKIP] 날짜 폴더 없음: {target_dir}")
             return []
-        return self._scan_recursive(target_dir)
-
-    def _scan_recursive(self, path):
-        results = []
         try:
-            entries = list(self.ftp.mlsd(path))
+            entries = list(self.ftp.mlsd(target_dir))
         except all_errors as exc:
-            print(f"[WARN] 디렉토리 조회 실패: {path} / {exc}")
-            return results
-
-        for name, facts in entries:
-            full_path = f"{path}/{name}"
-            if facts.get("type") == "dir":
-                results.extend(self._scan_recursive(full_path))
-            elif facts.get("type") == "file":
-                results.append(full_path)
-        return results
+            print(f"[WARN] 디렉토리 조회 실패: {target_dir} / {exc}")
+            return []
+        return [
+            f"{target_dir}/{name}"
+            for name, facts in entries
+            if facts.get("type") == "file"
+        ]
 
     def download_file(self, remote_path, local_path):
         local_path = Path(local_path)

@@ -5,11 +5,6 @@ from pathlib import Path
 
 
 class RubiProcessor:
-    EXTENSIONS = {".txt", ".csv", ".log"}
-
-    def can_process(self, local_path):
-        return local_path.suffix.lower() in self.EXTENSIONS
-
     def read_text(self, local_path):
         raw_bytes = Path(local_path).read_bytes()
         for encoding in ("utf-8", "cp949"):
