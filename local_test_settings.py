@@ -1,0 +1,13 @@
+from pathlib import Path
+
+
+PROJECT_DIR = Path(__file__).resolve().parent
+LOCAL_FTP_HOST = "127.0.0.1"
+LOCAL_FTP_PORT = 2121
+LOCAL_FTP_USERNAME = "testuser"
+LOCAL_FTP_PASSWORD = "1234"
+LOCAL_FTP_HOME_DIR = PROJECT_DIR / "ftp_root"
+LOCAL_FTP_ROOT_PATH = "/RUIP"
+LOCAL_FTP_SCAN_DIR = LOCAL_FTP_HOME_DIR / "RUIP"
+LOCAL_TEMP_DIR = PROJECT_DIR / "ftp_temp"
+LOCAL_OUTPUT_DIR = PROJECT_DIR / "ftp_output"
