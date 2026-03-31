@@ -18,12 +18,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9fc81ff4-5cda-47d6-ad9b-ac08b12c0f95" name="변경" comment="로컬 테스트용 FTP 서버 구현 및 관련 설정 파일 추가:&#10;- pyftpdlib 기반 LocalFTPServer 클래스 추가&#10;- 기본 사용자, 디렉토리, 권한 설정 지원 및 서버 start/stop 메서드 구현&#10;- `local_test_settings.py`에 FTP 관련 기본 설정값 정의&#10;  - 호스트, 포트, 사용자 이름/암호, 작업 디렉토리 등&#10;- test.py에서 FTP 설정값을 `local_test_settings.py`로 분리하여 코드 간소화 및 재사용성 향상&#10;- 기본 테스트 디렉토리 구조 및 샘플 파일 추가 (e.g., `ftp_root`)">
+    <list default="true" id="9fc81ff4-5cda-47d6-ad9b-ac08b12c0f95" name="변경" comment="FTP 스캔 및 파일 처리 로직 리팩터링:&#10;- `Rubi`/`Rupi` 파일 처리 로직 통합 및 불필요한 코드 제거&#10;- FTPScanner 스캔 로직 단순화 및 재귀 호출 제거&#10;- 처리 이력 `done_keys` 관리 로직 최적화&#10;- `build_local_path`와 `build_done_key` 메서드 개선&#10;- `RubiProcessor` 및 `RupiProcessor`의 확장자 검사 메서드 제거&#10;- `server_scanner` 로직 `parser_name` 조건에 맞게 수정 및 불필요한 초기화 제거&#10;- 중복된 파일 처리 스킵 로직 분리 및 일관성 보장">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/batch_runner.py" beforeDir="false" afterPath="$PROJECT_DIR$/batch_runner.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ftp_scanner.py" beforeDir="false" afterPath="$PROJECT_DIR$/ftp_scanner.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/local_ftp_server.py" beforeDir="false" afterPath="$PROJECT_DIR$/local_ftp_server.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/local_test_settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/local_test_settings.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/rupi_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/rupi_processor.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/rubi_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/rubi_processor.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/test.py" beforeDir="false" afterPath="$PROJECT_DIR$/test.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -32,8 +32,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="43" />
-    <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
+    <option name="cachedIndexableFilesCount" value="22" />
   </component>
   <component name="FileTemplateManagerImpl">
     <option name="RECENT_TEMPLATES">
@@ -178,7 +177,8 @@
       <workItem from="1773826810822" duration="3000" />
       <workItem from="1773826820808" duration="2746000" />
       <workItem from="1773830318203" duration="5171000" />
-      <workItem from="1774154839478" duration="7340000" />
+      <workItem from="1774154839478" duration="9798000" />
+      <workItem from="1774872495819" duration="1258000" />
     </task>
     <task id="LOCAL-00001" summary="`.gitignore`, `README.md`, `pyproject.toml`, 및 `test.py` 파일 추가: OpenCV 기반 16-bit TIFF 무손실 압축 및 이미지 처리 기능 초기 구현">
       <option name="closed" value="true" />
@@ -276,7 +276,23 @@
       <option name="project" value="LOCAL" />
       <updated>1774430896802</updated>
     </task>
-    <option name="localTasksCounter" value="13" />
+    <task id="LOCAL-00013" summary="FTP 스캔 및 파일 처리 로직 확장 및 설정 구조 개선:  &#10;- Client/Server FTP 설정 분리 및 `local_test_settings.py`로 구성값 이동  &#10;- Rupi 작업 시 처리 이력 관리 및 대상 파일 자동 건너뛰기 로직 추가  &#10;- FTPScanner에 파일 업로드/텍스트 파일 수정 등 유틸리티 함수 추가  &#10;- BatchRunner에 FTP 간 PNG 업로드 지원 및 작업 디렉토리 동적 관리 추가  &#10;- `argparse` CLI 설명 개선 (`Rubi`/`Rupi` 파서 및 스케일 비율 명확화)  &#10;- Rubi/Rupi 파일 처리 및 FTP 경로 구성 관련 메서드 리팩터링">
+      <option name="closed" value="true" />
+      <created>1774434544783</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1774434544783</updated>
+    </task>
+    <task id="LOCAL-00014" summary="FTP 스캔 및 파일 처리 로직 리팩터링:&#10;- `Rubi`/`Rupi` 파일 처리 로직 통합 및 불필요한 코드 제거&#10;- FTPScanner 스캔 로직 단순화 및 재귀 호출 제거&#10;- 처리 이력 `done_keys` 관리 로직 최적화&#10;- `build_local_path`와 `build_done_key` 메서드 개선&#10;- `RubiProcessor` 및 `RupiProcessor`의 확장자 검사 메서드 제거&#10;- `server_scanner` 로직 `parser_name` 조건에 맞게 수정 및 불필요한 초기화 제거&#10;- 중복된 파일 처리 스킵 로직 분리 및 일관성 보장">
+      <option name="closed" value="true" />
+      <created>1774438887163</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1774438887163</updated>
+    </task>
+    <option name="localTasksCounter" value="15" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -299,7 +315,10 @@
     <MESSAGE value="BatchRunner 및 관련 Processor 클래스 구현: FTP 파일 스캔, Rubi 텍스트 및 Rupi 이미지 처리 워크플로 추가." />
     <MESSAGE value="BatchRunner, FTPScanner, RubiProcessor, RupiProcessor 클래스 추가 및 test.py 리팩터링:  &#10;- FTP 기반 날짜 폴더 스캔 및 파일 다운로드/처리 로직 관리 BatchRunner 구현  &#10;- Rubi(txt) 및 Rupi(tif) 개별 파일 처리 담당 프로세서 클래스 (RubiProcessor/RupiProcessor) 추가  &#10;- FTP 유틸리티 클래스 FTPScanner 분리 및 리팩터링  &#10;- `argparse` 기반 CLI 파싱 추가 및 기존 test.py 코드 전면 리팩터링" />
     <MESSAGE value="로컬 테스트용 FTP 서버 구현 및 관련 설정 파일 추가:&#10;- pyftpdlib 기반 LocalFTPServer 클래스 추가&#10;- 기본 사용자, 디렉토리, 권한 설정 지원 및 서버 start/stop 메서드 구현&#10;- `local_test_settings.py`에 FTP 관련 기본 설정값 정의&#10;  - 호스트, 포트, 사용자 이름/암호, 작업 디렉토리 등&#10;- test.py에서 FTP 설정값을 `local_test_settings.py`로 분리하여 코드 간소화 및 재사용성 향상&#10;- 기본 테스트 디렉토리 구조 및 샘플 파일 추가 (e.g., `ftp_root`)" />
-    <option name="LAST_COMMIT_MESSAGE" value="로컬 테스트용 FTP 서버 구현 및 관련 설정 파일 추가:&#10;- pyftpdlib 기반 LocalFTPServer 클래스 추가&#10;- 기본 사용자, 디렉토리, 권한 설정 지원 및 서버 start/stop 메서드 구현&#10;- `local_test_settings.py`에 FTP 관련 기본 설정값 정의&#10;  - 호스트, 포트, 사용자 이름/암호, 작업 디렉토리 등&#10;- test.py에서 FTP 설정값을 `local_test_settings.py`로 분리하여 코드 간소화 및 재사용성 향상&#10;- 기본 테스트 디렉토리 구조 및 샘플 파일 추가 (e.g., `ftp_root`)" />
+    <MESSAGE value="FTP 스캔 및 파일 처리 로직 확장 및 설정 구조 개선:  &#10;- Client/Server FTP 설정 분리 및 `local_test_settings.py`로 구성값 이동  &#10;- Rupi 작업 시 처리 이력 관리 및 대상 파일 자동 건너뛰기 로직 추가  &#10;- FTPScanner에 파일 업로드/텍스트 파일 수정 등 유틸리티 함수 추가  &#10;- BatchRunner에 FTP 간 PNG 업로드 지원 및 작업 디렉토리 동적 관리 추가  &#10;- `argparse` CLI 설명 개선 (`Rubi`/`Rupi` 파서 및 스케일 비율 명확화)  &#10;- Rubi/Rupi 파일 처리 및 FTP 경로 구성 관련 메서드 리팩터링" />
+    <MESSAGE value="Rubi/Rupi 처리 로직 리팩터링 및 동작 최적화:  &#10;- BatchRunner: `파일 대상 식별`, `스캔 정렬 방식`, `처리 이력 클린업` 로직 전면 재구성  &#10;- FTPScanner: 재귀 탐색 제거 및 단순화  &#10;- Rubi/RupiProcessor: 파일 확장자 관련 로직 제거 및 `can_process` 제거  &#10;- Rubi/Rupi: 중복 처리 방지 로직 개선  &#10;- 기타: 불필요한 메서드 제거 및 작업 스킵 처리 메시지 명확화" />
+    <MESSAGE value="FTP 스캔 및 파일 처리 로직 리팩터링:&#10;- `Rubi`/`Rupi` 파일 처리 로직 통합 및 불필요한 코드 제거&#10;- FTPScanner 스캔 로직 단순화 및 재귀 호출 제거&#10;- 처리 이력 `done_keys` 관리 로직 최적화&#10;- `build_local_path`와 `build_done_key` 메서드 개선&#10;- `RubiProcessor` 및 `RupiProcessor`의 확장자 검사 메서드 제거&#10;- `server_scanner` 로직 `parser_name` 조건에 맞게 수정 및 불필요한 초기화 제거&#10;- 중복된 파일 처리 스킵 로직 분리 및 일관성 보장" />
+    <option name="LAST_COMMIT_MESSAGE" value="FTP 스캔 및 파일 처리 로직 리팩터링:&#10;- `Rubi`/`Rupi` 파일 처리 로직 통합 및 불필요한 코드 제거&#10;- FTPScanner 스캔 로직 단순화 및 재귀 호출 제거&#10;- 처리 이력 `done_keys` 관리 로직 최적화&#10;- `build_local_path`와 `build_done_key` 메서드 개선&#10;- `RubiProcessor` 및 `RupiProcessor`의 확장자 검사 메서드 제거&#10;- `server_scanner` 로직 `parser_name` 조건에 맞게 수정 및 불필요한 초기화 제거&#10;- 중복된 파일 처리 스킵 로직 분리 및 일관성 보장" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/generate_troubleshooting_docs_py$remote_batch_processor.coverage" NAME="remote_batch_processor 커버리지 결과" MODIFIED="1773832293382" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />

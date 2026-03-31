@@ -65,6 +65,19 @@ class FTPScanner:
         with local_path.open("rb") as file_obj:
             self.ftp.storbinary(f"STOR {remote_path}", file_obj)
 
+    def get_file_size(self, remote_path):
+        try:
+            size = self.ftp.size(remote_path)
+        except all_errors:
+            return None
+        return int(size) if size is not None else None
+
+    def file_exists(self, remote_path):
+        return self.get_file_size(remote_path) is not None
+
+    def delete_file(self, remote_path):
+        self.ftp.delete(remote_path)
+
     def append_text_line(self, remote_path, line, *, encoding="utf-8"):
         self._ensure_remote_dir(PurePosixPath(remote_path).parent.as_posix())
         payload = BytesIO((line.rstrip("\n") + "\n").encode(encoding))

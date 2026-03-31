@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
@@ -23,7 +24,7 @@ class BatchRunner:
         server_username,
         server_password,
         server_root_path,
-        done_file_path,
+        db_path,
         work_dir="/tmp/ftp_work",
         scale_percent=50,
         passive=True,
@@ -33,7 +34,6 @@ class BatchRunner:
         self.parser_name = self._normalize_parser(parser_name)
         self.client_root_path = client_root_path.rstrip("/")
         self.server_root_path = server_root_path.rstrip("/")
-        self.done_file_path = Path(done_file_path)
         self.work_dir = Path(work_dir)
         self.work_dir.mkdir(parents=True, exist_ok=True)
         self.client_scanner = FTPScanner(
@@ -54,7 +54,7 @@ class BatchRunner:
                 root_path=self.server_root_path,
                 passive=passive,
             )
-        self.rubi_processor = RubiProcessor()
+        self.rubi_processor = RubiProcessor(db_path=db_path)
         self.rupi_processor = RupiProcessor(scale_percent=scale_percent)
 
     def _normalize_date(self, input_date):
@@ -79,11 +79,6 @@ class BatchRunner:
         except ValueError:
             return remote.as_posix().lstrip("/")
 
-    def build_done_key(self, remote_path):
-        relative = PurePosixPath(self.build_relative_path(remote_path, self.client_root_path))
-        file_key = relative.parent / relative.stem
-        return file_key.as_posix() if file_key.as_posix() != "." else relative.stem
-
     def build_local_path(self, remote_path):
         relative = PurePosixPath(self.build_relative_path(remote_path, self.client_root_path))
         return self.work_dir.joinpath(*relative.parts)
@@ -92,40 +87,15 @@ class BatchRunner:
         relative = PurePosixPath(self.build_relative_path(client_remote_path, self.client_root_path))
         return (PurePosixPath(self.server_root_path) / relative).with_suffix(".png").as_posix()
 
-    def build_done_record(self, file_key):
-        return f"{self.parser_name}|{file_key}"
-
-    def load_done_keys(self):
-        done_keys = set()
-        if not self.done_file_path.exists():
-            return done_keys
-        for line in self.done_file_path.read_text(encoding="utf-8").splitlines():
-            record = line.strip()
-            if not record:
-                continue
-            parser_name, separator, file_key = record.partition("|")
-            if parser_name == self.parser_name and separator and file_key:
-                done_keys.add(file_key)
-        return done_keys
-
-    def mark_done(self, file_key):
-        self.done_file_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.done_file_path.open("a", encoding="utf-8") as file_obj:
-            file_obj.write(f"{self.build_done_record(file_key)}\n")
-
-    def process_file(self, local_path):
-        if self.parser_name == "rubi":
-            self.rubi_processor.process(local_path)
-            return True, None
-
-        return True, self.rupi_processor.process(local_path)
-
-    def ensure_local_file(self, remote_file, local_path, idx, total):
-        if local_path.exists():
-            print(f"[{idx}/{total}] CLIENT DOWNLOAD SKIP: {local_path}")
-            return
+    def download_local_file(self, remote_file, local_path, idx, total):
         print(f"[{idx}/{total}] CLIENT DOWNLOAD: {remote_file}")
         self.client_scanner.download_file(remote_file, local_path)
+
+    def process_file(self, local_path, remote_file):
+        if self.parser_name == "rubi":
+            self.rubi_processor.process(local_path, source_file=remote_file)
+            return True, None
+        return True, self.rupi_processor.process(local_path)
 
     def run(self):
         processed = 0
@@ -134,44 +104,43 @@ class BatchRunner:
 
         try:
             remote_files = self.client_scanner.scan(self.date_str)
-            done_keys = self.load_done_keys() if self.parser_name == "rubi" else set()
             total = len(remote_files)
             print(
                 f"[INFO] parser={self.parser_name}, input_date={self.input_date}, "
-                f"ftp_date={self.date_str}, client_total={len(remote_files)}, "
-                f"done_total={len(done_keys)}, target_total={total}"
+                f"ftp_date={self.date_str}, client_total={total}, target_total={total}"
             )
 
             for idx, remote_file in enumerate(remote_files, start=1):
                 local_path = self.build_local_path(remote_file)
                 try:
-                    if self.parser_name == "rubi":
-                        file_key = self.build_done_key(remote_file)
-                        if file_key in done_keys:
-                            print(f"[{idx}/{total}] PROCESS SKIP: {file_key}")
-                            skipped += 1
-                            continue
-                    else:
+                    if self.parser_name == "rupi":
                         output_path = self.rupi_processor.build_output_path(local_path)
-                        if output_path.exists():
+                        remote_output_path = self.build_server_remote_path(remote_file)
+                        if self.server_scanner.file_exists(remote_output_path):
                             print(f"[{idx}/{total}] PROCESS SKIP: {output_path}")
                             skipped += 1
                             continue
-
-                    self.ensure_local_file(remote_file, local_path, idx, total)
-                    print(f"[{idx}/{total}] PROCESS")
-                    success, output_path = self.process_file(local_path)
-                    if success:
-                        if self.parser_name == "rubi":
-                            self.mark_done(file_key)
-                            done_keys.add(file_key)
-                        else:
-                            remote_output_path = self.build_server_remote_path(remote_file)
-                            print(f"[{idx}/{total}] SERVER UPLOAD: {remote_output_path}")
-                            self.server_scanner.upload_file(output_path, remote_output_path)
-                        processed += 1
+                    self.download_local_file(remote_file, local_path, idx, total)
+                    if self.parser_name == "rupi" and output_path.exists():
+                        print(f"[{idx}/{total}] PROCESS SKIP (LOCAL PNG EXISTS): {output_path}")
+                        success = True
                     else:
+                        print(f"[{idx}/{total}] PROCESS")
+                        success, output_path = self.process_file(local_path, remote_file)
+
+                    if not success:
                         skipped += 1
+                        continue
+
+                    if self.parser_name == "rubi":
+                        print(f"[{idx}/{total}] CLIENT DELETE: {remote_file}")
+                        self.client_scanner.delete_file(remote_file)
+                        if local_path.exists():
+                            local_path.unlink()
+                    else:
+                        print(f"[{idx}/{total}] SERVER UPLOAD: {remote_output_path}")
+                        self.server_scanner.upload_file(output_path, remote_output_path)
+                    processed += 1
                 except Exception as exc:
                     errors += 1
                     print(f"[ERROR] {remote_file} / {exc}")
