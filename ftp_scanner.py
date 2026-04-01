@@ -31,15 +31,38 @@ class FTPScanner:
             if facts.get("type") == "file"
         ]
 
+    def _download_with_validation(self, remote_path, write_chunk):
+        expected_size = self.get_file_size(remote_path)
+        downloaded_size = 0
+
+        def tracked_write(chunk):
+            nonlocal downloaded_size
+            downloaded_size += len(chunk)
+            write_chunk(chunk)
+
+        self.ftp.retrbinary(f"RETR {remote_path}", tracked_write)
+
+        if expected_size is not None and downloaded_size != expected_size:
+            raise IOError(
+                f"다운로드 크기 불일치: remote={expected_size}, downloaded={downloaded_size}, path={remote_path}"
+            )
+
     def download_file(self, remote_path, local_path):
         local_path = Path(local_path)
         local_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(local_path, "wb") as file_obj:
-            self.ftp.retrbinary(f"RETR {remote_path}", file_obj.write)
+        try:
+            with open(local_path, "wb") as file_obj:
+                self._download_with_validation(remote_path, file_obj.write)
+        except Exception:
+            try:
+                local_path.unlink()
+            except FileNotFoundError:
+                pass
+            raise
 
     def download_bytes(self, remote_path):
         buffer = BytesIO()
-        self.ftp.retrbinary(f"RETR {remote_path}", buffer.write)
+        self._download_with_validation(remote_path, buffer.write)
         return buffer.getvalue()
 
     def read_text_file(self, remote_path, *, encoding="utf-8"):

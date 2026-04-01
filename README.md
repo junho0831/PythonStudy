@@ -1,0 +1,229 @@
+# FTP Batch Pipeline
+
+## 프로젝트 개요
+
+이 프로젝트는 FTP 서버에 주기적으로 생성되는 파일을 수집해서 처리하는 배치입니다.
+
+- `RUBI`: 텍스트 파일을 다운로드해서 파싱한 뒤 DB에 저장합니다.
+- `RUPI`: 이미지 파일을 다운로드해서 로컬에서 PNG로 변환한 뒤 서버 FTP에 업로드합니다.
+
+현재 구현의 중심은 `RUBI` 파이프라인입니다. `RUPI`도 동작하지만, 정합성 보강 포인트가 더 남아 있습니다.
+
+## 현재 구현
+
+### RUBI 처리 흐름
+
+```mermaid
+flowchart TD
+    A["FTP scan"] --> B["download"]
+    B --> C["parse text"]
+    C --> D["SQLite bulk insert"]
+    D --> E{"commit 성공?"}
+    E -->|Yes| F["FTP 원본 삭제"]
+    F --> G["로컬 다운로드 파일 삭제"]
+    E -->|No| H["rollback"]
+    H --> I["FTP 원본 유지"]
+```
+
+- FTP 날짜 폴더를 조회합니다.
+- 원본 파일을 로컬 작업 폴더로 다운로드합니다.
+- 텍스트를 파싱합니다.
+- SQLite DB에 `executemany`로 bulk insert 합니다.
+- commit 성공 시에만 FTP 원본 파일을 삭제합니다.
+- 실패 시 rollback 하고 원본은 그대로 둡니다.
+
+### RUPI 처리 흐름
+
+- FTP 날짜 폴더를 조회합니다.
+- 서버 FTP에 결과 PNG가 이미 있으면 skip 합니다.
+- 없으면 원본 파일을 로컬로 다운로드합니다.
+- 로컬에서 PNG로 변환합니다.
+- 서버 FTP 결과 경로로 업로드합니다.
+
+`RUPI`는 로컬 PNG가 이미 있으면 재변환 없이 그 파일을 재업로드할 수 있습니다.
+
+## 주요 클래스 역할
+
+### `FTPScanner`
+
+위치: [/Users/parkjunho/PycharmProjects/PythonStudy/ftp_scanner.py](/Users/parkjunho/PycharmProjects/PythonStudy/ftp_scanner.py)
+
+역할:
+
+- 날짜 폴더 조회
+- 원격 파일 다운로드
+- 원격 파일 업로드
+- 원격 파일 존재 여부 확인
+- 원격 파일 크기 확인
+- 원격 파일 삭제
+
+현재 `download_file()`과 `download_bytes()`는 공통 다운로드 검증을 사용합니다.
+
+- `FTP SIZE`로 원격 크기 조회
+- 실제 받은 바이트 수 추적
+- 크기가 다르면 예외 발생
+- 실패 시 불완전 로컬 파일 삭제
+
+### `RubiProcessor`
+
+위치: [/Users/parkjunho/PycharmProjects/PythonStudy/rubi_processor.py](/Users/parkjunho/PycharmProjects/PythonStudy/rubi_processor.py)
+
+역할:
+
+- 로컬 텍스트 파일 읽기
+- `utf-8`, `cp949`, `errors=replace` 순서로 디코딩
+- 텍스트 파싱
+- SQLite 트랜잭션으로 bulk insert
+
+현재 파싱 규칙:
+
+- `key=value`
+- `a,b,c` 같은 csv 유사 라인
+- 그 외 raw line
+
+DB 적재는 현재 SQLite `executemany` 기반입니다.
+
+### `RupiProcessor`
+
+위치: [/Users/parkjunho/PycharmProjects/PythonStudy/rupi_processor.py](/Users/parkjunho/PycharmProjects/PythonStudy/rupi_processor.py)
+
+역할:
+
+- 로컬 이미지 파일 열기
+- 해상도 축소
+- PNG 저장
+
+이미지 처리는 `Pillow`를 사용합니다.
+
+### `BatchRunner`
+
+위치: [/Users/parkjunho/PycharmProjects/PythonStudy/batch_runner.py](/Users/parkjunho/PycharmProjects/PythonStudy/batch_runner.py)
+
+역할:
+
+- 날짜/파서 입력 정규화
+- FTP scanner 생성
+- 파일별 처리 순서 제어
+- `RUBI`와 `RUPI` 분기
+- 성공/실패 로그 출력
+
+## 실행 방법
+
+### 1. 로컬 FTP 서버 실행
+
+[/Users/parkjunho/PycharmProjects/PythonStudy/local_ftp_server.py](/Users/parkjunho/PycharmProjects/PythonStudy/local_ftp_server.py)
+
+```bash
+/Users/parkjunho/PycharmProjects/PythonStudy/.venv/bin/python \
+  /Users/parkjunho/PycharmProjects/PythonStudy/local_ftp_server.py
+```
+
+### 2. 배치 실행
+
+[/Users/parkjunho/PycharmProjects/PythonStudy/test.py](/Users/parkjunho/PycharmProjects/PythonStudy/test.py)
+
+`RUBI`
+
+```bash
+/Users/parkjunho/PycharmProjects/PythonStudy/.venv/bin/python \
+  /Users/parkjunho/PycharmProjects/PythonStudy/test.py \
+  --input-date 2026-03-25 \
+  --parser RUBI
+```
+
+`RUPI`
+
+```bash
+/Users/parkjunho/PycharmProjects/PythonStudy/.venv/bin/python \
+  /Users/parkjunho/PycharmProjects/PythonStudy/test.py \
+  --input-date 2026-03-25 \
+  --parser RUPI
+```
+
+## 현재 설정
+
+위치: [/Users/parkjunho/PycharmProjects/PythonStudy/local_test_settings.py](/Users/parkjunho/PycharmProjects/PythonStudy/local_test_settings.py)
+
+주요 값:
+
+- `CLIENT_FTP_*`: 원본 파일 FTP
+- `SERVER_FTP_*`: 결과 파일 FTP
+- `CLIENT_FTP_ROOT_PATH = "/RUIP"`
+- `SERVER_FTP_ROOT_PATH = "/RESULT"`
+- `LOCAL_WORK_DIR`: 로컬 작업 폴더
+- `LOCAL_DB_PATH`: 현재 SQLite DB 파일
+- `RUPI_SCALE_PERCENT`: 이미지 축소 비율
+
+현재 로컬 테스트에서는 `CLIENT_FTP`와 `SERVER_FTP`가 같은 로컬 FTP 서버를 바라보지만, 경로는 다르게 사용합니다.
+
+## 데이터 정합성 / 실패 정책
+
+### 현재 구현
+
+#### RUBI
+
+- DB commit 성공 전에는 FTP 원본을 삭제하지 않습니다.
+- 파싱 또는 DB 적재 중 오류가 나면 rollback 합니다.
+- rollback 시 FTP 원본은 유지됩니다.
+- 실패한 로컬 다운로드 파일은 삭제해서 다음 실행에서 다시 다운로드하도록 합니다.
+
+#### RUPI
+
+- 서버 FTP에 결과 PNG가 있으면 skip 합니다.
+- 서버 결과가 없으면 로컬 PNG를 재사용하거나 다시 변환합니다.
+- 업로드 실패 시 서버 결과가 없으므로 다음 실행에서 다시 업로드를 시도할 수 있습니다.
+
+### 현재 남아 있는 운영 리스크
+
+- `RUBI`에서 DB commit은 성공했는데 FTP 원본 삭제가 실패하면, 다음 실행 때 같은 파일이 다시 잡혀 중복 적재될 수 있습니다.
+- 현재 구현에는 이 상황을 막는 별도 상태 저장소나 delete-failed 재시도 큐가 없습니다.
+
+## FTP / 로컬 경로 원칙
+
+- FTP 경로는 문자열로 다룹니다.
+- 로컬 경로는 `Path` 객체로 다룹니다.
+
+예:
+
+- FTP: `"/RUIP/20260325/sample.txt"`
+- 로컬: `Path("/tmp/ftp_work/RUIP/20260325/sample.txt")`
+
+현재 `scan()` 동작:
+
+- 기준 경로는 `root_path/YYYYMMDD`
+- 재귀가 아니라 날짜 폴더 바로 아래의 파일만 수집합니다.
+
+즉 현재 구현은 `parser/date` 재귀 스캔 구조가 아니라, 각 parser별 root를 설정으로 나누고 그 아래 날짜 폴더만 직접 조회하는 구조입니다.
+
+## 현재 구현 한계와 다음 작업 포인트
+
+### 현재 구현
+
+- `RUBI` DB는 SQLite 기반입니다.
+- bulk insert는 `psycopg2.execute_values`가 아니라 `sqlite3.executemany`입니다.
+- `DBManager`가 따로 분리되어 있지 않습니다.
+- `RUPI`와 `RUBI`가 같은 러너에서 분기됩니다.
+
+### 향후 개선 포인트
+
+- PostgreSQL 기반 `DBManager` 분리
+- `RUBI` bulk insert를 `psycopg2.execute_values`로 전환
+- `commit 성공 후 delete 실패` 재시도 정책 추가
+- `RUPI` 업로드 정합성 보강
+- 필요 시 `scan()` 재귀 스캔 지원
+
+## 요약
+
+현재 프로젝트는 다음 기준으로 이해하면 됩니다.
+
+- `RUBI`
+  - 다운로드
+  - 파싱
+  - DB bulk insert
+  - commit 성공 시 FTP 원본 삭제
+- `RUPI`
+  - 다운로드
+  - 로컬 PNG 변환
+  - 서버 FTP 업로드
+
+즉 현재 구현의 핵심은 `RUBI` 파이프라인의 정합성을 맞추는 것이고, 상태 파일 기반 중복 판단보다 `commit 성공 후 삭제`를 기준으로 단순화한 구조입니다.

@@ -120,7 +120,9 @@ class BatchRunner:
                             print(f"[{idx}/{total}] PROCESS SKIP: {output_path}")
                             skipped += 1
                             continue
+
                     self.download_local_file(remote_file, local_path, idx, total)
+
                     if self.parser_name == "rupi" and output_path.exists():
                         print(f"[{idx}/{total}] PROCESS SKIP (LOCAL PNG EXISTS): {output_path}")
                         success = True
@@ -144,6 +146,8 @@ class BatchRunner:
                 except Exception as exc:
                     errors += 1
                     print(f"[ERROR] {remote_file} / {exc}")
+                    if self.parser_name == "rubi" and local_path.exists():
+                        local_path.unlink()
         finally:
             self.client_scanner.close()
             if self.server_scanner is not None:

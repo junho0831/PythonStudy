@@ -75,23 +75,26 @@ class RubiProcessor:
         with sqlite3.connect(self.db_path) as conn:
             try:
                 conn.execute("begin")
-                for record in parsed_records:
-                    conn.execute(
-                        """
-                        insert into rubi_ingest (
-                            source_file,
-                            line_number,
-                            record_type,
-                            payload_json
-                        ) values (?, ?, ?, ?)
-                        """,
-                        (
-                            source_file,
-                            record["line_number"],
-                            record["type"],
-                            json.dumps(record, ensure_ascii=False),
-                        ),
+                rows = [
+                    (
+                        source_file,
+                        record["line_number"],
+                        record["type"],
+                        json.dumps(record, ensure_ascii=False),
                     )
+                    for record in parsed_records
+                ]
+                conn.executemany(
+                    """
+                    insert into rubi_ingest (
+                        source_file,
+                        line_number,
+                        record_type,
+                        payload_json
+                    ) values (?, ?, ?, ?)
+                    """,
+                    rows,
+                )
                 conn.commit()
             except Exception:
                 conn.rollback()
