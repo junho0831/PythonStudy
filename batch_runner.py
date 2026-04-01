@@ -91,6 +91,16 @@ class BatchRunner:
         print(f"[{idx}/{total}] CLIENT DOWNLOAD: {remote_file}")
         self.client_scanner.download_file(remote_file, local_path)
 
+    def ensure_local_rupi_source_file(self, remote_file, local_path, idx, total):
+        if local_path.exists():
+            print(f"[{idx}/{total}] CLIENT DOWNLOAD SKIP (LOCAL TIF EXISTS): {local_path}")
+            return
+        self.download_local_file(remote_file, local_path, idx, total)
+
+    def upload_rupi_output(self, output_path, remote_output_path, idx, total):
+        print(f"[{idx}/{total}] SERVER UPLOAD: {remote_output_path}")
+        self.server_scanner.upload_file(output_path, remote_output_path)
+
     def process_file(self, local_path, remote_file):
         if self.parser_name == "rubi":
             self.rubi_processor.process(local_path, source_file=remote_file)
@@ -112,36 +122,41 @@ class BatchRunner:
 
             for idx, remote_file in enumerate(remote_files, start=1):
                 local_path = self.build_local_path(remote_file)
+                output_path = None
                 try:
                     if self.parser_name == "rupi":
                         output_path = self.rupi_processor.build_output_path(local_path)
                         remote_output_path = self.build_server_remote_path(remote_file)
                         if self.server_scanner.file_exists(remote_output_path):
-                            print(f"[{idx}/{total}] PROCESS SKIP: {output_path}")
+                            print(f"[{idx}/{total}] PROCESS SKIP (REMOTE PNG EXISTS): {remote_output_path}")
                             skipped += 1
                             continue
+                        if output_path.exists():
+                            print(f"[{idx}/{total}] PROCESS SKIP (LOCAL PNG REUSE): {output_path}")
+                            self.upload_rupi_output(output_path, remote_output_path, idx, total)
+                        else:
+                            self.ensure_local_rupi_source_file(remote_file, local_path, idx, total)
+                            print(f"[{idx}/{total}] PROCESS")
+                            success, output_path = self.process_file(local_path, remote_file)
+                            if not success:
+                                skipped += 1
+                                continue
+                            self.upload_rupi_output(output_path, remote_output_path, idx, total)
+                        local_path.unlink(missing_ok=True)
+                        processed += 1
+                        continue
 
                     self.download_local_file(remote_file, local_path, idx, total)
-
-                    if self.parser_name == "rupi" and output_path.exists():
-                        print(f"[{idx}/{total}] PROCESS SKIP (LOCAL PNG EXISTS): {output_path}")
-                        success = True
-                    else:
-                        print(f"[{idx}/{total}] PROCESS")
-                        success, output_path = self.process_file(local_path, remote_file)
+                    print(f"[{idx}/{total}] PROCESS")
+                    success, _ = self.process_file(local_path, remote_file)
 
                     if not success:
                         skipped += 1
                         continue
 
-                    if self.parser_name == "rubi":
-                        print(f"[{idx}/{total}] CLIENT DELETE: {remote_file}")
-                        self.client_scanner.delete_file(remote_file)
-                        if local_path.exists():
-                            local_path.unlink()
-                    else:
-                        print(f"[{idx}/{total}] SERVER UPLOAD: {remote_output_path}")
-                        self.server_scanner.upload_file(output_path, remote_output_path)
+                    print(f"[{idx}/{total}] CLIENT DELETE: {remote_file}")
+                    self.client_scanner.delete_file(remote_file)
+                    local_path.unlink(missing_ok=True)
                     processed += 1
                 except Exception as exc:
                     errors += 1

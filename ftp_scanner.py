@@ -87,6 +87,12 @@ class FTPScanner:
         self._ensure_remote_dir(PurePosixPath(remote_path).parent.as_posix())
         with local_path.open("rb") as file_obj:
             self.ftp.storbinary(f"STOR {remote_path}", file_obj)
+        expected_size = local_path.stat().st_size
+        remote_size = self.get_file_size(remote_path)
+        if remote_size is None or remote_size != expected_size:
+            raise IOError(
+                f"업로드 크기 불일치: local={expected_size}, remote={remote_size}, path={remote_path}"
+            )
 
     def get_file_size(self, remote_path):
         try:

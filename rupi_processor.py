@@ -21,16 +21,20 @@ class RupiProcessor:
         Image = self._require_image()
         output_path = self.build_output_path(local_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        with Image.open(local_path) as image:
-            width, height = image.size
-            new_size = (
-                max(1, round(width * self.scale_percent / 100)),
-                max(1, round(height * self.scale_percent / 100)),
-            )
-            resized = image.resize(new_size)
-            resized.save(output_path, format="PNG")
-            print(
-                f"[IMAGE] {local_path.name} / size={image.size} / mode={image.mode} "
-                f"-> output={output_path} / resized={new_size}"
-            )
+        try:
+            with Image.open(local_path) as image:
+                width, height = image.size
+                new_size = (
+                    max(1, round(width * self.scale_percent / 100)),
+                    max(1, round(height * self.scale_percent / 100)),
+                )
+                resized = image.resize(new_size)
+                resized.save(output_path, format="PNG")
+                print(
+                    f"[IMAGE] {local_path.name} / size={image.size} / mode={image.mode} "
+                    f"-> output={output_path} / resized={new_size}"
+                )
+        except Exception:
+            output_path.unlink(missing_ok=True)
+            raise
         return output_path
