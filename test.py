@@ -15,6 +15,7 @@ from local_test_settings import (
     SERVER_FTP_PORT,
     SERVER_FTP_ROOT_PATH,
     SERVER_FTP_USERNAME,
+    TEXT_FTP_ROOT_PATH,
 )
 
 
@@ -35,6 +36,7 @@ def main():
         client_username=CLIENT_FTP_USERNAME,
         client_password=CLIENT_FTP_PASSWORD,
         client_root_path=CLIENT_FTP_ROOT_PATH,
+        text_root_path=TEXT_FTP_ROOT_PATH,
         server_host=SERVER_FTP_HOST,
         server_port=SERVER_FTP_PORT,
         server_username=SERVER_FTP_USERNAME,

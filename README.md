@@ -5,7 +5,7 @@
 이 프로젝트는 FTP 서버에 주기적으로 생성되는 파일을 수집해서 처리하는 배치입니다.
 
 - `RUBI`: 텍스트 파일을 다운로드해서 파싱한 뒤 DB에 저장합니다.
-- `RUPI`: 이미지 파일을 다운로드해서 로컬에서 PNG로 변환한 뒤 서버 FTP에 업로드합니다.
+- `RUPI`: 이미지 파일을 텍스트와 매칭한 뒤 로컬에서 PNG로 변환하고 서버 FTP에 업로드합니다.
 
 현재 구현의 중심은 `RUBI` 파이프라인입니다. `RUPI`도 동작하지만, 정합성 보강 포인트가 더 남아 있습니다.
 
@@ -35,12 +35,17 @@ flowchart TD
 ### RUPI 처리 흐름
 
 - FTP 날짜 폴더를 조회합니다.
+- 같은 날짜의 `RUBI` 텍스트 후보를 FTP에서 같이 조회합니다.
+- 이미지 파일명을 기준으로 `prefix 동일`, `text_ts >= image_ts`, `5분 이내` 조건의 가장 가까운 텍스트를 찾습니다.
+- 이미지는 먼저 SQLite `rupi_ingest`에 insert 합니다.
+- 매칭 실패 시 방금 insert 한 이미지 row 를 delete 합니다.
 - 서버 FTP에 결과 PNG가 이미 있으면 skip 합니다.
 - 서버 결과가 없고 로컬 PNG가 이미 있으면 원본 TIF를 다시 받지 않고 그 PNG를 재업로드합니다.
 - 서버 결과도 없고 로컬 PNG도 없을 때만 원본 TIF를 로컬로 다운로드합니다.
 - 다운로드한 TIF를 로컬에서 PNG로 변환합니다.
 - 서버 FTP 결과 경로로 업로드하고, 업로드 후 원격 크기와 로컬 크기를 비교해 검증합니다.
 - 업로드 성공 후 로컬 TIF는 삭제하고, 로컬 PNG는 재업로드 캐시로 유지합니다.
+- 업로드 또는 원격 결과 확인이 끝나면 매칭 텍스트 정보와 결과 PNG 경로를 SQLite에 update 합니다.
 
 ## 주요 클래스 역할
 
@@ -95,11 +100,23 @@ DB 적재는 현재 SQLite `executemany` 기반입니다.
 
 역할:
 
+- SQLite `rupi_ingest` 테이블 관리
+- 이미지 메타 insert / delete / match update
 - 로컬 이미지 파일 열기
 - 해상도 축소
 - PNG 저장
 
 이미지 처리는 `Pillow`를 사용합니다.
+
+### `image_text_matcher`
+
+위치: [/Users/parkjunho/PycharmProjects/PythonStudy/image_text_matcher.py](/Users/parkjunho/PycharmProjects/PythonStudy/image_text_matcher.py)
+
+역할:
+
+- 파일명에서 `prefix`, timestamp 추출
+- 같은 날짜의 텍스트 후보 중 가장 가까운 텍스트 선택
+- 매칭 조건 `prefix 동일`, `text_ts >= image_ts`, `5분 이내` 적용
 
 ### `BatchRunner`
 
@@ -153,6 +170,7 @@ DB 적재는 현재 SQLite `executemany` 기반입니다.
 주요 값:
 
 - `CLIENT_FTP_*`: 원본 파일 FTP
+- `TEXT_FTP_ROOT_PATH = "/RUBI"`
 - `SERVER_FTP_*`: 결과 파일 FTP
 - `CLIENT_FTP_ROOT_PATH = "/RUIP"`
 - `SERVER_FTP_ROOT_PATH = "/RESULT"`
@@ -175,6 +193,9 @@ DB 적재는 현재 SQLite `executemany` 기반입니다.
 
 #### RUPI
 
+- 이미지를 먼저 SQLite `rupi_ingest`에 insert 합니다.
+- 같은 날짜의 `RUBI` 텍스트 후보를 FTP에서 읽어 매칭합니다.
+- 매칭 실패 시 방금 insert 한 row 는 delete 합니다.
 - 서버 FTP에 결과 PNG가 있으면 skip 합니다.
 - 서버 결과가 없고 로컬 PNG가 있으면 재변환 없이 재업로드합니다.
 - 서버 결과도 없고 로컬 PNG도 없을 때만 원본 TIF를 다시 다운로드합니다.
@@ -209,6 +230,7 @@ DB 적재는 현재 SQLite `executemany` 기반입니다.
 
 - `RUBI` DB는 SQLite 기반입니다.
 - bulk insert는 `psycopg2.execute_values`가 아니라 `sqlite3.executemany`입니다.
+- `RUPI` 이미지 메타도 SQLite `rupi_ingest` 테이블에 저장합니다.
 - `DBManager`가 따로 분리되어 있지 않습니다.
 - `RUPI`와 `RUBI`가 같은 러너에서 분기됩니다.
 
@@ -219,6 +241,11 @@ DB 적재는 현재 SQLite `executemany` 기반입니다.
 - `commit 성공 후 delete 실패` 재시도 정책 추가
 - `RUPI` 업로드 정합성 보강
 - 필요 시 `scan()` 재귀 스캔 지원
+- 이미지-텍스트 매칭 로직 고도화
+
+관련 설계 문서:
+
+- [IMAGE_TEXT_MATCHING.md](/Users/parkjunho/PycharmProjects/PythonStudy/IMAGE_TEXT_MATCHING.md)
 
 ## 요약
 

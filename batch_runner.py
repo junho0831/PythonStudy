@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from ftp_scanner import FTPScanner
+from image_text_matcher import extract_info, find_best_text_match
 from rubi_processor import RubiProcessor
 from rupi_processor import RupiProcessor
 
@@ -19,6 +20,7 @@ class BatchRunner:
         client_username,
         client_password,
         client_root_path,
+        text_root_path,
         server_host,
         server_port,
         server_username,
@@ -33,6 +35,7 @@ class BatchRunner:
         self.date_str = self._normalize_date(input_date)
         self.parser_name = self._normalize_parser(parser_name)
         self.client_root_path = client_root_path.rstrip("/")
+        self.text_root_path = text_root_path.rstrip("/")
         self.server_root_path = server_root_path.rstrip("/")
         self.work_dir = Path(work_dir)
         self.work_dir.mkdir(parents=True, exist_ok=True)
@@ -45,7 +48,16 @@ class BatchRunner:
             passive=passive,
         )
         self.server_scanner = None
+        self.text_scanner = None
         if self.parser_name == "rupi":
+            self.text_scanner = FTPScanner(
+                host=client_host,
+                port=client_port,
+                username=client_username,
+                password=client_password,
+                root_path=self.text_root_path,
+                passive=passive,
+            )
             self.server_scanner = FTPScanner(
                 host=server_host,
                 port=server_port,
@@ -55,7 +67,7 @@ class BatchRunner:
                 passive=passive,
             )
         self.rubi_processor = RubiProcessor(db_path=db_path)
-        self.rupi_processor = RupiProcessor(scale_percent=scale_percent)
+        self.rupi_processor = RupiProcessor(db_path=db_path, scale_percent=scale_percent)
 
     def _normalize_date(self, input_date):
         try:
@@ -114,6 +126,9 @@ class BatchRunner:
 
         try:
             remote_files = self.client_scanner.scan(self.date_str)
+            text_files = []
+            if self.parser_name == "rupi":
+                text_files = self.text_scanner.scan(self.date_str)
             total = len(remote_files)
             print(
                 f"[INFO] parser={self.parser_name}, input_date={self.input_date}, "
@@ -125,11 +140,29 @@ class BatchRunner:
                 output_path = None
                 try:
                     if self.parser_name == "rupi":
+                        prefix, image_ts = extract_info(remote_file)
+                        image_id = self.rupi_processor.insert_image(remote_file, prefix, image_ts)
+                        matched_text = find_best_text_match(remote_file, text_files)
+                        if not matched_text:
+                            print(f"[{idx}/{total}] MATCH SKIP (TEXT NOT FOUND): {remote_file}")
+                            self.rupi_processor.delete_image(image_id)
+                            skipped += 1
+                            continue
+
+                        _, matched_text_ts = extract_info(matched_text)
+                        matched_diff_seconds = int((matched_text_ts - image_ts).total_seconds())
                         output_path = self.rupi_processor.build_output_path(local_path)
                         remote_output_path = self.build_server_remote_path(remote_file)
                         if self.server_scanner.file_exists(remote_output_path):
                             print(f"[{idx}/{total}] PROCESS SKIP (REMOTE PNG EXISTS): {remote_output_path}")
-                            skipped += 1
+                            self.rupi_processor.update_image_match(
+                                image_id=image_id,
+                                matched_text_file=matched_text,
+                                matched_text_ts=matched_text_ts,
+                                matched_diff_seconds=matched_diff_seconds,
+                                output_remote_file=remote_output_path,
+                            )
+                            processed += 1
                             continue
                         if output_path.exists():
                             print(f"[{idx}/{total}] PROCESS SKIP (LOCAL PNG REUSE): {output_path}")
@@ -142,6 +175,13 @@ class BatchRunner:
                                 skipped += 1
                                 continue
                             self.upload_rupi_output(output_path, remote_output_path, idx, total)
+                        self.rupi_processor.update_image_match(
+                            image_id=image_id,
+                            matched_text_file=matched_text,
+                            matched_text_ts=matched_text_ts,
+                            matched_diff_seconds=matched_diff_seconds,
+                            output_remote_file=remote_output_path,
+                        )
                         local_path.unlink(missing_ok=True)
                         processed += 1
                         continue
@@ -165,6 +205,8 @@ class BatchRunner:
                         local_path.unlink()
         finally:
             self.client_scanner.close()
+            if self.text_scanner is not None:
+                self.text_scanner.close()
             if self.server_scanner is not None:
                 self.server_scanner.close()
 
