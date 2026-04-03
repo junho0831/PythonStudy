@@ -2,7 +2,7 @@ from pyftpdlib.authorizers import DummyAuthorizer
 from pyftpdlib.handlers import FTPHandler
 from pyftpdlib.servers import FTPServer
 
-from local_test_settings import (
+from ftp_batch.config.local_test_settings import (
     CLIENT_FTP_HOST,
     CLIENT_FTP_PASSWORD,
     CLIENT_FTP_PORT,

@@ -1,6 +1,6 @@
 import argparse
-from batch_runner import BatchRunner
-from local_test_settings import (
+from ftp_batch.app.batch_runner import BatchRunner
+from ftp_batch.config.local_test_settings import (
     CLIENT_FTP_HOST,
     CLIENT_FTP_PASSWORD,
     CLIENT_FTP_PORT,

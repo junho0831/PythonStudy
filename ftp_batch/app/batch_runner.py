@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
-from ftp_scanner import FTPScanner
-from image_text_matcher import extract_info, find_best_text_match
-from rubi_processor import RubiProcessor
-from rupi_processor import RupiProcessor
+from ftp_batch.infra.ftp_scanner import FTPScanner
+from ftp_batch.matching.image_text_matcher import extract_info, find_best_text_match
+from ftp_batch.processors.rubi_processor import RubiProcessor
+from ftp_batch.processors.rupi_processor import RupiProcessor
 
 
 class BatchRunner:
@@ -66,8 +66,12 @@ class BatchRunner:
                 root_path=self.server_root_path,
                 passive=passive,
             )
-        self.rubi_processor = RubiProcessor(db_path=db_path)
-        self.rupi_processor = RupiProcessor(db_path=db_path, scale_percent=scale_percent)
+        self.rubi_processor = RubiProcessor(db_path=db_path) if self.parser_name == "rubi" else None
+        self.rupi_processor = (
+            RupiProcessor(db_path=db_path, scale_percent=scale_percent)
+            if self.parser_name == "rupi"
+            else None
+        )
 
     def _normalize_date(self, input_date):
         try:
@@ -113,16 +117,11 @@ class BatchRunner:
         print(f"[{idx}/{total}] SERVER UPLOAD: {remote_output_path}")
         self.server_scanner.upload_file(output_path, remote_output_path)
 
-    def process_file(self, local_path, remote_file):
-        if self.parser_name == "rubi":
-            self.rubi_processor.process(local_path, source_file=remote_file)
-            return True, None
-        return True, self.rupi_processor.process(local_path)
-
     def run(self):
         processed = 0
         skipped = 0
         errors = 0
+        upload_queue = []
 
         try:
             remote_files = self.client_scanner.scan(self.date_str)
@@ -132,12 +131,11 @@ class BatchRunner:
             total = len(remote_files)
             print(
                 f"[INFO] parser={self.parser_name}, input_date={self.input_date}, "
-                f"ftp_date={self.date_str}, client_total={total}, target_total={total}"
+                f"ftp_date={self.date_str}, total={total}"
             )
 
             for idx, remote_file in enumerate(remote_files, start=1):
                 local_path = self.build_local_path(remote_file)
-                output_path = None
                 try:
                     if self.parser_name == "rupi":
                         prefix, image_ts = extract_info(remote_file)
@@ -151,49 +149,41 @@ class BatchRunner:
 
                         _, matched_text_ts = extract_info(matched_text)
                         matched_diff_seconds = int((matched_text_ts - image_ts).total_seconds())
-                        output_path = self.rupi_processor.build_output_path(local_path)
-                        remote_output_path = self.build_server_remote_path(remote_file)
-                        if self.server_scanner.file_exists(remote_output_path):
-                            print(f"[{idx}/{total}] PROCESS SKIP (REMOTE PNG EXISTS): {remote_output_path}")
-                            self.rupi_processor.update_image_match(
-                                image_id=image_id,
-                                matched_text_file=matched_text,
-                                matched_text_ts=matched_text_ts,
-                                matched_diff_seconds=matched_diff_seconds,
-                                output_remote_file=remote_output_path,
-                            )
-                            processed += 1
-                            continue
-                        if output_path.exists():
-                            print(f"[{idx}/{total}] PROCESS SKIP (LOCAL PNG REUSE): {output_path}")
-                            self.upload_rupi_output(output_path, remote_output_path, idx, total)
-                        else:
-                            self.ensure_local_rupi_source_file(remote_file, local_path, idx, total)
-                            print(f"[{idx}/{total}] PROCESS")
-                            success, output_path = self.process_file(local_path, remote_file)
-                            if not success:
-                                skipped += 1
-                                continue
-                            self.upload_rupi_output(output_path, remote_output_path, idx, total)
-                        self.rupi_processor.update_image_match(
+                        self.rupi_processor.update_match_candidate(
                             image_id=image_id,
                             matched_text_file=matched_text,
                             matched_text_ts=matched_text_ts,
                             matched_diff_seconds=matched_diff_seconds,
-                            output_remote_file=remote_output_path,
                         )
-                        local_path.unlink(missing_ok=True)
-                        processed += 1
+                        output_path = self.rupi_processor.build_output_path(local_path)
+                        remote_output_path = self.build_server_remote_path(remote_file)
+                        if self.server_scanner.file_exists(remote_output_path):
+                            print(f"[{idx}/{total}] PROCESS SKIP (REMOTE PNG EXISTS): {remote_output_path}")
+                            self.rupi_processor.finalize_upload(image_id, remote_output_path)
+                            processed += 1
+                            continue
+                        output_path = self.rupi_processor.build_output_path(local_path)
+                        if output_path.exists():
+                            print(f"[{idx}/{total}] PROCESS PREPARE (LOCAL PNG REUSE): {output_path}")
+                        else:
+                            self.ensure_local_rupi_source_file(remote_file, local_path, idx, total)
+                            print(f"[{idx}/{total}] PROCESS PREPARE")
+                            output_path = self.rupi_processor.process(local_path)
+
+                        upload_queue.append(
+                            {
+                                "image_id": image_id,
+                                "remote_file": remote_file,
+                                "local_path": local_path,
+                                "output_path": output_path,
+                                "remote_output_path": remote_output_path,
+                            }
+                        )
                         continue
 
                     self.download_local_file(remote_file, local_path, idx, total)
                     print(f"[{idx}/{total}] PROCESS")
-                    success, _ = self.process_file(local_path, remote_file)
-
-                    if not success:
-                        skipped += 1
-                        continue
-
+                    self.rubi_processor.process(local_path, source_file=remote_file)
                     print(f"[{idx}/{total}] CLIENT DELETE: {remote_file}")
                     self.client_scanner.delete_file(remote_file)
                     local_path.unlink(missing_ok=True)
@@ -201,8 +191,30 @@ class BatchRunner:
                 except Exception as exc:
                     errors += 1
                     print(f"[ERROR] {remote_file} / {exc}")
-                    if self.parser_name == "rubi" and local_path.exists():
+                    if local_path.exists():
                         local_path.unlink()
+
+            if self.parser_name == "rupi" and upload_queue:
+                upload_total = len(upload_queue)
+                print(f"[UPLOAD] queued={upload_total}")
+                for upload_idx, item in enumerate(upload_queue, start=1):
+                    try:
+                        self.upload_rupi_output(
+                            item["output_path"],
+                            item["remote_output_path"],
+                            upload_idx,
+                            upload_total,
+                        )
+                        self.rupi_processor.finalize_upload(
+                            item["image_id"],
+                            item["remote_output_path"],
+                        )
+                        item["local_path"].unlink(missing_ok=True)
+                        processed += 1
+                    except Exception as exc:
+                        errors += 1
+                        print(f"[ERROR] {item['remote_file']} / {exc}")
+                        item["local_path"].unlink(missing_ok=True)
         finally:
             self.client_scanner.close()
             if self.text_scanner is not None:

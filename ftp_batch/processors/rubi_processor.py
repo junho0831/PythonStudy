@@ -1,31 +1,18 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from pathlib import Path
+
+import pandas as pd
+
+from ftp_batch.infra.db_manager import DBManager
 
 
 class RubiProcessor:
     def __init__(self, db_path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._ensure_table()
-
-    def _ensure_table(self):
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                create table if not exists rubi_ingest (
-                    id integer primary key autoincrement,
-                    source_file text not null,
-                    line_number integer not null,
-                    record_type text not null,
-                    payload_json text not null,
-                    created_at text not null default current_timestamp
-                )
-                """
-            )
-            conn.commit()
+        self.db = DBManager(db_path)
 
     def read_text(self, local_path):
         raw_bytes = Path(local_path).read_bytes()
@@ -72,33 +59,17 @@ class RubiProcessor:
         return parsed_records
 
     def store_records(self, source_file, parsed_records):
-        with sqlite3.connect(self.db_path) as conn:
-            try:
-                conn.execute("begin")
-                rows = [
-                    (
-                        source_file,
-                        record["line_number"],
-                        record["type"],
-                        json.dumps(record, ensure_ascii=False),
-                    )
-                    for record in parsed_records
-                ]
-                conn.executemany(
-                    """
-                    insert into rubi_ingest (
-                        source_file,
-                        line_number,
-                        record_type,
-                        payload_json
-                    ) values (?, ?, ?, ?)
-                    """,
-                    rows,
-                )
-                conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
+        rows = [
+            {
+                "source_file": source_file,
+                "line_number": record["line_number"],
+                "record_type": record["type"],
+                "payload_json": json.dumps(record, ensure_ascii=False),
+            }
+            for record in parsed_records
+        ]
+        df = pd.DataFrame(rows)
+        self.db.bulk_insert_df("rubi_ingest", df)
 
     def process(self, local_path, source_file):
         text = self.read_text(local_path)
