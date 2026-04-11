@@ -49,3 +49,30 @@ def find_best_text_match(image_remote_path, text_paths) -> str | None:
             best_diff = diff
 
     return best_path
+
+
+def find_nearest_image_for_text(text_path, candidate_images) -> str | None:
+    text_prefix, text_ts = extract_info(text_path)
+    best_path = None
+    best_diff = None
+
+    for image_path in candidate_images:
+        try:
+            image_prefix, image_ts = extract_info(image_path)
+        except ValueError:
+            continue
+
+        if image_prefix != text_prefix:
+            continue
+        if image_ts > text_ts:
+            continue
+
+        diff = text_ts - image_ts
+        if diff > MAX_MATCH_DIFF:
+            continue
+
+        if best_diff is None or diff < best_diff:
+            best_path = image_path
+            best_diff = diff
+
+    return best_path

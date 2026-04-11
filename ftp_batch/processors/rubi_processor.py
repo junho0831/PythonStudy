@@ -58,7 +58,7 @@ class RubiProcessor:
             )
         return parsed_records
 
-    def store_records(self, source_file, parsed_records):
+    def build_df(self, source_file, parsed_records):
         rows = [
             {
                 "source_file": source_file,
@@ -68,14 +68,20 @@ class RubiProcessor:
             }
             for record in parsed_records
         ]
-        df = pd.DataFrame(rows)
-        self.db.bulk_insert_df("rubi_ingest", df)
+        return pd.DataFrame(rows)
 
-    def process(self, local_path, source_file):
+    def parse_to_df(self, local_path, source_file):
         text = self.read_text(local_path)
         parsed_records = self.parse_text(text)
         preview = json.dumps(parsed_records[:3], ensure_ascii=False)
         print(f"[TEXT] {local_path.name} / length={len(text)} / records={len(parsed_records)}")
         print(f"[TEXT] preview={preview}")
-        self.store_records(source_file, parsed_records)
-        return parsed_records
+        return self.build_df(source_file, parsed_records)
+
+    def store_df(self, df, connection=None):
+        self.db.bulk_insert_df("rubi_ingest", df, connection=connection)
+
+    def process(self, local_path, source_file, connection=None):
+        df = self.parse_to_df(local_path, source_file)
+        self.store_df(df, connection=connection)
+        return df

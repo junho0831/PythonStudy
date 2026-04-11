@@ -1,4 +1,5 @@
-import argparse
+from __future__ import annotations
+
 from ftp_batch.app.batch_runner import BatchRunner
 from ftp_batch.config.local_test_settings import (
     CLIENT_FTP_HOST,
@@ -19,18 +20,10 @@ from ftp_batch.config.local_test_settings import (
 )
 
 
-def build_parser():
-    parser = argparse.ArgumentParser(description="날짜와 RUBI/RUPI/COMBINED를 받아 FTP 파일을 처리합니다")
-    parser.add_argument("--input-date", required=True, help="YYYY-MM-DD 형식")
-    parser.add_argument("--parser", required=True, help="RUBI, RUPI 또는 COMBINED")
-    return parser
-
-
-def main():
-    args = build_parser().parse_args()
-    runner = BatchRunner(
-        input_date=args.input_date,
-        parser_name=args.parser,
+def build_runner(input_date: str, parser_name: str) -> BatchRunner:
+    return BatchRunner(
+        input_date=input_date,
+        parser_name=parser_name,
         client_host=CLIENT_FTP_HOST,
         client_port=CLIENT_FTP_PORT,
         client_username=CLIENT_FTP_USERNAME,
@@ -47,9 +40,20 @@ def main():
         scale_percent=RUPI_SCALE_PERCENT,
         passive=FTP_PASSIVE_MODE,
     )
+
+
+def run_batch(input_date: str, parser_name: str) -> None:
+    runner = build_runner(input_date=input_date, parser_name=parser_name)
     runner.run()
-    return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+def run_combined(input_date: str) -> None:
+    run_batch(input_date=input_date, parser_name="COMBINED")
+
+
+def run_rubi(input_date: str) -> None:
+    run_batch(input_date=input_date, parser_name="RUBI")
+
+
+def run_rupi(input_date: str) -> None:
+    run_batch(input_date=input_date, parser_name="RUPI")
