@@ -18,18 +18,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9fc81ff4-5cda-47d6-ad9b-ac08b12c0f95" name="변경" comment="이미지-텍스트 매칭 로직 및 SQLite 관리 기능 추가:  &#10;- 파일명 기반 prefix와 timestamp 추출 로직 구현  &#10;- 이미지와 텍스트 간 매칭 조건(`prefix 동일`, `text_ts &gt;= image_ts`, `5분 이내`) 구현  &#10;- 최적 매칭 텍스트를 찾고, 매칭 실패 시 이미지 row 삭제 처리  &#10;- `rupi_ingest` 테이블 생성 및 이미지 메타 정보 관리(insert, delete, update) 기능 추가  &#10;- Rupi 처리 흐름에 매칭 로직 통합 및 관련 테스트 설정 업데이트">
-      <change beforePath="$PROJECT_DIR$/IMAGE_TEXT_MATCHING.md" beforeDir="false" afterPath="$PROJECT_DIR$/IMAGE_TEXT_MATCHING.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/batch_runner.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ftp_scanner.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/image_text_matcher.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/local_ftp_server.py" beforeDir="false" afterPath="$PROJECT_DIR$/local_ftp_server.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/local_test_settings.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/rubi_processor.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/rupi_processor.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/test.py" beforeDir="false" afterPath="$PROJECT_DIR$/test.py" afterDir="false" />
-    </list>
+    <list default="true" id="9fc81ff4-5cda-47d6-ad9b-ac08b12c0f95" name="변경" comment="소스 코드 및 설정 파일 전체 리팩터링:  &#10;- 기존 BatchRunner, FTPScanner, RubiProcessor, RupiProcessor 모듈 분리  &#10;- 코드 계층 구조 정리 (`ftp_batch`로 재구성: `app`, `infra`, `config`, `processors`, `matching`)  &#10;- Rubi/Rupi 처리 로직 통합 및 FTP 관련 유틸 코드 단순화  &#10;- 테스트 및 설정 파일 삭제, 신규 프로젝트 구조에 맞게 재구성" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -120,6 +109,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="true" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="RUN_TOOL" value="" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/generate_troubleshooting_docs.py" />
@@ -144,6 +134,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="true" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="RUN_TOOL" value="" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/remote_batch_processor.py" />
@@ -185,7 +176,7 @@
       <workItem from="1774154839478" duration="9798000" />
       <workItem from="1774872495819" duration="3209000" />
       <workItem from="1775044698979" duration="808000" />
-      <workItem from="1775130505432" duration="2412000" />
+      <workItem from="1775130505432" duration="3891000" />
     </task>
     <task id="LOCAL-00001" summary="`.gitignore`, `README.md`, `pyproject.toml`, 및 `test.py` 파일 추가: OpenCV 기반 16-bit TIFF 무손실 압축 및 이미지 처리 기능 초기 구현">
       <option name="closed" value="true" />
@@ -331,7 +322,15 @@
       <option name="project" value="LOCAL" />
       <updated>1775130557024</updated>
     </task>
-    <option name="localTasksCounter" value="19" />
+    <task id="LOCAL-00019" summary="소스 코드 및 설정 파일 전체 리팩터링:  &#10;- 기존 BatchRunner, FTPScanner, RubiProcessor, RupiProcessor 모듈 분리  &#10;- 코드 계층 구조 정리 (`ftp_batch`로 재구성: `app`, `infra`, `config`, `processors`, `matching`)  &#10;- Rubi/Rupi 처리 로직 통합 및 FTP 관련 유틸 코드 단순화  &#10;- 테스트 및 설정 파일 삭제, 신규 프로젝트 구조에 맞게 재구성">
+      <option name="closed" value="true" />
+      <created>1775212106315</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1775212106315</updated>
+    </task>
+    <option name="localTasksCounter" value="20" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -349,7 +348,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Add `.gitignore`, `README.md`, and initial implementation of image compression and processing utilities." />
     <MESSAGE value="`.gitignore`, `README.md`, `pyproject.toml`, 및 `test.py` 파일 추가: OpenCV 기반 16-bit TIFF 무손실 압축 및 이미지 처리 기능 초기 구현" />
     <MESSAGE value="OpenCV 기반 16-bit TIFF 이미지 압축/처리 기능 삭제 및 원격 처리를 위한 새로운 pipeline 작성: SSH 기반 Rubi/Rubp 배치 프로세스 초기 구현, DB 연동 및 텍스트 파싱 지원 추가" />
     <MESSAGE value="Rubi txt 로컬 및 원격 처리 배치 프로그램 초기 구현" />
@@ -374,7 +372,8 @@
     <MESSAGE value="`README.md` 추가: 프로젝트 전반 개요, Rubi/Rupi 처리 흐름, 주요 클래스 역할 및 실행 방법 포함." />
     <MESSAGE value="Rupi 처리 및 FTP 업로드 로직 개선:  &#10;- 서버/로컬 PNG 캐시 재활용 로직 추가  &#10;- 업로드 후 원격 파일 크기 검증 및 불일치 시 예외 처리 구현  &#10;- 업로드 성공 시 로컬 TIF 파일 삭제, PNG 캐시 유지 로직 추가  &#10;- 예외 발생 시 미완료 파일 삭제 처리 강화" />
     <MESSAGE value="이미지-텍스트 매칭 로직 및 SQLite 관리 기능 추가:  &#10;- 파일명 기반 prefix와 timestamp 추출 로직 구현  &#10;- 이미지와 텍스트 간 매칭 조건(`prefix 동일`, `text_ts &gt;= image_ts`, `5분 이내`) 구현  &#10;- 최적 매칭 텍스트를 찾고, 매칭 실패 시 이미지 row 삭제 처리  &#10;- `rupi_ingest` 테이블 생성 및 이미지 메타 정보 관리(insert, delete, update) 기능 추가  &#10;- Rupi 처리 흐름에 매칭 로직 통합 및 관련 테스트 설정 업데이트" />
-    <option name="LAST_COMMIT_MESSAGE" value="이미지-텍스트 매칭 로직 및 SQLite 관리 기능 추가:  &#10;- 파일명 기반 prefix와 timestamp 추출 로직 구현  &#10;- 이미지와 텍스트 간 매칭 조건(`prefix 동일`, `text_ts &gt;= image_ts`, `5분 이내`) 구현  &#10;- 최적 매칭 텍스트를 찾고, 매칭 실패 시 이미지 row 삭제 처리  &#10;- `rupi_ingest` 테이블 생성 및 이미지 메타 정보 관리(insert, delete, update) 기능 추가  &#10;- Rupi 처리 흐름에 매칭 로직 통합 및 관련 테스트 설정 업데이트" />
+    <MESSAGE value="소스 코드 및 설정 파일 전체 리팩터링:  &#10;- 기존 BatchRunner, FTPScanner, RubiProcessor, RupiProcessor 모듈 분리  &#10;- 코드 계층 구조 정리 (`ftp_batch`로 재구성: `app`, `infra`, `config`, `processors`, `matching`)  &#10;- Rubi/Rupi 처리 로직 통합 및 FTP 관련 유틸 코드 단순화  &#10;- 테스트 및 설정 파일 삭제, 신규 프로젝트 구조에 맞게 재구성" />
+    <option name="LAST_COMMIT_MESSAGE" value="소스 코드 및 설정 파일 전체 리팩터링:  &#10;- 기존 BatchRunner, FTPScanner, RubiProcessor, RupiProcessor 모듈 분리  &#10;- 코드 계층 구조 정리 (`ftp_batch`로 재구성: `app`, `infra`, `config`, `processors`, `matching`)  &#10;- Rubi/Rupi 처리 로직 통합 및 FTP 관련 유틸 코드 단순화  &#10;- 테스트 및 설정 파일 삭제, 신규 프로젝트 구조에 맞게 재구성" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/generate_troubleshooting_docs_py$remote_batch_processor.coverage" NAME="remote_batch_processor 커버리지 결과" MODIFIED="1773832293382" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />

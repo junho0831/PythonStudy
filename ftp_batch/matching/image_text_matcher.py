@@ -4,6 +4,8 @@ import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from ftp_batch.common.path_utils import make_rbi_path
+
 
 FILE_NAME_PATTERN = re.compile(r"^(?P<prefix>.+)_(?P<date>\d{8})_(?P<time>\d{6})$")
 MAX_MATCH_DIFF = timedelta(minutes=5)

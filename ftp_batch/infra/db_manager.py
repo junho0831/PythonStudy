@@ -52,9 +52,6 @@ class DBManager:
             conn.commit()
         return len(rows)
 
-    def insert_df(self, table_name, df):
-        return self.bulk_insert_df(table_name, df)
-
     def execute(self, query, params=None):
         with self._connect() as conn:
             conn.execute(query, params or ())

@@ -9,6 +9,7 @@ from ftp_batch.config.local_test_settings import (
     CLIENT_FTP_USERNAME,
     LOCAL_FTP_HOME_DIR,
     LOCAL_CLIENT_SCAN_DIR,
+    LOCAL_TEXT_SCAN_DIR,
     LOCAL_SERVER_SCAN_DIR,
 )
 
@@ -35,6 +36,7 @@ class LocalFTPServer:
         try:
             LOCAL_FTP_HOME_DIR.mkdir(parents=True, exist_ok=True)
             LOCAL_CLIENT_SCAN_DIR.mkdir(parents=True, exist_ok=True)
+            LOCAL_TEXT_SCAN_DIR.mkdir(parents=True, exist_ok=True)
             LOCAL_SERVER_SCAN_DIR.mkdir(parents=True, exist_ok=True)
 
             authorizer = DummyAuthorizer()

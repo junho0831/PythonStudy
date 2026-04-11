@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-PROJECT_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = Path(__file__).resolve().parents[2]
 CLIENT_FTP_HOST = "127.0.0.1"
 CLIENT_FTP_PORT = 2121
 CLIENT_FTP_USERNAME = "testuser"
@@ -13,7 +13,7 @@ SERVER_FTP_HOST = "127.0.0.1"
 SERVER_FTP_PORT = 2121
 SERVER_FTP_USERNAME = "testuser"
 SERVER_FTP_PASSWORD = "1234"
-SERVER_FTP_ROOT_PATH = "/RESULT"
+SERVER_FTP_ROOT_PATH = "/rbi"
 
 LOCAL_FTP_HOME_DIR = PROJECT_DIR / "ftp_root"
 LOCAL_CLIENT_SCAN_DIR = LOCAL_FTP_HOME_DIR / CLIENT_FTP_ROOT_PATH.lstrip("/")

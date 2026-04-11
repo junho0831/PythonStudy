@@ -15,6 +15,9 @@
 ftp_batch/
 ├── app/
 │   └── batch_runner.py
+├── common/
+│   ├── date_utils.py
+│   └── path_utils.py
 ├── config/
 │   └── local_test_settings.py
 ├── infra/
@@ -34,6 +37,7 @@ IMAGE_TEXT_MATCHING.md
 ```
 
 - `ftp_batch/app`: 배치 실행 흐름
+- `ftp_batch/common`: 날짜/경로 helper
 - `ftp_batch/config`: 로컬/FTP 설정
 - `ftp_batch/infra`: FTP, DB 공통 계층
 - `ftp_batch/matching`: 이미지-텍스트 매칭 로직
@@ -56,7 +60,7 @@ flowchart TD
     H --> I["FTP 원본 유지"]
 ```
 
-- FTP 날짜 폴더를 조회합니다.
+- 입력 날짜를 anchor로 받고, 전날과 anchor 날짜 폴더를 함께 조회합니다.
 - 원본 파일을 로컬 작업 폴더로 다운로드합니다.
 - 텍스트를 파싱합니다.
 - `pandas.DataFrame`으로 정리한 뒤 공통 DB 계층의 벌크 인설트로 저장합니다.
@@ -65,12 +69,12 @@ flowchart TD
 
 ### RUPI 처리 흐름
 
-- FTP 날짜 폴더를 조회합니다.
+- 입력 날짜를 anchor로 받고, 전날과 anchor 날짜 폴더를 함께 조회합니다.
 - 같은 날짜의 `RUBI` 텍스트 후보를 FTP에서 같이 조회합니다.
 - 이미지 파일명을 기준으로 `prefix 동일`, `text_ts >= image_ts`, `5분 이내` 조건의 가장 가까운 텍스트를 찾습니다.
 - 이미지는 먼저 SQLite `rupi_ingest`에 insert 합니다.
 - 매칭 실패 시 방금 insert 한 이미지 row 를 delete 합니다.
-- 서버 FTP에 결과 PNG가 이미 있으면 업로드 큐에 넣지 않고 DB 정보만 갱신합니다.
+- 서버 FTP에 `rbi/ruip/.../*.png` 결과가 이미 있으면 업로드 큐에 넣지 않고 DB 정보만 갱신합니다.
 - 서버 결과가 없고 로컬 PNG가 이미 있으면 원본 TIF를 다시 받지 않고 업로드 큐에만 추가합니다.
 - 서버 결과도 없고 로컬 PNG도 없을 때만 원본 TIF를 로컬로 다운로드합니다.
 - 다운로드한 TIF를 로컬에서 PNG로 변환하고 업로드 큐에 추가합니다.
@@ -162,6 +166,7 @@ DB 적재는 현재 [db_manager.py](/Users/parkjunho/PycharmProjects/PythonStudy
 - 파일명에서 `prefix`, timestamp 추출
 - 같은 날짜의 텍스트 후보 중 가장 가까운 텍스트 선택
 - 매칭 조건 `prefix 동일`, `text_ts >= image_ts`, `5분 이내` 적용
+- `RUIP` 원격 경로를 `rbi/ruip/.../*.png` 업로드 경로로 변환
 
 ### `BatchRunner`
 
@@ -230,7 +235,7 @@ DB 적재는 현재 [db_manager.py](/Users/parkjunho/PycharmProjects/PythonStudy
 - `TEXT_FTP_ROOT_PATH = "/RUBI"`
 - `SERVER_FTP_*`: 결과 파일 FTP
 - `CLIENT_FTP_ROOT_PATH = "/RUIP"`
-- `SERVER_FTP_ROOT_PATH = "/RESULT"`
+- `SERVER_FTP_ROOT_PATH = "/rbi"`
 - `LOCAL_WORK_DIR`: 로컬 작업 폴더
 - `LOCAL_DB_PATH`: 현재 SQLite DB 파일
 - `RUPI_SCALE_PERCENT`: 이미지 축소 비율
@@ -253,7 +258,7 @@ DB 적재는 현재 [db_manager.py](/Users/parkjunho/PycharmProjects/PythonStudy
 - 이미지를 먼저 SQLite `rupi_ingest`에 insert 합니다.
 - 같은 날짜의 `RUBI` 텍스트 후보를 FTP에서 읽어 매칭합니다.
 - 매칭 실패 시 방금 insert 한 row 는 delete 합니다.
-- 서버 FTP에 결과 PNG가 있으면 업로드 큐에 넣지 않고 DB 매칭 정보만 유지합니다.
+- 서버 FTP에 `rbi/ruip/.../*.png` 결과가 있으면 업로드 큐에 넣지 않고 DB 매칭 정보만 유지합니다.
 - 서버 결과가 없고 로컬 PNG가 있으면 재변환 없이 업로드 큐에 넣습니다.
 - 서버 결과도 없고 로컬 PNG도 없을 때만 원본 TIF를 다시 다운로드합니다.
 - 이미지 준비가 끝난 뒤 마지막에 한 번에 업로드합니다.
@@ -272,8 +277,8 @@ DB 적재는 현재 [db_manager.py](/Users/parkjunho/PycharmProjects/PythonStudy
 
 예:
 
-- FTP: `"/RUIP/20260325/sample.txt"`
-- 로컬: `Path("/tmp/ftp_work/RUIP/20260325/sample.txt")`
+- FTP: `"/RUBI/20260325/sample.txt"`
+- 로컬: `Path("/tmp/ftp_work/20260325/sample.txt")`
 
 현재 `scan()` 동작:
 
@@ -316,8 +321,9 @@ DB 적재는 현재 [db_manager.py](/Users/parkjunho/PycharmProjects/PythonStudy
   - DB bulk insert
   - commit 성공 시 FTP 원본 삭제
 - `RUPI`
-  - 다운로드
+  - 전날 + 오늘 스캔
+  - 이미지-텍스트 매칭
   - 로컬 PNG 변환
-  - 서버 FTP 업로드
+  - `rbi/ruip/...` 서버 FTP 업로드
 
 즉 현재 구현의 핵심은 `RUBI` 파이프라인의 정합성을 맞추는 것이고, 상태 파일 기반 중복 판단보다 `commit 성공 후 삭제`를 기준으로 단순화한 구조입니다.
