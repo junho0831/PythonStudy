@@ -229,4 +229,12 @@ IMAGE_TEXT_MATCHING.md
 - DB는 SQLite 기준입니다.
 - `scan()`은 날짜 폴더 바로 아래 파일만 읽고 재귀 스캔은 지원하지 않습니다.
 
+## 이번 범위에 넣지 않은 것
+
+- `.env` 기반 설정 로딩
+- `ON CONFLICT DO NOTHING` 기반 중복 처리 정책 변경
+- FTP 재귀 디렉토리 삭제 유틸
+- `00:00 ~ 01:59` 전날만 처리하는 시간 분기
+- PostgreSQL 전환
+
 자세한 매칭 규칙은 [/Users/parkjunho/PycharmProjects/PythonStudy/IMAGE_TEXT_MATCHING.md](/Users/parkjunho/PycharmProjects/PythonStudy/IMAGE_TEXT_MATCHING.md) 를 참고하면 됩니다.

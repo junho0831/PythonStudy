@@ -22,7 +22,13 @@ from ftp_batch.config.local_test_settings import (
 def build_parser():
     parser = argparse.ArgumentParser(description="날짜와 RUBI/RUPI/COMBINED를 받아 FTP 파일을 처리합니다")
     parser.add_argument("--input-date", required=True, help="YYYY-MM-DD 형식")
-    parser.add_argument("--parser", required=True, help="RUBI, RUPI 또는 COMBINED")
+    parser.add_argument(
+        "--parser",
+        required=True,
+        type=str.upper,
+        choices=("RUBI", "RUPI", "COMBINED"),
+        help="RUBI, RUPI 또는 COMBINED",
+    )
     return parser
 
 
