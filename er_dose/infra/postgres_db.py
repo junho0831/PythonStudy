@@ -58,7 +58,7 @@ class PostgresDB:
         column_sql = ", ".join(self._quote_identifier(column) for column in columns)
         conflict_sql = ""
         if on_conflict_column:
-            conflict_sql = f" on conflict ({self._quote_identifier(on_conflict_column)}) do nothing"
+            conflict_sql = f" on conflict ({self._quote_identifier(on_conflict_column)}) do nothing returning 1"
 
         query = f"""
             insert into {table_sql} ({column_sql})
@@ -68,13 +68,15 @@ class PostgresDB:
 
         own_connection = connection is None
         conn = connection or self._connect()
-        affected_count = 0
+        insert_count = len(rows)
         try:
             from psycopg2.extras import execute_values
 
             with conn.cursor() as cur:
-                execute_values(cur, query, rows, page_size=page_size)
-                affected_count = cur.rowcount
+                if on_conflict_column is not None:
+                    insert_count = len(execute_values(cur, query, rows, page_size=page_size, fetch=True))
+                else:
+                    execute_values(cur, query, rows, page_size=page_size)
             if own_connection:
                 conn.commit()
         except Exception:
@@ -85,7 +87,7 @@ class PostgresDB:
             if own_connection:
                 conn.close()
 
-        return affected_count
+        return insert_count
 
     def execute(self, query: str, params=None, connection=None) -> int:
         own_connection = connection is None

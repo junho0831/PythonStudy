@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime
+from decimal import Decimal
 
 import pandas as pd
 
@@ -12,6 +13,8 @@ from er_dose.parsers.registry import parse_raw_er_log
 
 RAW_TABLE = "mbeat.er_data_raw"
 PARSED_TABLE = "mbeat.er_dose_error_parsed"
+PARSER_VERSION = "v1"
+DoseErrorValue = Decimal | int | bool | str | datetime | None
 
 
 class ERDoseBatch:
@@ -19,50 +22,53 @@ class ERDoseBatch:
         self.db = db
 
     def run(self, start_time: datetime, end_time: datetime, limit: int | None = None) -> dict[str, int]:
+        self.ensure_partitions(start_time=start_time, end_time=end_time)
         raw_df = self.fetch_raw_logs(start_time=start_time, end_time=end_time, limit=limit)
         parsed_rows = []
-        skipped_count = 0
-        failed_samples = []
+        success_count = 0
+        regex_fail_count = 0
+        parser_error_count = 0
 
         for _, row in raw_df.iterrows():
             try:
                 raw = self._row_to_raw_log(row)
                 parsed = parse_raw_er_log(raw)
                 if parsed is None:
-                    skipped_count += 1
+                    regex_fail_count += 1
+                    parsed_rows.append(self._build_status_row(raw, "REGEX_FAIL", "No parser matched contents."))
                     continue
                 parsed_rows.append(asdict(parsed))
+                success_count += 1
             except Exception as exc:
-                if len(failed_samples) < 5:
-                    failed_samples.append(f"raw_id={row.get('raw_id')} error={exc}")
+                parser_error_count += 1
+                parsed_rows.append(self._build_error_row(row, exc))
 
         insert_count = 0
-        if parsed_rows:
-            parsed_df = pd.DataFrame(parsed_rows)
-            insert_count = self.db.bulk_insert_df(
-                PARSED_TABLE,
-                parsed_df,
-                on_conflict_column="raw_id",
-            )
+        deleted_count = 0
+        with self.db.transaction() as connection:
+            deleted_count = self.delete_existing(start_time=start_time, end_time=end_time, connection=connection)
+            if parsed_rows:
+                parsed_df = pd.DataFrame(parsed_rows)
+                insert_count = self.db.bulk_insert_df(PARSED_TABLE, parsed_df, connection=connection)
 
         summary = {
             "fetched": int(len(raw_df)),
-            "parsed": int(len(parsed_rows)),
+            "success": int(success_count),
+            "regex_fail": int(regex_fail_count),
+            "parser_error": int(parser_error_count),
             "inserted": int(insert_count),
-            "skipped": int(skipped_count),
-            "failed": int(len(failed_samples)),
+            "deleted": int(deleted_count),
         }
 
         print(
             "[ER_DOSE] "
             f"fetched={summary['fetched']} "
-            f"parsed={summary['parsed']} "
+            f"success={summary['success']} "
+            f"regex_fail={summary['regex_fail']} "
+            f"parser_error={summary['parser_error']} "
             f"inserted={summary['inserted']} "
-            f"skipped={summary['skipped']} "
-            f"failed={summary['failed']}"
+            f"deleted={summary['deleted']}"
         )
-        for sample in failed_samples:
-            print(f"[ER_DOSE][PARSE_FAIL] {sample}")
 
         return summary
 
@@ -80,31 +86,73 @@ class ERDoseBatch:
 
         query = f"""
             select
-                r.id as raw_id,
+                r.er_date,
+                r.er_index,
+                ((r.er_date::bigint * 1000000000) + r.er_index::bigint) as raw_id,
                 r.er_line,
                 r.eq_name,
                 r.code,
                 r.code_occur_time,
+                r.belong,
+                r.type,
                 r.contents
             from {RAW_TABLE} r
             where r.code_occur_time >= %(start_time)s
               and r.code_occur_time < %(end_time)s
-              and r.contents is not null
-              and not exists (
-                  select 1
-                  from {PARSED_TABLE} p
-                  where p.raw_id = r.id
+              and (
+                  r.code ilike 'dw-%%'
+                  or r.contents ilike '%%dose evaluation%%'
+                  or r.contents ilike '%%de_err%%'
+                  or r.contents ilike '%%dwdc_eval_determine_dose_performance_result%%'
               )
-            order by r.code_occur_time, r.id
+            order by r.code_occur_time, r.er_date, r.er_index
             {limit_sql}
         """
         return self.db.fetch_df(query, params=params)
 
+    def delete_existing(self, start_time: datetime, end_time: datetime, connection=None) -> int:
+        query = f"""
+            delete from {PARSED_TABLE}
+            where code_occur_time >= %(start_time)s
+              and code_occur_time < %(end_time)s
+        """
+        return self.db.execute(
+            query,
+            params={
+                "start_time": start_time,
+                "end_time": end_time,
+            },
+            connection=connection,
+        )
+
+    def ensure_partitions(self, start_time: datetime, end_time: datetime) -> None:
+        for month_start in self._iter_month_starts(start_time, end_time):
+            next_month = self._next_month(month_start)
+            partition_name = f"er_dose_error_parsed_{month_start:%Y%m}"
+            query = f"""
+                create table if not exists mbeat.{partition_name}
+                partition of {PARSED_TABLE}
+                for values from (%(start_time)s) to (%(end_time)s)
+            """
+            self.db.execute(
+                query,
+                params={
+                    "start_time": month_start,
+                    "end_time": next_month,
+                },
+            )
+
     def _row_to_raw_log(self, row) -> RawErLog:
+        er_date = row.get("er_date")
+        er_index = row.get("er_index")
         raw_id = row.get("raw_id")
         code_occur_time = row.get("code_occur_time")
         contents = row.get("contents")
 
+        if pd.isna(er_date):
+            raise ValueError("er_date is required")
+        if pd.isna(er_index):
+            raise ValueError("er_index is required")
         if pd.isna(raw_id):
             raise ValueError("raw_id is required")
         if pd.isna(code_occur_time):
@@ -116,11 +164,15 @@ class ERDoseBatch:
             code_occur_time = code_occur_time.to_pydatetime()
 
         return RawErLog(
+            er_date=int(er_date),
+            er_index=int(er_index),
             raw_id=int(raw_id),
             er_line=self._nullable_str(row.get("er_line")),
             eq_name=self._nullable_str(row.get("eq_name")),
             code=self._nullable_str(row.get("code")),
             code_occur_time=code_occur_time,
+            code_occur_time_raw=self._format_timestamp_raw(code_occur_time),
+            log_source=self._build_log_source(row),
             contents=str(contents),
         )
 
@@ -129,3 +181,112 @@ class ERDoseBatch:
             return None
         return str(value)
 
+    def _build_error_row(self, row, exc: Exception) -> dict[str, DoseErrorValue]:
+        try:
+            raw = self._row_to_raw_log(row)
+            return self._build_status_row(raw, "PARSER_ERROR", str(exc))
+        except Exception:
+            code_occur_time = row.get("code_occur_time")
+            if hasattr(code_occur_time, "to_pydatetime"):
+                code_occur_time = code_occur_time.to_pydatetime()
+            if pd.isna(code_occur_time):
+                code_occur_time = datetime.min
+            return self._empty_parsed_row(
+                er_date=None if pd.isna(row.get("er_date")) else int(row.get("er_date")),
+                er_index=None if pd.isna(row.get("er_index")) else int(row.get("er_index")),
+                raw_id=None if pd.isna(row.get("raw_id")) else int(row.get("raw_id")),
+                er_line=self._nullable_str(row.get("er_line")),
+                eq_name=self._nullable_str(row.get("eq_name")),
+                code=self._nullable_str(row.get("code")),
+                code_occur_time=code_occur_time,
+                code_occur_time_raw=self._format_timestamp_raw(code_occur_time),
+                log_source=self._build_log_source(row),
+                raw_contents="" if row.get("contents") is None or pd.isna(row.get("contents")) else str(row.get("contents")),
+                parsing_status="PARSER_ERROR",
+                parsing_error=str(exc),
+            )
+
+    def _build_status_row(self, raw: RawErLog, parsing_status: str, parsing_error: str | None) -> dict[str, DoseErrorValue]:
+        return self._empty_parsed_row(
+            er_date=raw.er_date,
+            er_index=raw.er_index,
+            raw_id=raw.raw_id,
+            er_line=raw.er_line,
+            eq_name=raw.eq_name,
+            code=raw.code,
+            code_occur_time=raw.code_occur_time,
+            code_occur_time_raw=raw.code_occur_time_raw,
+            log_source=raw.log_source,
+            raw_contents=raw.contents,
+            parsing_status=parsing_status,
+            parsing_error=parsing_error,
+        )
+
+    def _empty_parsed_row(
+        self,
+        er_date: int | None,
+        er_index: int | None,
+        raw_id: int | None,
+        er_line: str | None,
+        eq_name: str | None,
+        code: str | None,
+        code_occur_time: datetime,
+        code_occur_time_raw: str,
+        log_source: str | None,
+        raw_contents: str,
+        parsing_status: str,
+        parsing_error: str | None,
+    ) -> dict[str, DoseErrorValue]:
+        return {
+            "er_date": er_date,
+            "er_index": er_index,
+            "raw_id": raw_id,
+            "er_line": er_line,
+            "eq_name": eq_name,
+            "code": code,
+            "code_occur_time": code_occur_time,
+            "code_occur_time_raw": code_occur_time_raw,
+            "log_source": log_source,
+            "exposure_handle": None,
+            "action_handle": None,
+            "wafer_seq": None,
+            "shot_seq": None,
+            "field_seq": None,
+            "repair_yn": None,
+            "repair_result": None,
+            "dose_error": None,
+            "dose_warn_level": None,
+            "de_err": None,
+            "de_warn_lvl": None,
+            "eset": None,
+            "freq": None,
+            "n_slit": None,
+            "mb_enabled": None,
+            "function_name": None,
+            "result_type": None,
+            "parser_version": PARSER_VERSION,
+            "parsing_status": parsing_status,
+            "parsing_error": parsing_error,
+            "raw_contents": raw_contents,
+        }
+
+    def _format_timestamp_raw(self, value: datetime) -> str:
+        return value.strftime("%Y-%m-%d %H:%M:%S.%f")
+
+    def _build_log_source(self, row) -> str | None:
+        belong = self._nullable_str(row.get("belong"))
+        log_type = self._nullable_str(row.get("type"))
+        if belong and log_type:
+            return f"{belong}:{log_type}"
+        return belong or log_type
+
+    def _iter_month_starts(self, start_time: datetime, end_time: datetime):
+        current = start_time.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        while current < end_time:
+            yield current
+            current = self._next_month(current)
+
+    def _next_month(self, value: datetime) -> datetime:
+        if value.month == 12:
+            return value.replace(year=value.year + 1, month=1)
+        return value.replace(month=value.month + 1)

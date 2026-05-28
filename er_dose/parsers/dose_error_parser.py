@@ -29,13 +29,22 @@ class DoseErrorParser:
         contents = raw.contents
         function_name, result_type = self._extract_function_block(contents)
         return ParsedErDoseError(
+            er_date=raw.er_date,
+            er_index=raw.er_index,
             raw_id=raw.raw_id,
             er_line=raw.er_line,
             eq_name=raw.eq_name,
             code=raw.code,
             code_occur_time=raw.code_occur_time,
+            code_occur_time_raw=raw.code_occur_time_raw,
+            log_source=raw.log_source,
             exposure_handle=self._extract_int(contents, r"\bexposure_handle\s*[:=]\s*" + _INT_RE),
             action_handle=self._extract_int(contents, r"\baction_handle\s*[:=]\s*" + _INT_RE),
+            wafer_seq=None,
+            shot_seq=None,
+            field_seq=None,
+            repair_yn=None,
+            repair_result=None,
             dose_error=self._extract_decimal(
                 contents,
                 r"skip\s+the\s+dose\s+evaluation\s+" + _DECIMAL_RE + r"\s*\[%\]",
@@ -52,6 +61,9 @@ class DoseErrorParser:
             mb_enabled=self._extract_bool(contents, r"\bmb_enabled\s*[:=]\s*(t|f|true|false|1|0)"),
             function_name=function_name,
             result_type=result_type,
+            parser_version="v1",
+            parsing_status="SUCCESS",
+            parsing_error=None,
             raw_contents=raw.contents,
         )
 

@@ -21,22 +21,26 @@
     <list default="true" id="9fc81ff4-5cda-47d6-ad9b-ac08b12c0f95" name="변경" comment="날짜 및 경로 관련 공통 유틸리티 추가:  &#10;- `ftp_batch.common.date_utils`: 날짜 정규화 및 대상 날짜 계산 함수 구현  &#10;- `ftp_batch.common.path_utils`: 경로 빌드 및 `rbi/ruip` 업로드 경로 변환 함수 추가  &#10;- 기존 중복 코드 제거 및 재사용성 향상">
       <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/IMAGE_TEXT_MATCHING.md" beforeDir="false" afterPath="$PROJECT_DIR$/IMAGE_TEXT_MATCHING.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ftp_batch/app/batch_runner.py" beforeDir="false" afterPath="$PROJECT_DIR$/ftp_batch/app/batch_runner.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ftp_batch/infra/db_manager.py" beforeDir="false" afterPath="$PROJECT_DIR$/ftp_batch/infra/db_manager.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ftp_batch/matching/image_text_matcher.py" beforeDir="false" afterPath="$PROJECT_DIR$/ftp_batch/matching/image_text_matcher.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ftp_batch/processors/rubi_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/ftp_batch/processors/rubi_processor.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ftp_batch/processors/rupi_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/ftp_batch/processors/rupi_processor.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/test.py" beforeDir="false" afterPath="$PROJECT_DIR$/test.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ER_DOSE_ERROR.md" beforeDir="false" afterPath="$PROJECT_DIR$/ER_DOSE_ERROR.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/er_dose/batch.py" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/batch.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/er_dose/infra/postgres_db.py" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/infra/postgres_db.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/er_dose/parsers/base.py" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/parsers/base.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/er_dose/parsers/dose_error_parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/parsers/dose_error_parser.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/er_dose/sql/create_er_dose_error_parsed.sql" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/sql/create_er_dose_error_parsed.sql" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_er_dose_parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_er_dose_parser.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
+  <component name="CopilotPersistence">
+    <persistenceIdMap>
+      <entry key="_/Users/parkjunho/PycharmProjects/PythonStudy" value="3AyEXwOwbnIWAlWqbtxeHwbrj0h" />
+    </persistenceIdMap>
+  </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="37" />
+    <option name="cachedIndexableFilesCount" value="58" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="FileTemplateManagerImpl">
@@ -93,6 +97,7 @@
     "ai.playground.ignore.import.keys.banner.in.settings": "true",
     "codeWithMe.voiceChat.enabledByDefault": "false",
     "git-widget-placeholder": "master",
+    "last_opened_file_path": "/Users/parkjunho/PycharmProjects/PythonStudy",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -167,8 +172,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-3bd3a6803838-JavaScript-PY-261.22158.340" />
-        <option value="bundled-python-sdk-b63d5a1f7c97-b61e75351b1f-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-261.22158.340" />
+        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-PY-261.24374.152" />
+        <option value="bundled-python-sdk-c59985aa861c-c2ffad84badb-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-261.24374.152" />
       </set>
     </attachedChunks>
   </component>

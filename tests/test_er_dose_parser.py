@@ -69,11 +69,15 @@ class ERDoseParserTest(unittest.TestCase):
 
     def _raw(self, contents):
         return RawErLog(
+            er_date=20260413,
+            er_index=1,
             raw_id=1,
             er_line="L1",
             eq_name="EQ1",
             code="dw-3411",
             code_occur_time=datetime(2026, 4, 13, 10, 0, 0),
+            code_occur_time_raw="2026-04-13 10:00:00.000000",
+            log_source=None,
             contents=contents,
         )
 
