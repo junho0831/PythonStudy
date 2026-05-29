@@ -2,54 +2,48 @@
   <diagram id="er-dose-history-flow" name="ER Dose 이력 구조">
     <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">
       <root>
-        <mxCell id="0"/>
-        <mxCell id="1" parent="0"/>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
         <mxCell id="title" value="ER Dose Error 이력 적재 구조" style="text;html=1;strokeColor=none;fillColor=none;fontSize=24;fontStyle=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="60" y="40" width="520" height="40" as="geometry"/>
+          <mxGeometry x="60" y="40" width="520" height="40" as="geometry" />
         </mxCell>
         <mxCell id="note" value="ER_DATA_RAW에는 er_date, er_index, raw_id가 없다. 파싱 결과는 기존 row를 수정/삭제하지 않고 이력으로 append 적재한다." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
-          <mxGeometry x="60" y="95" width="760" height="60" as="geometry"/>
+          <mxGeometry x="60" y="95" width="760" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="raw" value="mbeat.er_data_raw&#xa;&#xa;핵심 컬럼&#xa;- code_occur_time&#xa;- eq_name&#xa;- code&#xa;- belong / type&#xa;- contents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
-          <mxGeometry x="60" y="220" width="260" height="190" as="geometry"/>
+        <mxCell id="fetch" value="RAW 로그 조회&#10;&#10;- code_occur_time 범위 조건&#10;- Dose 관련 code/contents 조건&#10;- code_occur_time 기준 정렬" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+          <mxGeometry x="390" y="220" width="280" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="fetch" value="RAW 로그 조회&#xa;&#xa;- code_occur_time 범위 조건&#xa;- Dose 관련 code/contents 조건&#xa;- code_occur_time 기준 정렬" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
-          <mxGeometry x="390" y="220" width="280" height="170" as="geometry"/>
+        <mxCell id="parser" value="DoseErrorParser&#10;&#10;- RawErLog 생성&#10;- log_source 구성&#10;- Dose/Error 필드 추출&#10;- 파싱 상태 생성" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+          <mxGeometry x="740" y="220" width="280" height="190" as="geometry" />
         </mxCell>
-        <mxCell id="parser" value="DoseErrorParser&#xa;&#xa;- RawErLog 생성&#xa;- log_source 구성&#xa;- Dose/Error 필드 추출&#xa;- 파싱 상태 생성" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
-          <mxGeometry x="740" y="220" width="280" height="190" as="geometry"/>
+        <mxCell id="append" value="이력 적재 정책&#10;&#10;- 월별 파티션 생성&#10;- 파싱/상태 row insert&#10;- 기존 row update 없음&#10;- 기존 row delete 없음" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+          <mxGeometry x="390" y="540" width="280" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="parsed" value="mbeat.er_dose_error_parsed&#xa;&#xa;핵심 이력 컬럼&#xa;- id&#xa;- code_occur_time&#xa;- eq_name / code&#xa;- exposure_handle&#xa;- parsing_status&#xa;- raw_contents&#xa;- created_at" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
-          <mxGeometry x="740" y="520" width="300" height="230" as="geometry"/>
+        <mxCell id="index" value="키 / 파티션 / 인덱스&#10;&#10;PK: id, code_occur_time&#10;파티션: code_occur_time 범위&#10;인덱스: eq_name + code_occur_time&#10;인덱스: code + code_occur_time&#10;인덱스: exposure_handle + code_occur_time" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="535" width="280" height="190" as="geometry" />
         </mxCell>
-        <mxCell id="append" value="이력 적재 정책&#xa;&#xa;- 월별 파티션 생성&#xa;- 파싱/상태 row insert&#xa;- 기존 row update 없음&#xa;- 기존 row delete 없음" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
-          <mxGeometry x="390" y="540" width="280" height="170" as="geometry"/>
-        </mxCell>
-        <mxCell id="index" value="키 / 파티션 / 인덱스&#xa;&#xa;PK: id, code_occur_time&#xa;파티션: code_occur_time 범위&#xa;인덱스: eq_name + code_occur_time&#xa;인덱스: code + code_occur_time&#xa;인덱스: exposure_handle + code_occur_time" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
-          <mxGeometry x="60" y="535" width="280" height="190" as="geometry"/>
-        </mxCell>
-        <mxCell id="cleanup" value="기존 DB 스키마 정리&#xa;&#xa;drop_er_dose_error_raw_identifier_columns.sql&#xa;&#xa;이전 설계의 식별 컬럼 정리:&#xa;er_date, er_index, raw_id" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
-          <mxGeometry x="60" y="430" width="610" height="80" as="geometry"/>
+        <mxCell id="cleanup" value="기존 DB 스키마 정리&#10;&#10;drop_er_dose_error_raw_identifier_columns.sql&#10;&#10;이전 설계의 식별 컬럼 정리:&#10;er_date, er_index, raw_id" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="430" width="610" height="80" as="geometry" />
         </mxCell>
         <mxCell id="edge-raw-fetch" value="" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="raw" target="fetch">
-          <mxGeometry relative="1" as="geometry"/>
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="edge-fetch-parser" value="" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="fetch" target="parser">
-          <mxGeometry relative="1" as="geometry"/>
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="edge-parser-append" value="" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="parser" target="append">
-          <mxGeometry relative="1" as="geometry"/>
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="edge-append-parsed" value="" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="append" target="parsed">
-          <mxGeometry relative="1" as="geometry"/>
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="edge-index-parsed" value="" style="endArrow=block;html=1;rounded=0;strokeWidth=2;dashed=1;strokeColor=#666666;" edge="1" parent="1" source="index" target="parsed">
-          <mxGeometry relative="1" as="geometry"/>
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="edge-cleanup-parsed" value="스키마 정리" style="endArrow=block;html=1;rounded=0;strokeWidth=2;dashed=1;strokeColor=#b85450;fontSize=12;" edge="1" parent="1" source="cleanup" target="parsed">
-          <mxGeometry relative="1" as="geometry"/>
+          <mxGeometry relative="1" as="geometry" />
         </mxCell>
-      </root>
+      <mxCell id="edge-raw-parsed-er" parent="1" value="이력 참조" style="edgeStyle=entityRelationEdgeStyle;html=1;rounded=0;strokeWidth=2;strokeColor=#6c8ebf;startArrow=ERone;startFill=0;endArrow=ERmany;endFill=0;fontSize=12;" edge="1" source="raw" target="parsed"><mxGeometry relative="1" as="geometry" /></mxCell><mxCell id="raw" parent="1" value="mbeat.er_data_raw" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1"><mxGeometry x="60" y="220" width="260" height="174" as="geometry" /></mxCell><mxCell id="raw-row-0" parent="raw" value="code_occur_time : timestamp" style="shape=tableRow;html=1;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;fontStyle=0;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1"><mxGeometry x="0" y="34" width="260" height="28" as="geometry" /></mxCell><mxCell id="raw-row-1" parent="raw" value="eq_name : varchar" style="shape=tableRow;html=1;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;fontStyle=0;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1"><mxGeometry x="0" y="62" width="260" height="28" as="geometry" /></mxCell><mxCell id="raw-row-2" parent="raw" value="code : varchar" style="shape=tableRow;html=1;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;fontStyle=0;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1"><mxGeometry x="0" y="90" width="260" height="28" as="geometry" /></mxCell><mxCell id="raw-row-3" parent="raw" value="belong / type : varchar" style="shape=tableRow;html=1;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;fontStyle=0;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1"><mxGeometry x="0" y="118" width="260" height="28" as="geometry" /></mxCell><mxCell id="raw-row-4" parent="raw" value="contents : text" style="shape=tableRow;html=1;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;fontStyle=0;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1"><mxGeometry x="0" y="146" width="260" height="28" as="geometry" /></mxCell><mxCell id="parsed" parent="1" value="mbeat.er_dose_error_parsed" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1"><mxGeometry x="740" y="520" width="300" height="230" as="geometry" /></mxCell><mxCell id="parsed-row-0" parent="parsed" value="PK id : bigserial" style="shape=tableRow;html=1;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;fontStyle=0;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1"><mxGeometry x="0" y="34" width="300" height="28" as="geometry" /></mxCell><mxCell id="parsed-row-1" parent="parsed" value="PK code_occur_time : timestamp(6)" style="shape=tableRow;html=1;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;fontStyle=0;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1"><mxGeometry x="0" y="62" width="300" height="28" as="geometry" /></mxCell><mxCell id="parsed-row-2" parent="parsed" value="eq_name / code : varchar" style="shape=tableRow;html=1;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;fontStyle=0;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1"><mxGeometry x="0" y="90" width="300" height="28" as="geometry" /></mxCell><mxCell id="parsed-row-3" parent="parsed" value="exposure_handle : bigint" style="shape=tableRow;html=1;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;fontStyle=0;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1"><mxGeometry x="0" y="118" width="300" height="28" as="geometry" /></mxCell><mxCell id="parsed-row-4" parent="parsed" value="parsing_status : varchar" style="shape=tableRow;html=1;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;fontStyle=0;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1"><mxGeometry x="0" y="146" width="300" height="28" as="geometry" /></mxCell><mxCell id="parsed-row-5" parent="parsed" value="raw_contents : text" style="shape=tableRow;html=1;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;fontStyle=0;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1"><mxGeometry x="0" y="174" width="300" height="28" as="geometry" /></mxCell><mxCell id="parsed-row-6" parent="parsed" value="created_at : timestamp" style="shape=tableRow;html=1;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;fontStyle=0;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1"><mxGeometry x="0" y="202" width="300" height="28" as="geometry" /></mxCell></root>
     </mxGraphModel>
   </diagram>
 </mxfile>
