@@ -101,16 +101,17 @@ class ERDoseBatchTest(unittest.TestCase):
         self.assertEqual(db.inserted_df.loc[0, "code_occur_time_raw"], "2026-05-01 10:00:00.123456")
         self.assertEqual(db.inserted_df.loc[0, "log_source"], "SCANNER:ER")
 
-    def test_partition_creation_covers_each_month_in_range(self):
+    def test_partition_creation_covers_each_day_in_range(self):
         db = FakeDB(pd.DataFrame())
         batch = ERDoseBatch(db)
 
-        batch.ensure_partitions(start_time=datetime(2026, 5, 31), end_time=datetime(2026, 7, 1))
+        batch.ensure_partitions(start_time=datetime(2026, 5, 31, 12), end_time=datetime(2026, 6, 2, 1))
 
         create_queries = [query for query, _, _ in db.executed if "partition of mbeat.er_dose_error_parsed" in query]
-        self.assertEqual(len(create_queries), 2)
-        self.assertIn("er_dose_error_parsed_202605", create_queries[0])
-        self.assertIn("er_dose_error_parsed_202606", create_queries[1])
+        self.assertEqual(len(create_queries), 3)
+        self.assertIn("er_dose_error_parsed_20260531", create_queries[0])
+        self.assertIn("er_dose_error_parsed_20260601", create_queries[1])
+        self.assertIn("er_dose_error_parsed_20260602", create_queries[2])
 
     def _row(self, row_no, code, contents):
         return {

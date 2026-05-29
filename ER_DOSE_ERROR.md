@@ -32,7 +32,6 @@ erDiagram
     }
 
     ER_DOSE_ERROR_PARSED {
-        bigserial id PK
         varchar er_line
         varchar eq_name
         varchar code
@@ -69,7 +68,8 @@ erDiagram
 - `mbeat.er_data_raw`는 원본 ER 로그 저장 테이블이다.
 - `mbeat.er_dose_error_parsed`는 분석/조회용 정규화 테이블이다.
 - 원본 테이블에는 단일 `id`가 없으므로 원본 추적은 시간 범위와 로그 본문 기준으로 수행한다.
-- `code_occur_time`은 파티션 키이므로 parsed 테이블의 PK에 포함된다.
+- parsed 테이블의 PK는 파티션 키인 `code_occur_time` 기준이다.
+- `er_line`, `eq_name` 조합을 장비 단위 키로 보고, `exposure_handle`은 해당 키 안에서 순차 증가하는 exposure 순번 기준으로 사용한다.
 
 핵심 정책:
 
@@ -77,7 +77,7 @@ erDiagram
 - parsed 테이블에도 `raw_contents`를 저장한다.
 - `code_occur_time`은 `TIMESTAMP(6)`이며 파티션 키다.
 - 조회는 반드시 `code_occur_time` 범위 기준으로 수행한다.
-- 배치는 실행 범위의 월 파티션을 자동 생성한다.
+- 배치는 실행 범위의 일별 파티션을 자동 생성한다.
 - 파싱 결과는 이력 보존을 위해 기존 row를 수정하거나 삭제하지 않고 append 방식으로 적재한다.
 - RAW에 없는 원본 식별 컬럼은 parsed 테이블에도 저장하지 않는다.
 
@@ -94,7 +94,7 @@ erDiagram
 - `code`: ER 코드
 - `code_occur_time`: ER 발생 시각, 파티션/조회 기준
 - `log_source`: `belong:type` 조합 값
-- `exposure_handle`: Shot 식별에 사용하는 handle
+- `exposure_handle`: `er_line`, `eq_name` 조합 안에서 순차 증가하는 exposure handle
 - `action_handle`: Action 식별에 사용하는 handle
 
 Dose Error 컬럼:
@@ -108,8 +108,17 @@ Dose Error 컬럼:
 
 후속 enrichment 컬럼:
 
-- `wafer_seq`, `shot_seq`, `field_seq`: expose handle 순서 기반으로 복원 예정
+- `wafer_seq`, `shot_seq`, `field_seq`: `er_line`, `eq_name`, `exposure_handle` 순서 기반으로 복원 예정
 - `repair_yn`, `repair_result`: Repair/Re-Expose 판정 후 저장 예정
+
+## Exposure Handle 기준
+
+`exposure_handle`은 전체 테이블에서 단독으로 해석하지 않고, `er_line`, `eq_name` 조합 안에서 해석한다.
+
+- 장비 단위 키는 `er_line + eq_name`으로 본다.
+- 같은 `er_line + eq_name` 안에서 `exposure_handle`은 순차적으로 증가한다.
+- Shot/Field/Wafer sequence 복원은 `er_line`, `eq_name`, `exposure_handle` 정렬을 기준으로 수행한다.
+- 조회 성능을 위해 parsed 테이블에는 `er_line`, `eq_name`, `exposure_handle`, `code_occur_time` 복합 인덱스를 둔다.
 
 파서 운영 컬럼:
 
@@ -135,6 +144,8 @@ python -m er_dose.run_er_dose_batch \
 
 추출 필드:
 
+- `er_line`
+- `eq_name`
 - `exposure_handle`
 - `action_handle`
 - `dose_error`

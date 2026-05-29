@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 import pandas as pd
@@ -104,9 +104,9 @@ class ERDoseBatch:
         return self.db.fetch_df(query, params=params)
 
     def ensure_partitions(self, start_time: datetime, end_time: datetime) -> None:
-        for month_start in self._iter_month_starts(start_time, end_time):
-            next_month = self._next_month(month_start)
-            partition_name = f"er_dose_error_parsed_{month_start:%Y%m}"
+        for day_start in self._iter_day_starts(start_time, end_time):
+            next_day = day_start + timedelta(days=1)
+            partition_name = f"er_dose_error_parsed_{day_start:%Y%m%d}"
             query = f"""
                 create table if not exists mbeat.{partition_name}
                 partition of {PARSED_TABLE}
@@ -115,8 +115,8 @@ class ERDoseBatch:
             self.db.execute(
                 query,
                 params={
-                    "start_time": month_start,
-                    "end_time": next_month,
+                    "start_time": day_start,
+                    "end_time": next_day,
                 },
             )
 
@@ -234,13 +234,8 @@ class ERDoseBatch:
             return f"{belong}:{log_type}"
         return belong or log_type
 
-    def _iter_month_starts(self, start_time: datetime, end_time: datetime):
-        current = start_time.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    def _iter_day_starts(self, start_time: datetime, end_time: datetime):
+        current = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
         while current < end_time:
             yield current
-            current = self._next_month(current)
-
-    def _next_month(self, value: datetime) -> datetime:
-        if value.month == 12:
-            return value.replace(year=value.year + 1, month=1)
-        return value.replace(month=value.month + 1)
+            current += timedelta(days=1)
