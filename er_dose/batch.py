@@ -44,9 +44,7 @@ class ERDoseBatch:
                 parsed_rows.append(self._build_error_row(row, exc))
 
         insert_count = 0
-        deleted_count = 0
         with self.db.transaction() as connection:
-            deleted_count = self.delete_existing(start_time=start_time, end_time=end_time, connection=connection)
             if parsed_rows:
                 parsed_df = pd.DataFrame(parsed_rows)
                 insert_count = self.db.bulk_insert_df(PARSED_TABLE, parsed_df, connection=connection)
@@ -57,7 +55,6 @@ class ERDoseBatch:
             "regex_fail": int(regex_fail_count),
             "parser_error": int(parser_error_count),
             "inserted": int(insert_count),
-            "deleted": int(deleted_count),
         }
 
         print(
@@ -66,8 +63,7 @@ class ERDoseBatch:
             f"success={summary['success']} "
             f"regex_fail={summary['regex_fail']} "
             f"parser_error={summary['parser_error']} "
-            f"inserted={summary['inserted']} "
-            f"deleted={summary['deleted']}"
+            f"inserted={summary['inserted']}"
         )
 
         return summary
@@ -106,21 +102,6 @@ class ERDoseBatch:
             {limit_sql}
         """
         return self.db.fetch_df(query, params=params)
-
-    def delete_existing(self, start_time: datetime, end_time: datetime, connection=None) -> int:
-        query = f"""
-            delete from {PARSED_TABLE}
-            where code_occur_time >= %(start_time)s
-              and code_occur_time < %(end_time)s
-        """
-        return self.db.execute(
-            query,
-            params={
-                "start_time": start_time,
-                "end_time": end_time,
-            },
-            connection=connection,
-        )
 
     def ensure_partitions(self, start_time: datetime, end_time: datetime) -> None:
         for month_start in self._iter_month_starts(start_time, end_time):

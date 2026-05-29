@@ -9,7 +9,7 @@
 ## 테이블
 
 DDL은 [create_er_dose_error_parsed.sql](/Users/parkjunho/PycharmProjects/PythonStudy/er_dose/sql/create_er_dose_error_parsed.sql)에 있다.
-기존 DB에 남아 있는 RAW 식별 컬럼 삭제 SQL은 [drop_er_dose_error_raw_identifier_columns.sql](/Users/parkjunho/PycharmProjects/PythonStudy/er_dose/sql/drop_er_dose_error_raw_identifier_columns.sql)에 있다.
+기존 DB에 남아 있는 RAW 식별 컬럼 정리 SQL은 [drop_er_dose_error_raw_identifier_columns.sql](/Users/parkjunho/PycharmProjects/PythonStudy/er_dose/sql/drop_er_dose_error_raw_identifier_columns.sql)에 있다.
 
 ## ERD
 
@@ -76,9 +76,9 @@ erDiagram
 - RAW 원문은 `mbeat.er_data_raw.contents`에 유지한다.
 - parsed 테이블에도 `raw_contents`를 저장한다.
 - `code_occur_time`은 `TIMESTAMP(6)`이며 파티션 키다.
-- 조회, 삭제, 재처리는 반드시 `code_occur_time` 범위 기준으로 수행한다.
+- 조회는 반드시 `code_occur_time` 범위 기준으로 수행한다.
 - 배치는 실행 범위의 월 파티션을 자동 생성한다.
-- 재처리 시 대상 기간의 parsed 데이터를 삭제한 뒤 다시 적재한다.
+- 파싱 결과는 이력 보존을 위해 기존 row를 수정하거나 삭제하지 않고 append 방식으로 적재한다.
 - RAW에 없는 원본 식별 컬럼은 parsed 테이블에도 저장하지 않는다.
 
 ## 컬럼 설명

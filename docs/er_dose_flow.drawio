@@ -1,0 +1,55 @@
+<mxfile host="app.diagrams.net" modified="2026-05-29T00:00:00.000Z" agent="Codex" version="24.7.17">
+  <diagram id="er-dose-history-flow" name="ER Dose 이력 구조">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="ER Dose Error 이력 적재 구조" style="text;html=1;strokeColor=none;fillColor=none;fontSize=24;fontStyle=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="40" width="520" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="note" value="ER_DATA_RAW에는 er_date, er_index, raw_id가 없다. 파싱 결과는 기존 row를 수정/삭제하지 않고 이력으로 append 적재한다." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="95" width="760" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="raw" value="mbeat.er_data_raw&#xa;&#xa;핵심 컬럼&#xa;- code_occur_time&#xa;- eq_name&#xa;- code&#xa;- belong / type&#xa;- contents" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+          <mxGeometry x="60" y="220" width="260" height="190" as="geometry"/>
+        </mxCell>
+        <mxCell id="fetch" value="RAW 로그 조회&#xa;&#xa;- code_occur_time 범위 조건&#xa;- Dose 관련 code/contents 조건&#xa;- code_occur_time 기준 정렬" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+          <mxGeometry x="390" y="220" width="280" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="parser" value="DoseErrorParser&#xa;&#xa;- RawErLog 생성&#xa;- log_source 구성&#xa;- Dose/Error 필드 추출&#xa;- 파싱 상태 생성" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+          <mxGeometry x="740" y="220" width="280" height="190" as="geometry"/>
+        </mxCell>
+        <mxCell id="parsed" value="mbeat.er_dose_error_parsed&#xa;&#xa;핵심 이력 컬럼&#xa;- id&#xa;- code_occur_time&#xa;- eq_name / code&#xa;- exposure_handle&#xa;- parsing_status&#xa;- raw_contents&#xa;- created_at" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+          <mxGeometry x="740" y="520" width="300" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="append" value="이력 적재 정책&#xa;&#xa;- 월별 파티션 생성&#xa;- 파싱/상태 row insert&#xa;- 기존 row update 없음&#xa;- 기존 row delete 없음" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+          <mxGeometry x="390" y="540" width="280" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="index" value="키 / 파티션 / 인덱스&#xa;&#xa;PK: id, code_occur_time&#xa;파티션: code_occur_time 범위&#xa;인덱스: eq_name + code_occur_time&#xa;인덱스: code + code_occur_time&#xa;인덱스: exposure_handle + code_occur_time" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="535" width="280" height="190" as="geometry"/>
+        </mxCell>
+        <mxCell id="cleanup" value="기존 DB 스키마 정리&#xa;&#xa;drop_er_dose_error_raw_identifier_columns.sql&#xa;&#xa;이전 설계의 식별 컬럼 정리:&#xa;er_date, er_index, raw_id" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="430" width="610" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-raw-fetch" value="" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="raw" target="fetch">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-fetch-parser" value="" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="fetch" target="parser">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-parser-append" value="" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="parser" target="append">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-append-parsed" value="" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="append" target="parsed">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-index-parsed" value="" style="endArrow=block;html=1;rounded=0;strokeWidth=2;dashed=1;strokeColor=#666666;" edge="1" parent="1" source="index" target="parsed">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-cleanup-parsed" value="스키마 정리" style="endArrow=block;html=1;rounded=0;strokeWidth=2;dashed=1;strokeColor=#b85450;fontSize=12;" edge="1" parent="1" source="cleanup" target="parsed">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

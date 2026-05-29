@@ -51,8 +51,6 @@ class FakeDB:
 
     def execute(self, query, params=None, connection=None):
         self.executed.append((query, params, connection))
-        if query.strip().lower().startswith("delete"):
-            return 7
         return 0
 
     def bulk_insert_df(self, table_name, df, connection=None):
@@ -77,7 +75,7 @@ class ERDoseBatchTest(unittest.TestCase):
         self.assertEqual(db.fetch_params["end_time"], end_time)
         self.assertEqual(db.fetch_params["limit"], 10)
 
-    def test_run_deletes_range_and_inserts_status_rows_in_one_transaction(self):
+    def test_run_inserts_status_rows_without_deleting_existing_history(self):
         raw_df = pd.DataFrame(
             [
                 self._row(1, "dw-3411", SAMPLE_CONTENTS),
@@ -96,8 +94,9 @@ class ERDoseBatchTest(unittest.TestCase):
         self.assertEqual(summary["regex_fail"], 1)
         self.assertEqual(summary["parser_error"], 1)
         self.assertEqual(summary["inserted"], 3)
-        self.assertEqual(summary["deleted"], 7)
         self.assertIs(db.insert_connection, db.connection)
+        delete_queries = [query for query, _, _ in db.executed if query.strip().lower().startswith("delete")]
+        self.assertEqual(delete_queries, [])
         self.assertEqual(list(db.inserted_df["parsing_status"]), ["SUCCESS", "REGEX_FAIL", "PARSER_ERROR"])
         self.assertEqual(db.inserted_df.loc[0, "code_occur_time_raw"], "2026-05-01 10:00:00.123456")
         self.assertEqual(db.inserted_df.loc[0, "log_source"], "SCANNER:ER")
