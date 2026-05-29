@@ -73,9 +73,6 @@ class ERDoseBatchTest(unittest.TestCase):
 
         self.assertIn("r.code_occur_time >= %(start_time)s", db.fetch_query)
         self.assertIn("r.code_occur_time < %(end_time)s", db.fetch_query)
-        self.assertIn("r.er_date", db.fetch_query)
-        self.assertIn("r.er_index", db.fetch_query)
-        self.assertIn("((r.er_date::bigint * 1000000000) + r.er_index::bigint) as raw_id", db.fetch_query)
         self.assertEqual(db.fetch_params["start_time"], start_time)
         self.assertEqual(db.fetch_params["end_time"], end_time)
         self.assertEqual(db.fetch_params["limit"], 10)
@@ -103,9 +100,6 @@ class ERDoseBatchTest(unittest.TestCase):
         self.assertIs(db.insert_connection, db.connection)
         self.assertEqual(list(db.inserted_df["parsing_status"]), ["SUCCESS", "REGEX_FAIL", "PARSER_ERROR"])
         self.assertEqual(db.inserted_df.loc[0, "code_occur_time_raw"], "2026-05-01 10:00:00.123456")
-        self.assertEqual(db.inserted_df.loc[0, "er_date"], 20260501)
-        self.assertEqual(db.inserted_df.loc[0, "er_index"], 1)
-        self.assertEqual(db.inserted_df.loc[0, "raw_id"], 20260501000000001)
         self.assertEqual(db.inserted_df.loc[0, "log_source"], "SCANNER:ER")
 
     def test_partition_creation_covers_each_month_in_range(self):
@@ -119,11 +113,8 @@ class ERDoseBatchTest(unittest.TestCase):
         self.assertIn("er_dose_error_parsed_202605", create_queries[0])
         self.assertIn("er_dose_error_parsed_202606", create_queries[1])
 
-    def _row(self, raw_id, code, contents):
+    def _row(self, row_no, code, contents):
         return {
-            "er_date": 20260501,
-            "er_index": raw_id,
-            "raw_id": 20260501000000000 + raw_id,
             "er_line": "L1",
             "eq_name": "EQ1",
             "code": code,

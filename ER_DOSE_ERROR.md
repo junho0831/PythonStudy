@@ -9,16 +9,15 @@
 ## 테이블
 
 DDL은 [create_er_dose_error_parsed.sql](/Users/parkjunho/PycharmProjects/PythonStudy/er_dose/sql/create_er_dose_error_parsed.sql)에 있다.
+기존 DB에 남아 있는 RAW 식별 컬럼 삭제 SQL은 [drop_er_dose_error_raw_identifier_columns.sql](/Users/parkjunho/PycharmProjects/PythonStudy/er_dose/sql/drop_er_dose_error_raw_identifier_columns.sql)에 있다.
 
 ## ERD
 
 ```mermaid
 erDiagram
-    ER_DATA_RAW ||--o| ER_DOSE_ERROR_PARSED : "er_date + er_index"
+    ER_DATA_RAW ||--o{ ER_DOSE_ERROR_PARSED : "code_occur_time range"
 
     ER_DATA_RAW {
-        int4 er_date PK
-        int4 er_index PK
         varchar er_line
         varchar eq_name
         varchar code
@@ -34,9 +33,6 @@ erDiagram
 
     ER_DOSE_ERROR_PARSED {
         bigserial id PK
-        int4 er_date
-        int4 er_index
-        bigint raw_id
         varchar er_line
         varchar eq_name
         varchar code
@@ -72,9 +68,8 @@ erDiagram
 
 - `mbeat.er_data_raw`는 원본 ER 로그 저장 테이블이다.
 - `mbeat.er_dose_error_parsed`는 분석/조회용 정규화 테이블이다.
-- 원본 테이블에는 단일 `id`가 없으므로 `er_date + er_index`를 원본 식별 기준으로 사용한다.
-- `raw_id`는 조인 편의와 추적을 위해 `er_date * 1000000000 + er_index`로 만든 파생 키다.
-- `code_occur_time`은 파티션 키이므로 parsed 테이블의 PK와 unique 기준에 포함된다.
+- 원본 테이블에는 단일 `id`가 없으므로 원본 추적은 시간 범위와 로그 본문 기준으로 수행한다.
+- `code_occur_time`은 파티션 키이므로 parsed 테이블의 PK에 포함된다.
 
 핵심 정책:
 
@@ -84,16 +79,12 @@ erDiagram
 - 조회, 삭제, 재처리는 반드시 `code_occur_time` 범위 기준으로 수행한다.
 - 배치는 실행 범위의 월 파티션을 자동 생성한다.
 - 재처리 시 대상 기간의 parsed 데이터를 삭제한 뒤 다시 적재한다.
-- 원본 RAW에는 `id`가 없으므로 `er_date`, `er_index`를 함께 저장한다.
-- `raw_id`는 `er_date * 1000000000 + er_index`로 만든 파생 추적 키다.
-- 운영 가드 unique 기준은 `(er_date, er_index, code_occur_time)`이다.
+- RAW에 없는 원본 식별 컬럼은 parsed 테이블에도 저장하지 않는다.
 
 ## 컬럼 설명
 
 원본 추적 컬럼:
 
-- `er_date`, `er_index`: RAW 테이블의 원본 식별자
-- `raw_id`: `er_date`, `er_index` 기반 파생 추적 키
 - `raw_contents`: 파싱 대상 원문
 - `code_occur_time_raw`: microsecond 보존 확인용 문자열 timestamp
 

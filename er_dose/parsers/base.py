@@ -8,9 +8,6 @@ from typing import Protocol
 
 @dataclass(frozen=True)
 class RawErLog:
-    er_date: int
-    er_index: int
-    raw_id: int
     er_line: str | None
     eq_name: str | None
     code: str | None
@@ -22,9 +19,6 @@ class RawErLog:
 
 @dataclass(frozen=True)
 class ParsedErDoseError:
-    er_date: int
-    er_index: int
-    raw_id: int
     er_line: str | None
     eq_name: str | None
     code: str | None

@@ -28,7 +28,6 @@ class ERDoseParserTest(unittest.TestCase):
         parsed = parse_raw_er_log(raw)
 
         self.assertIsNotNone(parsed)
-        self.assertEqual(parsed.raw_id, 1)
         self.assertEqual(parsed.exposure_handle, 2631)
         self.assertEqual(parsed.action_handle, 2625)
         self.assertEqual(parsed.dose_error, Decimal("0.0461075"))
@@ -69,9 +68,6 @@ class ERDoseParserTest(unittest.TestCase):
 
     def _raw(self, contents):
         return RawErLog(
-            er_date=20260413,
-            er_index=1,
-            raw_id=1,
             er_line="L1",
             eq_name="EQ1",
             code="dw-3411",

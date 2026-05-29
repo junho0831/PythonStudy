@@ -86,9 +86,6 @@ class ERDoseBatch:
 
         query = f"""
             select
-                r.er_date,
-                r.er_index,
-                ((r.er_date::bigint * 1000000000) + r.er_index::bigint) as raw_id,
                 r.er_line,
                 r.eq_name,
                 r.code,
@@ -105,7 +102,7 @@ class ERDoseBatch:
                   or r.contents ilike '%%de_err%%'
                   or r.contents ilike '%%dwdc_eval_determine_dose_performance_result%%'
               )
-            order by r.code_occur_time, r.er_date, r.er_index
+            order by r.code_occur_time
             {limit_sql}
         """
         return self.db.fetch_df(query, params=params)
@@ -143,18 +140,9 @@ class ERDoseBatch:
             )
 
     def _row_to_raw_log(self, row) -> RawErLog:
-        er_date = row.get("er_date")
-        er_index = row.get("er_index")
-        raw_id = row.get("raw_id")
         code_occur_time = row.get("code_occur_time")
         contents = row.get("contents")
 
-        if pd.isna(er_date):
-            raise ValueError("er_date is required")
-        if pd.isna(er_index):
-            raise ValueError("er_index is required")
-        if pd.isna(raw_id):
-            raise ValueError("raw_id is required")
         if pd.isna(code_occur_time):
             raise ValueError("code_occur_time is required")
         if contents is None or pd.isna(contents):
@@ -164,9 +152,6 @@ class ERDoseBatch:
             code_occur_time = code_occur_time.to_pydatetime()
 
         return RawErLog(
-            er_date=int(er_date),
-            er_index=int(er_index),
-            raw_id=int(raw_id),
             er_line=self._nullable_str(row.get("er_line")),
             eq_name=self._nullable_str(row.get("eq_name")),
             code=self._nullable_str(row.get("code")),
@@ -192,9 +177,6 @@ class ERDoseBatch:
             if pd.isna(code_occur_time):
                 code_occur_time = datetime.min
             return self._empty_parsed_row(
-                er_date=None if pd.isna(row.get("er_date")) else int(row.get("er_date")),
-                er_index=None if pd.isna(row.get("er_index")) else int(row.get("er_index")),
-                raw_id=None if pd.isna(row.get("raw_id")) else int(row.get("raw_id")),
                 er_line=self._nullable_str(row.get("er_line")),
                 eq_name=self._nullable_str(row.get("eq_name")),
                 code=self._nullable_str(row.get("code")),
@@ -208,9 +190,6 @@ class ERDoseBatch:
 
     def _build_status_row(self, raw: RawErLog, parsing_status: str, parsing_error: str | None) -> dict[str, DoseErrorValue]:
         return self._empty_parsed_row(
-            er_date=raw.er_date,
-            er_index=raw.er_index,
-            raw_id=raw.raw_id,
             er_line=raw.er_line,
             eq_name=raw.eq_name,
             code=raw.code,
@@ -224,9 +203,6 @@ class ERDoseBatch:
 
     def _empty_parsed_row(
         self,
-        er_date: int | None,
-        er_index: int | None,
-        raw_id: int | None,
         er_line: str | None,
         eq_name: str | None,
         code: str | None,
@@ -238,9 +214,6 @@ class ERDoseBatch:
         parsing_error: str | None,
     ) -> dict[str, DoseErrorValue]:
         return {
-            "er_date": er_date,
-            "er_index": er_index,
-            "raw_id": raw_id,
             "er_line": er_line,
             "eq_name": eq_name,
             "code": code,

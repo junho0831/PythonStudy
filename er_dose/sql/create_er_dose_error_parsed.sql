@@ -2,9 +2,6 @@ create schema if not exists mbeat;
 
 create table if not exists mbeat.er_dose_error_parsed (
     id                  bigserial,
-    er_date             integer,
-    er_index            integer,
-    raw_id              bigint,
     er_line             varchar(20),
     eq_name             varchar(20),
     code                varchar(20),
@@ -36,9 +33,6 @@ create table if not exists mbeat.er_dose_error_parsed (
     primary key (id, code_occur_time)
 )
 partition by range (code_occur_time);
-
-create unique index if not exists uq_er_dose_error_parsed_raw_time
-on mbeat.er_dose_error_parsed (er_date, er_index, code_occur_time);
 
 create index if not exists idx_er_dose_error_eq_time
 on mbeat.er_dose_error_parsed (eq_name, code_occur_time);

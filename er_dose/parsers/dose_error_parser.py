@@ -29,9 +29,6 @@ class DoseErrorParser:
         contents = raw.contents
         function_name, result_type = self._extract_function_block(contents)
         return ParsedErDoseError(
-            er_date=raw.er_date,
-            er_index=raw.er_index,
-            raw_id=raw.raw_id,
             er_line=raw.er_line,
             eq_name=raw.eq_name,
             code=raw.code,
