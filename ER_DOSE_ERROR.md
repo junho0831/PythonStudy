@@ -18,6 +18,8 @@ erDiagram
     ER_DATA_RAW ||--o{ ER_DOSE_ERROR_PARSED : "code_occur_time range"
 
     ER_DATA_RAW {
+        int4 er_date
+        int4 er_index
         varchar er_line
         varchar eq_name
         varchar code
@@ -67,7 +69,7 @@ erDiagram
 
 - `mbeat.er_data_raw`는 원본 ER 로그 저장 테이블이다.
 - `mbeat.er_dose_error_parsed`는 분석/조회용 정규화 테이블이다.
-- 원본 테이블에는 단일 `id`가 없으므로 원본 추적은 시간 범위와 로그 본문 기준으로 수행한다.
+- 원본 테이블에는 단일 `id`가 없으므로 원본 추적 기준은 `er_date`, `er_index`, `er_line`, `eq_name` 조합이다.
 - parsed 테이블의 PK는 파티션 키인 `code_occur_time` 기준이다.
 - `er_line`, `eq_name` 조합을 장비 단위 키로 보고, `exposure_handle`은 해당 키 안에서 순차 증가하는 exposure 순번 기준으로 사용한다.
 
@@ -79,12 +81,13 @@ erDiagram
 - 조회는 반드시 `code_occur_time` 범위 기준으로 수행한다.
 - 배치는 실행 범위의 일별 파티션을 자동 생성한다.
 - 파싱 결과는 이력 보존을 위해 기존 row를 수정하거나 삭제하지 않고 append 방식으로 적재한다.
-- RAW에 없는 원본 식별 컬럼은 parsed 테이블에도 저장하지 않는다.
+- `er_date`, `er_index`는 RAW 원본 추적용으로만 사용하고 parsed 테이블에는 저장하지 않는다.
 
 ## 컬럼 설명
 
 원본 추적 컬럼:
 
+- `er_date`, `er_index`, `er_line`, `eq_name`: RAW 원본 row 식별 기준
 - `raw_contents`: 파싱 대상 원문
 - `code_occur_time_raw`: microsecond 보존 확인용 문자열 timestamp
 

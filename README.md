@@ -55,11 +55,14 @@ ftp_batch/
     ├── rubi_processor.py
     └── rupi_processor.py
 
+batch_main/
+└── main.py
 airflow_modules/
 └── ftp_batch_jobs.py
 dags/
 └── ftp_batch_hourly_dag.py
 
+main.py
 test.py
 init_db.py
 local_ftp_server.py
@@ -152,6 +155,61 @@ IMAGE_TEXT_MATCHING.md
 - `RUIP -> rbi/ruip/.../*.png` 경로 변환
 
 ## 실행 방법
+
+### 공통 main 실행
+
+운영용 공통 진입점은 [main.py](/Users/parkjunho/PycharmProjects/PythonStudy/main.py) 입니다. 실제 분기 로직은 [batch_main/main.py](/Users/parkjunho/PycharmProjects/PythonStudy/batch_main/main.py)에 두고, 루트 `main.py`는 얇은 실행 래퍼로 유지합니다.
+
+`BATCH_TARGET` 값에 따라 RBI 배치와 ER Dose 배치를 분기합니다.
+
+먼저 프로젝트 루트로 이동합니다.
+
+```bash
+cd /Users/parkjunho/PycharmProjects/PythonStudy
+```
+
+`RBI` 실행:
+
+```bash
+BATCH_TARGET=RBI \
+RBI_INPUT_DATE=2026-05-31 \
+RBI_PARSER=COMBINED \
+.venv/bin/python main.py
+```
+
+`ER_DOSE` 실행:
+
+```bash
+BATCH_TARGET=ER_DOSE \
+ER_DOSE_START_TIME=2026-05-31T00:00:00 \
+ER_DOSE_END_TIME=2026-06-01T00:00:00 \
+ER_DOSE_LIMIT=1000 \
+ER_DOSE_DB_DSN='postgresql://user:password@host:5432/dbname' \
+.venv/bin/python main.py
+```
+
+필수 환경변수:
+
+- `BATCH_TARGET`: `RBI` 또는 `ER_DOSE`
+- `RBI_INPUT_DATE`: RBI 기준 날짜, `YYYY-MM-DD`
+- `ER_DOSE_START_TIME`: ER Dose 조회 시작 시각
+- `ER_DOSE_END_TIME`: ER Dose 조회 종료 시각
+- `ER_DOSE_DB_DSN` 또는 `DATABASE_URL`: PostgreSQL DSN
+
+선택 환경변수:
+
+- `RBI_PARSER`: `RUBI`, `RUPI`, `COMBINED`, 기본값 `COMBINED`
+- `ER_DOSE_LIMIT`: 최대 처리 row 수
+- `INPUT_DATE`: `RBI_INPUT_DATE` 대체값
+- `START_TIME`: `ER_DOSE_START_TIME` 대체값
+- `END_TIME`: `ER_DOSE_END_TIME` 대체값
+
+실행 규칙:
+
+- `BATCH_TARGET=RBI`이면 FTP 기반 RBI 배치를 실행합니다.
+- `BATCH_TARGET=ER_DOSE`이면 ER RAW 로그 파싱 배치를 실행합니다.
+- `BATCH_TARGET=ER_DOES`도 `ER_DOSE`와 동일하게 처리합니다.
+- 환경변수 없이 `main.py`를 실행하면 `BATCH_TARGET` 필수 오류가 발생합니다.
 
 ### DB 초기화
 

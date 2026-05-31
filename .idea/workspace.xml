@@ -18,16 +18,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9fc81ff4-5cda-47d6-ad9b-ac08b12c0f95" name="변경" comment="날짜 및 경로 관련 공통 유틸리티 추가:  &#10;- `ftp_batch.common.date_utils`: 날짜 정규화 및 대상 날짜 계산 함수 구현  &#10;- `ftp_batch.common.path_utils`: 경로 빌드 및 `rbi/ruip` 업로드 경로 변환 함수 추가  &#10;- 기존 중복 코드 제거 및 재사용성 향상">
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
+    <list default="true" id="9fc81ff4-5cda-47d6-ad9b-ac08b12c0f95" name="변경" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ER_DOSE_ERROR.md" beforeDir="false" afterPath="$PROJECT_DIR$/ER_DOSE_ERROR.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/er_dose/batch.py" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/batch.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/er_dose/infra/postgres_db.py" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/infra/postgres_db.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/er_dose/parsers/base.py" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/parsers/base.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/er_dose/parsers/dose_error_parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/parsers/dose_error_parser.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/er_dose/sql/create_er_dose_error_parsed.sql" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/sql/create_er_dose_error_parsed.sql" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_er_dose_parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_er_dose_parser.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/er_dose_flow.drawio" beforeDir="false" afterPath="$PROJECT_DIR$/docs/er_dose_flow.drawio" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -40,7 +35,7 @@
     </persistenceIdMap>
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="58" />
+    <option name="cachedIndexableFilesCount" value="62" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="FileTemplateManagerImpl">
@@ -84,34 +79,34 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.generate_troubleshooting_docs.executor": "Run",
-    "Python.remote_batch_processor.executor": "Run",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "ai.playground.ignore.import.keys.banner.in.settings": "true",
-    "codeWithMe.voiceChat.enabledByDefault": "false",
-    "git-widget-placeholder": "master",
-    "last_opened_file_path": "/Users/parkjunho/PycharmProjects/PythonStudy",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "ml.llm.AIAssistantPromptsLibrary",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.generate_troubleshooting_docs.executor&quot;: &quot;Run&quot;,
+    &quot;Python.remote_batch_processor.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;ai.playground.ignore.import.keys.banner.in.settings&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/parkjunho/PycharmProjects/PythonStudy&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   },
-  "keyToStringList": {
-    "DatabaseDriversLRU": [
-      "postgresql"
+  &quot;keyToStringList&quot;: {
+    &quot;DatabaseDriversLRU&quot;: [
+      &quot;postgresql&quot;
     ]
   }
-}]]></component>
+}</component>
   <component name="RunManager" selected="Python.remote_batch_processor">
     <configuration name="generate_troubleshooting_docs" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="PythonStudy" />
@@ -374,7 +369,6 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="OpenCV 기반 16-bit TIFF 이미지 압축/처리 기능 삭제 및 원격 처리를 위한 새로운 pipeline 작성: SSH 기반 Rubi/Rubp 배치 프로세스 초기 구현, DB 연동 및 텍스트 파싱 지원 추가" />
     <MESSAGE value="Rubi txt 로컬 및 원격 처리 배치 프로그램 초기 구현" />
     <MESSAGE value="Rubi txt 원격 배치 및 파싱을 위한 초기 기능 구현:  &#10;- Rubi txt 파일 처리 CLI 및 배치 기능 추가  &#10;- 파일 파싱, 검증 및 데이터 적재를 위한 도메인 서비스 및 데이터베이스 CRUD 구현  &#10;- 로컬 파일과 원격 SSH 파일 읽기 지원  &#10;- 처리 workflow 관리 및 실패/재처리 로그를 위한 데이터베이스 테이블 설계" />
     <MESSAGE value="Rubp tif 파일 처리 초기 구현:&#10;- Rubp tif 파일의 날짜 폴더 조회 및 처리 이력 테이블 기반 중복 방지 로직 추가&#10;- 처리 대상 별 `process_tif_stub()` 호출 및 완료/실패 상태 갱신 기능 추가&#10;- CLI에서 Rubi(txt)와 함께 Rubp(tif) 작업 동시 실행 지원&#10;- README에 Rubp 처리 워크플로 상세 설명 및 사용 예시 추가" />
@@ -399,7 +393,8 @@
     <MESSAGE value="이미지-텍스트 매칭 로직 및 SQLite 관리 기능 추가:  &#10;- 파일명 기반 prefix와 timestamp 추출 로직 구현  &#10;- 이미지와 텍스트 간 매칭 조건(`prefix 동일`, `text_ts &gt;= image_ts`, `5분 이내`) 구현  &#10;- 최적 매칭 텍스트를 찾고, 매칭 실패 시 이미지 row 삭제 처리  &#10;- `rupi_ingest` 테이블 생성 및 이미지 메타 정보 관리(insert, delete, update) 기능 추가  &#10;- Rupi 처리 흐름에 매칭 로직 통합 및 관련 테스트 설정 업데이트" />
     <MESSAGE value="소스 코드 및 설정 파일 전체 리팩터링:  &#10;- 기존 BatchRunner, FTPScanner, RubiProcessor, RupiProcessor 모듈 분리  &#10;- 코드 계층 구조 정리 (`ftp_batch`로 재구성: `app`, `infra`, `config`, `processors`, `matching`)  &#10;- Rubi/Rupi 처리 로직 통합 및 FTP 관련 유틸 코드 단순화  &#10;- 테스트 및 설정 파일 삭제, 신규 프로젝트 구조에 맞게 재구성" />
     <MESSAGE value="날짜 및 경로 관련 공통 유틸리티 추가:  &#10;- `ftp_batch.common.date_utils`: 날짜 정규화 및 대상 날짜 계산 함수 구현  &#10;- `ftp_batch.common.path_utils`: 경로 빌드 및 `rbi/ruip` 업로드 경로 변환 함수 추가  &#10;- 기존 중복 코드 제거 및 재사용성 향상" />
-    <option name="LAST_COMMIT_MESSAGE" value="날짜 및 경로 관련 공통 유틸리티 추가:  &#10;- `ftp_batch.common.date_utils`: 날짜 정규화 및 대상 날짜 계산 함수 구현  &#10;- `ftp_batch.common.path_utils`: 경로 빌드 및 `rbi/ruip` 업로드 경로 변환 함수 추가  &#10;- 기존 중복 코드 제거 및 재사용성 향상" />
+    <MESSAGE value="ER Dose 배치 파이프라인 확장:  &#10;- Dose 데이터 분석 기능 강화  &#10;  - `parsed` 테이블의 schema와 파티션 구조 개선 (`er_date`, `er_index` 기반)  &#10;  - 원본 파싱 및 상태(성공, regex 실패, 파싱 실패) 기록 로직 추가  &#10;- 배치 실행 로직 리팩터링  &#10;  - 파티션 자동 생성, 데이터 삭제 및 재처리 지원  &#10;  - 파서 버전, 파싱 상태 및 실패 정보 기록  &#10;- 테스트 케이스와 뷰어 문서 추가  &#10;  - `tests/test_er_dose_batch.py`: 주요 로직 유닛 테스트  &#10;  -" />
+    <option name="LAST_COMMIT_MESSAGE" value="" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/generate_troubleshooting_docs_py$remote_batch_processor.coverage" NAME="remote_batch_processor 커버리지 결과" MODIFIED="1773832293382" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />

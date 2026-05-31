@@ -1,0 +1,2 @@
+"""Shared batch entrypoint package."""
+
