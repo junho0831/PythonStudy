@@ -35,6 +35,18 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 현재 운영 기본값은 `COMBINED` 기준입니다. 입력일 하나를 받으면 내부적으로 `전날 + 입력일` 두 날짜를 함께 처리합니다.
 
+## ER Dose Error 배치
+
+`ER_DOSE` 배치는 `mbeat.er_data_raw`의 dose warning 로그를 파싱해 `mbeat.er_dose_error_parsed`에 적재합니다. 원천 식별 컬럼인 `er_date`, `er_index`, `er_line`, `eq_name`, `code`, `code_occur_time`, `belong`, `type`, `title`, `contents`는 그대로 보존하고, `contents`에서 실제 추출되는 dose/action/exposure/sequence 값만 별도 컬럼으로 저장합니다.
+
+`er_dose_error_parsed`에는 배치 상태 관리용 컬럼을 두지 않습니다. 파싱 실패 여부는 실행 summary로만 집계하고, 테이블에는 상태값 없이 원천 로그와 추출 가능한 값만 적재합니다.
+
+기존 운영 테이블이 repo DDL과 다르게 만들어진 경우를 대비해 migration SQL은 `er_date`, `er_index`뿐 아니라 `er_line`, `eq_name`, `code`, `code_occur_time`도 `add column if not exists`로 보강합니다.
+
+`mbeat.er_data_raw_euv` 기반 root cause 결과는 `mbeat.er_dose_error_root_cause`에 저장하는 별도 구조입니다. 이 테이블도 원천 컬럼과 root cause `contents`에서 실제 파싱되는 값만 보관합니다.
+
+상세 스키마와 파싱 규칙은 [ER_DOSE_ERROR.md](ER_DOSE_ERROR.md)를 기준으로 관리합니다.
+
 ## 디렉토리 구조
 
 ```text

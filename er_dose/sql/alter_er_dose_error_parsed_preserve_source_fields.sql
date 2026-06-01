@@ -1,0 +1,18 @@
+alter table mbeat.er_dose_error_parsed
+    drop column if exists log_source,
+    drop column if exists raw_contents,
+    drop column if exists repair_yn,
+    drop column if exists repair_result,
+    drop column if exists parser_version,
+    drop column if exists parsing_status,
+    drop column if exists parsing_error,
+    add column if not exists er_date int4,
+    add column if not exists er_index int4,
+    add column if not exists er_line varchar(20),
+    add column if not exists eq_name varchar(20),
+    add column if not exists code varchar(20),
+    add column if not exists code_occur_time timestamp(6),
+    add column if not exists belong varchar(12),
+    add column if not exists "type" varchar(8),
+    add column if not exists title varchar,
+    add column if not exists contents varchar;

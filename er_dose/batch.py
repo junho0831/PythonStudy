@@ -11,9 +11,8 @@ from er_dose.parsers.base import RawErLog
 from er_dose.parsers.registry import parse_raw_er_log
 
 
-RAW_TABLE = "mbeat.er_data_raw"
+MAIN_RAW_TABLE = "mbeat.er_data_raw"
 PARSED_TABLE = "mbeat.er_dose_error_parsed"
-PARSER_VERSION = "v1"
 DoseErrorValue = Decimal | int | bool | str | datetime | None
 
 
@@ -35,7 +34,7 @@ class ERDoseBatch:
                 parsed = parse_raw_er_log(raw)
                 if parsed is None:
                     regex_fail_count += 1
-                    parsed_rows.append(self._build_status_row(raw, "REGEX_FAIL", "No parser matched contents."))
+                    parsed_rows.append(self._build_unparsed_row(raw))
                     continue
                 parsed_rows.append(asdict(parsed))
                 success_count += 1
@@ -82,14 +81,17 @@ class ERDoseBatch:
 
         query = f"""
             select
+                r.er_date,
+                r.er_index,
                 r.er_line,
                 r.eq_name,
                 r.code,
                 r.code_occur_time,
                 r.belong,
-                r.type,
+                r."type" as type,
+                r.title,
                 r.contents
-            from {RAW_TABLE} r
+            from {MAIN_RAW_TABLE} r
             where r.code_occur_time >= %(start_time)s
               and r.code_occur_time < %(end_time)s
               and (
@@ -133,12 +135,15 @@ class ERDoseBatch:
             code_occur_time = code_occur_time.to_pydatetime()
 
         return RawErLog(
+            er_date=self._nullable_int(row.get("er_date")),
+            er_index=self._nullable_int(row.get("er_index")),
             er_line=self._nullable_str(row.get("er_line")),
             eq_name=self._nullable_str(row.get("eq_name")),
             code=self._nullable_str(row.get("code")),
             code_occur_time=code_occur_time,
-            code_occur_time_raw=self._format_timestamp_raw(code_occur_time),
-            log_source=self._build_log_source(row),
+            belong=self._nullable_str(row.get("belong")),
+            type=self._nullable_str(row.get("type")),
+            title=self._nullable_str(row.get("title")),
             contents=str(contents),
         )
 
@@ -147,10 +152,15 @@ class ERDoseBatch:
             return None
         return str(value)
 
+    def _nullable_int(self, value):
+        if value is None or pd.isna(value):
+            return None
+        return int(value)
+
     def _build_error_row(self, row, exc: Exception) -> dict[str, DoseErrorValue]:
         try:
             raw = self._row_to_raw_log(row)
-            return self._build_status_row(raw, "PARSER_ERROR", str(exc))
+            return self._build_unparsed_row(raw)
         except Exception:
             code_occur_time = row.get("code_occur_time")
             if hasattr(code_occur_time, "to_pydatetime"):
@@ -158,56 +168,62 @@ class ERDoseBatch:
             if pd.isna(code_occur_time):
                 code_occur_time = datetime.min
             return self._empty_parsed_row(
+                er_date=self._nullable_int(row.get("er_date")),
+                er_index=self._nullable_int(row.get("er_index")),
                 er_line=self._nullable_str(row.get("er_line")),
                 eq_name=self._nullable_str(row.get("eq_name")),
                 code=self._nullable_str(row.get("code")),
                 code_occur_time=code_occur_time,
-                code_occur_time_raw=self._format_timestamp_raw(code_occur_time),
-                log_source=self._build_log_source(row),
-                raw_contents="" if row.get("contents") is None or pd.isna(row.get("contents")) else str(row.get("contents")),
-                parsing_status="PARSER_ERROR",
-                parsing_error=str(exc),
+                belong=self._nullable_str(row.get("belong")),
+                type=self._nullable_str(row.get("type")),
+                title=self._nullable_str(row.get("title")),
+                contents="" if row.get("contents") is None or pd.isna(row.get("contents")) else str(row.get("contents")),
             )
 
-    def _build_status_row(self, raw: RawErLog, parsing_status: str, parsing_error: str | None) -> dict[str, DoseErrorValue]:
+    def _build_unparsed_row(self, raw: RawErLog) -> dict[str, DoseErrorValue]:
         return self._empty_parsed_row(
+            er_date=raw.er_date,
+            er_index=raw.er_index,
             er_line=raw.er_line,
             eq_name=raw.eq_name,
             code=raw.code,
             code_occur_time=raw.code_occur_time,
-            code_occur_time_raw=raw.code_occur_time_raw,
-            log_source=raw.log_source,
-            raw_contents=raw.contents,
-            parsing_status=parsing_status,
-            parsing_error=parsing_error,
+            belong=raw.belong,
+            type=raw.type,
+            title=raw.title,
+            contents=raw.contents,
         )
 
     def _empty_parsed_row(
         self,
+        er_date: int | None,
+        er_index: int | None,
         er_line: str | None,
         eq_name: str | None,
         code: str | None,
         code_occur_time: datetime,
-        code_occur_time_raw: str,
-        log_source: str | None,
-        raw_contents: str,
-        parsing_status: str,
-        parsing_error: str | None,
+        belong: str | None,
+        type: str | None,
+        title: str | None,
+        contents: str,
     ) -> dict[str, DoseErrorValue]:
         return {
+            "er_date": er_date,
+            "er_index": er_index,
             "er_line": er_line,
             "eq_name": eq_name,
             "code": code,
             "code_occur_time": code_occur_time,
-            "code_occur_time_raw": code_occur_time_raw,
-            "log_source": log_source,
+            "belong": belong,
+            "type": type,
+            "title": title,
+            "contents": contents,
             "exposure_handle": None,
+            "source_exposure_id": None,
             "action_handle": None,
             "wafer_seq": None,
             "shot_seq": None,
             "field_seq": None,
-            "repair_yn": None,
-            "repair_result": None,
             "dose_error": None,
             "dose_warn_level": None,
             "de_err": None,
@@ -218,21 +234,7 @@ class ERDoseBatch:
             "mb_enabled": None,
             "function_name": None,
             "result_type": None,
-            "parser_version": PARSER_VERSION,
-            "parsing_status": parsing_status,
-            "parsing_error": parsing_error,
-            "raw_contents": raw_contents,
         }
-
-    def _format_timestamp_raw(self, value: datetime) -> str:
-        return value.strftime("%Y-%m-%d %H:%M:%S.%f")
-
-    def _build_log_source(self, row) -> str | None:
-        belong = self._nullable_str(row.get("belong"))
-        log_type = self._nullable_str(row.get("type"))
-        if belong and log_type:
-            return f"{belong}:{log_type}"
-        return belong or log_type
 
     def _iter_day_starts(self, start_time: datetime, end_time: datetime):
         current = start_time.replace(hour=0, minute=0, second=0, microsecond=0)

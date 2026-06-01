@@ -8,30 +8,36 @@ from typing import Protocol
 
 @dataclass(frozen=True)
 class RawErLog:
+    er_date: int | None
+    er_index: int | None
     er_line: str | None
     eq_name: str | None
     code: str | None
     code_occur_time: datetime
-    code_occur_time_raw: str
-    log_source: str | None
+    belong: str | None
+    type: str | None
+    title: str | None
     contents: str
 
 
 @dataclass(frozen=True)
 class ParsedErDoseError:
+    er_date: int | None
+    er_index: int | None
     er_line: str | None
     eq_name: str | None
     code: str | None
     code_occur_time: datetime
-    code_occur_time_raw: str
-    log_source: str | None
+    belong: str | None
+    type: str | None
+    title: str | None
+    contents: str
     exposure_handle: int | None
+    source_exposure_id: int | None
     action_handle: int | None
     wafer_seq: int | None
     shot_seq: int | None
     field_seq: int | None
-    repair_yn: bool | None
-    repair_result: str | None
     dose_error: Decimal | None
     dose_warn_level: Decimal | None
     de_err: Decimal | None
@@ -42,10 +48,6 @@ class ParsedErDoseError:
     mb_enabled: bool | None
     function_name: str | None
     result_type: str | None
-    parser_version: str
-    parsing_status: str
-    parsing_error: str | None
-    raw_contents: str
 
 
 class ERLogParser(Protocol):

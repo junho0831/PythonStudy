@@ -9,6 +9,25 @@ from er_dose.parsers.base import ParsedErDoseError, RawErLog
 _DECIMAL_RE = r"([+-]?\d+(?:\.\d+)?)"
 _INT_RE = r"([+-]?\d+)"
 
+_WAFER_SEQ_PATTERNS = [
+    r"\bwafer_seq\s*[:=]\s*" + _INT_RE,
+    r"\bwafer\s+seq\s*[:=]\s*" + _INT_RE,
+    r"\bwafer_id\s*[:=]\s*" + _INT_RE,
+    r"\bwafer\s+id\s*[:=]\s*" + _INT_RE,
+    r"\bslot_seq\s*[:=]\s*" + _INT_RE,
+    r"\bslot\s+seq\s*[:=]\s*" + _INT_RE,
+]
+
+_SHOT_SEQ_PATTERNS = [
+    r"\bshot_seq\s*[:=]\s*" + _INT_RE,
+    r"\bshot\s+seq\s*[:=]\s*" + _INT_RE,
+]
+
+_FIELD_SEQ_PATTERNS = [
+    r"\bfield_seq\s*[:=]\s*" + _INT_RE,
+    r"\bfield\s+seq\s*[:=]\s*" + _INT_RE,
+]
+
 
 class DoseErrorParser:
     """Parser for dw-xxxx dose evaluation warning logs."""
@@ -29,19 +48,22 @@ class DoseErrorParser:
         contents = raw.contents
         function_name, result_type = self._extract_function_block(contents)
         return ParsedErDoseError(
+            er_date=raw.er_date,
+            er_index=raw.er_index,
             er_line=raw.er_line,
             eq_name=raw.eq_name,
             code=raw.code,
             code_occur_time=raw.code_occur_time,
-            code_occur_time_raw=raw.code_occur_time_raw,
-            log_source=raw.log_source,
+            belong=raw.belong,
+            type=raw.type,
+            title=raw.title,
+            contents=raw.contents,
             exposure_handle=self._extract_int(contents, r"\bexposure_handle\s*[:=]\s*" + _INT_RE),
+            source_exposure_id=self._extract_source_exposure_id(contents),
             action_handle=self._extract_int(contents, r"\baction_handle\s*[:=]\s*" + _INT_RE),
-            wafer_seq=None,
-            shot_seq=None,
-            field_seq=None,
-            repair_yn=None,
-            repair_result=None,
+            wafer_seq=self._extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1),
+            shot_seq=self._extract_first_int(contents, _SHOT_SEQ_PATTERNS),
+            field_seq=self._extract_first_int(contents, _FIELD_SEQ_PATTERNS),
             dose_error=self._extract_decimal(
                 contents,
                 r"skip\s+the\s+dose\s+evaluation\s+" + _DECIMAL_RE + r"\s*\[%\]",
@@ -58,10 +80,6 @@ class DoseErrorParser:
             mb_enabled=self._extract_bool(contents, r"\bmb_enabled\s*[:=]\s*(t|f|true|false|1|0)"),
             function_name=function_name,
             result_type=result_type,
-            parser_version="v1",
-            parsing_status="SUCCESS",
-            parsing_error=None,
-            raw_contents=raw.contents,
         )
 
     def _extract_decimal(self, contents: str, pattern: str) -> Decimal | None:
@@ -76,6 +94,16 @@ class DoseErrorParser:
             return None
         return int(match.group(1))
 
+    def _extract_first_int(self, contents: str, patterns: list[str], minimum: int | None = None) -> int | None:
+        for pattern in patterns:
+            value = self._extract_int(contents, pattern)
+            if value is None:
+                continue
+            if minimum is not None and value < minimum:
+                continue
+            return value
+        return None
+
     def _extract_bool(self, contents: str, pattern: str) -> bool | None:
         match = re.search(pattern, contents, flags=re.IGNORECASE)
         if match is None:
@@ -86,6 +114,14 @@ class DoseErrorParser:
         if value in {"f", "false", "0"}:
             return False
         return None
+
+    def _extract_source_exposure_id(self, contents: str) -> int | None:
+        patterns = [
+            r"\bsource[_\s-]*exposure[_\s-]*id\s*[:=]\s*" + _INT_RE,
+            r"\bsource[_\s-]*exposure[_\s-]*handle\s*[:=]\s*" + _INT_RE,
+            r"\bsource[_\s-]*exp(?:osure)?[_\s-]*id\s*[:=]\s*" + _INT_RE,
+        ]
+        return self._extract_first_int(contents, patterns)
 
     def _extract_function_block(self, contents: str) -> tuple[str | None, str | None]:
         matches = re.findall(r"\[([A-Za-z0-9_]+):([A-Za-z0-9_]+)\]", contents)
