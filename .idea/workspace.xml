@@ -23,6 +23,9 @@
       <change beforePath="$PROJECT_DIR$/ER_DOSE_ERROR.md" beforeDir="false" afterPath="$PROJECT_DIR$/ER_DOSE_ERROR.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/er_dose_flow.drawio" beforeDir="false" afterPath="$PROJECT_DIR$/docs/er_dose_flow.drawio" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/er_dose/batch.py" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/batch.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/er_dose/infra/postgres_db.py" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/infra/postgres_db.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_er_dose_batch.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_er_dose_batch.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

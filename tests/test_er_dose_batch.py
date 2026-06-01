@@ -39,6 +39,7 @@ class FakeDB:
         self.raw_df = raw_df
         self.executed = []
         self.inserted = []
+        self.do_nothing_inserted = []
         self.connection = object()
 
     def fetch_df(self, query, params=None):
@@ -58,6 +59,20 @@ class FakeDB:
         self.inserted.append((table_name, df))
         self.insert_connection = connection
         return len(df)
+
+    def bulk_insert_do_nothing_df(self, table_name, df, conflict_columns, connection=None):
+        self.insert_table_name = table_name
+        self.do_nothing_inserted.append((table_name, df, conflict_columns))
+        self.insert_connection = connection
+        return len(df)
+
+    def iter_query_chunks(self, query, params=None, chunk_size=20000):
+        self.stream_query = query
+        self.stream_params = params
+        self.stream_chunk_size = chunk_size
+        rows = self.raw_df.to_dict("records")
+        for idx in range(0, len(rows), chunk_size):
+            yield rows[idx : idx + chunk_size]
 
 
 class ERDoseBatchTest(unittest.TestCase):
@@ -80,7 +95,7 @@ class ERDoseBatchTest(unittest.TestCase):
         self.assertEqual(db.fetch_params["end_time"], end_time)
         self.assertEqual(db.fetch_params["limit"], 10)
 
-    def test_run_inserts_rows_without_deleting_existing_history(self):
+    def test_run_streams_rows_and_inserts_do_nothing_without_deleting(self):
         raw_df = pd.DataFrame(
             [
                 self._row(1, "dw-3411", SAMPLE_CONTENTS),
@@ -89,7 +104,7 @@ class ERDoseBatchTest(unittest.TestCase):
             ]
         )
         db = FakeDB(raw_df)
-        batch = ERDoseBatch(db)
+        batch = ERDoseBatch(db, chunk_size=2)
 
         with redirect_stdout(StringIO()):
             summary = batch.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
@@ -101,9 +116,16 @@ class ERDoseBatchTest(unittest.TestCase):
         self.assertEqual(summary["inserted"], 3)
         self.assertNotIn("root_cause_inserted", summary)
         self.assertIs(db.insert_connection, db.connection)
+        self.assertEqual(db.stream_chunk_size, 2)
+        self.assertIn("r.code_occur_time >= %(start_time)s", db.stream_query)
+        self.assertIn("r.code_occur_time < %(end_time)s", db.stream_query)
         delete_queries = [query for query, _, _ in db.executed if query.strip().lower().startswith("delete")]
         self.assertEqual(delete_queries, [])
-        parsed_insert = self._inserted_df(db, "mbeat.er_dose_error_parsed")
+        parsed_insert = self._do_nothing_inserted_df(db, "mbeat.er_dose_error_parsed")
+        self.assertEqual(
+            db.do_nothing_inserted[0][2],
+            ["code_occur_time"],
+        )
         self.assertNotIn("parser_version", parsed_insert.columns)
         self.assertNotIn("parsing_status", parsed_insert.columns)
         self.assertNotIn("parsing_error", parsed_insert.columns)
@@ -114,8 +136,15 @@ class ERDoseBatchTest(unittest.TestCase):
         self.assertEqual(parsed_insert.loc[0, "type"], "ER")
         self.assertEqual(parsed_insert.loc[0, "title"], "Dose warning")
         self.assertEqual(parsed_insert.loc[0, "contents"], SAMPLE_CONTENTS)
-        inserted_tables = [table_name for table_name, _ in db.inserted]
-        self.assertEqual(inserted_tables, ["mbeat.er_dose_error_parsed"])
+        inserted_tables = [table_name for table_name, _, _ in db.do_nothing_inserted]
+        self.assertEqual(inserted_tables, ["mbeat.er_dose_error_parsed", "mbeat.er_dose_error_parsed"])
+
+    def test_run_rejects_invalid_time_range(self):
+        db = FakeDB(pd.DataFrame())
+        batch = ERDoseBatch(db)
+
+        with self.assertRaises(ValueError):
+            batch.run(start_time=datetime(2026, 5, 2), end_time=datetime(2026, 5, 1))
 
     def test_partition_creation_covers_each_day_in_range(self):
         db = FakeDB(pd.DataFrame())
@@ -149,6 +178,12 @@ class ERDoseBatchTest(unittest.TestCase):
             if inserted_table_name == table_name:
                 return inserted_df
         raise AssertionError(f"{table_name} was not inserted")
+
+    def _do_nothing_inserted_df(self, db, table_name):
+        for inserted_table_name, inserted_df, _ in db.do_nothing_inserted:
+            if inserted_table_name == table_name:
+                return inserted_df
+        raise AssertionError(f"{table_name} was not inserted with do nothing")
 
 
 if __name__ == "__main__":

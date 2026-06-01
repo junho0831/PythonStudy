@@ -89,6 +89,66 @@ class PostgresDB:
 
         return insert_count
 
+    def bulk_insert_do_nothing_df(
+        self,
+        table_name: str,
+        df,
+        conflict_columns: list[str],
+        connection=None,
+        page_size: int = 1000,
+    ) -> int:
+        if df.empty:
+            return 0
+
+        normalized_df = df.where(pd.notna(df), None)
+        columns = list(normalized_df.columns)
+        rows = list(normalized_df.itertuples(index=False, name=None))
+        table_sql = self._quote_identifier_path(table_name)
+        column_sql = ", ".join(self._quote_identifier(column) for column in columns)
+        conflict_sql = ", ".join(self._quote_identifier(column) for column in conflict_columns)
+        query = f"""
+            insert into {table_sql} ({column_sql})
+            values %s
+            on conflict ({conflict_sql}) do nothing
+        """
+
+        own_connection = connection is None
+        conn = connection or self._connect()
+        try:
+            from psycopg2.extras import execute_values
+
+            with conn.cursor() as cur:
+                execute_values(cur, query, rows, page_size=page_size)
+            if own_connection:
+                conn.commit()
+        except Exception:
+            if own_connection:
+                conn.rollback()
+            raise
+        finally:
+            if own_connection:
+                conn.close()
+
+        return len(rows)
+
+    def iter_query_chunks(self, query: str, params=None, chunk_size: int = 20000):
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be greater than 0")
+
+        conn = self._connect()
+        try:
+            with conn.cursor(name="er_dose_stream") as cur:
+                cur.itersize = chunk_size
+                cur.execute(query, params)
+                columns = [column.name for column in cur.description]
+                while True:
+                    rows = cur.fetchmany(chunk_size)
+                    if not rows:
+                        break
+                    yield [dict(zip(columns, row, strict=False)) for row in rows]
+        finally:
+            conn.close()
+
     def execute(self, query: str, params=None, connection=None) -> int:
         own_connection = connection is None
         conn = connection or self._connect()

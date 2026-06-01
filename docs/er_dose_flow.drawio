@@ -61,7 +61,7 @@
         <mxCell id="status" value="파싱 결과 분기&#10;&#10;- 파싱 성공 row 적재&#10;- 파싱 실패 row도 contents와 함께 적재&#10;- summary count는 콘솔 출력" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="1170" y="240" width="300" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="append" value="적재 정책&#10;&#10;- 일별 파티션 자동 생성&#10;- transaction 안에서 bulk insert&#10;- parsed append only&#10;- RAW update/delete 없음" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+        <mxCell id="append" value="적재 정책&#10;&#10;- 일별 파티션 자동 생성&#10;- server-side cursor chunk 조회&#10;- ON CONFLICT DO NOTHING bulk insert&#10;- RAW update/delete 없음" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="450" y="610" width="300" height="170" as="geometry" />
         </mxCell>
         <mxCell id="parsed" value="mbeat.er_dose_error_parsed" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">

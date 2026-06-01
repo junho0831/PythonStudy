@@ -39,6 +39,12 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 `ER_DOSE` 배치는 `mbeat.er_data_raw`의 dose warning 로그를 파싱해 `mbeat.er_dose_error_parsed`에 적재합니다. 원천 식별 컬럼인 `er_date`, `er_index`, `er_line`, `eq_name`, `code`, `code_occur_time`, `belong`, `type`, `title`, `contents`는 그대로 보존하고, `contents`에서 실제 추출되는 dose/action/exposure/sequence 값만 별도 컬럼으로 저장합니다.
 
+하루 수천만 건 수준을 전제로 하므로 `ER_DOSE`는 전체 구간을 한 번에 pandas로 읽지 않고 server-side cursor로 chunk 처리합니다. 운영 테이블 제약상 `code_occur_time` 단일 PK를 사용하므로 적재도 `code_occur_time` 기준 `ON CONFLICT DO NOTHING`으로 중복만 막고 기존 row는 다시 쓰지 않습니다.
+
+성능을 위해 bulk insert는 `RETURNING` 결과를 받지 않습니다. 실행 summary의 `inserted`는 실제 신규 insert 건수가 아니라 insert 시도 row 수이며, conflict skip 건수는 별도로 집계하지 않습니다.
+
+주의: 같은 `code_occur_time`에 여러 원천 row가 존재하면 현재 PK 제약상 먼저 들어간 row만 남고 나머지는 conflict skip됩니다.
+
 `er_dose_error_parsed`에는 배치 상태 관리용 컬럼을 두지 않습니다. 파싱 실패 여부는 실행 summary로만 집계하고, 테이블에는 상태값 없이 원천 로그와 추출 가능한 값만 적재합니다.
 
 기존 운영 테이블이 repo DDL과 다르게 만들어진 경우를 대비해 migration SQL은 `er_date`, `er_index`뿐 아니라 `er_line`, `eq_name`, `code`, `code_occur_time`도 `add column if not exists`로 보강합니다.
@@ -272,6 +278,17 @@ ER_DOSE_DB_DSN='postgresql://user:password@host:5432/dbname' \
 - 래퍼: [/Users/parkjunho/PycharmProjects/PythonStudy/airflow_modules/ftp_batch_jobs.py](/Users/parkjunho/PycharmProjects/PythonStudy/airflow_modules/ftp_batch_jobs.py)
 - 스케줄: 매시간 정각
 - 기본 실행 모드: `COMBINED`
+
+### ER Dose Airflow
+
+- Near realtime DAG: [/Users/parkjunho/PycharmProjects/PythonStudy/dags/er_dose_near_realtime_dag.py](/Users/parkjunho/PycharmProjects/PythonStudy/dags/er_dose_near_realtime_dag.py)
+- Hourly backfill DAG: [/Users/parkjunho/PycharmProjects/PythonStudy/dags/er_dose_backfill_hourly_dag.py](/Users/parkjunho/PycharmProjects/PythonStudy/dags/er_dose_backfill_hourly_dag.py)
+- Daily backfill DAG: [/Users/parkjunho/PycharmProjects/PythonStudy/dags/er_dose_backfill_daily_dag.py](/Users/parkjunho/PycharmProjects/PythonStudy/dags/er_dose_backfill_daily_dag.py)
+- 래퍼: [/Users/parkjunho/PycharmProjects/PythonStudy/airflow_modules/er_dose_jobs.py](/Users/parkjunho/PycharmProjects/PythonStudy/airflow_modules/er_dose_jobs.py)
+- 주 배치: 10분마다 실행하고, 실제 처리 구간은 `data_interval_start/end - 10분`
+- 보정 배치: 매시간 최근 1일, 매일 03시 최근 3일을 10분 chunk로 재처리
+- 중복 방지: 운영 테이블 PK인 `code_occur_time` 기준 `ON CONFLICT DO NOTHING`
+- 적재 summary: `RETURNING`을 쓰지 않으므로 `inserted`는 insert 시도 row 수
 
 ## 설정
 

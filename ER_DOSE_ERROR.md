@@ -178,11 +178,25 @@ erDiagram
 `ERDoseBatch.run()`은 다음만 수행한다.
 
 1. 기간에 해당하는 `er_dose_error_parsed` 일별 파티션 생성
-2. `mbeat.er_data_raw`에서 Dose Error 후보 조회
+2. `mbeat.er_data_raw`에서 Dose Error 후보를 server-side cursor로 chunk 조회
 3. RAW contents 파싱
-4. `mbeat.er_dose_error_parsed`에 append insert
+4. `mbeat.er_dose_error_parsed`에 `ON CONFLICT DO NOTHING` bulk insert
+
+bulk insert는 대용량 성능을 우선해 `RETURNING` 결과를 받지 않는다. 따라서 실행 summary의 `inserted`는 실제 신규 insert 건수가 아니라 insert 시도 row 수이며, conflict skip 건수는 별도 집계하지 않는다.
 
 배치는 `mbeat.er_data_raw_euv`와 `mbeat.er_dose_error_root_cause`를 조회하거나 적재하지 않는다.
+
+중복 기준은 운영 테이블 PK인 `code_occur_time`이다. 하루 수천만 건 단위 입력을 전제로 하므로 일반 운영에서는 delete 후 재적재나 `DO UPDATE`를 사용하지 않는다.
+
+같은 `code_occur_time`에 여러 원천 row가 존재하면 현재 PK 제약상 먼저 적재된 row만 남고 나머지는 conflict skip된다.
+
+## Airflow 운영
+
+- `er_dose_near_realtime`: 10분마다 실행하고 `data_interval_start/end - 10분` 구간 처리
+- `er_dose_backfill_hourly`: 매시간 최근 1일을 10분 chunk로 재처리
+- `er_dose_backfill_daily`: 매일 03시 최근 3일을 10분 chunk로 재처리
+
+세 DAG 모두 `max_active_runs=1`로 둔다. 배치 실행 시간이 스케줄 주기를 넘어도 담당 조회 구간은 Airflow `data_interval` 기준으로 고정된다.
 
 ## Root Cause 파싱 대상
 
