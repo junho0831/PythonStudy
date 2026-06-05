@@ -70,16 +70,16 @@ erDiagram
     }
 
     ER_DATA_RAW_EUV {
-        varchar(20) er_line
-        varchar(20) eq_name
-        varchar(10) er_type
-        varchar(20) code
+        varchar er_line
+        varchar eq_name
+        varchar er_type
+        varchar code
         timestamp code_occur_time
-        varchar(12) belong
-        varchar(8) type
+        varchar belong
+        varchar type
         varchar title
         varchar contents
-        varchar(20) reason_code
+        varchar reason_code
         varchar task
         varchar compile_script
     }
@@ -87,12 +87,12 @@ erDiagram
     ER_DOSE_ERROR_PARSED {
         int4 er_date
         int4 er_index
-        varchar(20) er_line
-        varchar(20) eq_name
-        varchar(20) code
-        timestamp(6) code_occur_time PK
-        varchar(12) belong
-        varchar(8) type
+        varchar er_line
+        varchar eq_name
+        varchar code
+        timestamp code_occur_time PK
+        varchar belong
+        varchar type
         varchar title
         varchar contents
         bigint exposure_handle
@@ -101,10 +101,10 @@ erDiagram
         integer wafer_seq
         integer shot_seq
         integer field_seq
-        numeric(12,7) dose_error
-        numeric(12,7) dose_warn_level
-        numeric(12,7) de_err
-        numeric(12,7) de_warn_lvl
+        numeric dose_error
+        numeric dose_warn_level
+        numeric de_err
+        numeric de_warn_lvl
         bigint eset
         integer freq
         integer n_slit
@@ -115,63 +115,63 @@ erDiagram
     }
 
     ER_DOSE_ERROR_ROOT_CAUSE {
-        varchar(20) er_line
-        varchar(20) eq_name
-        varchar(10) er_type
-        varchar(20) code
-        timestamp(6) code_occur_time PARTITION
-        varchar(12) belong
-        varchar(8) type
+        varchar er_line
+        varchar eq_name
+        varchar er_type
+        varchar code
+        timestamp code_occur_time PK
+        varchar belong
+        varchar type
         varchar title
         varchar contents
-        varchar(20) reason_code
+        varchar reason_code
         varchar task
         varchar compile_script
         bigint source_exposure_id
-        timestamp(6) source_code_occur_time
-        numeric(12,7) dose_error
+        timestamp source_code_occur_time
+        numeric dose_error
         text source_file_name
         text root_cause_code
         text root_cause_message
-        numeric(12,7) exposure_length
-        numeric(12,7) duty_cycle
-        numeric(12,7) min_dose_error
-        numeric(12,7) max_dose_error
-        numeric(12,7) on_drop_euv_energy
-        numeric(12,7) on_drop_pp_energy
-        numeric(12,7) on_drop_mp_energy
-        numeric(12,7) on_drop_pp_dlgc1
-        numeric(12,7) on_drop_mp_dlgc1
-        numeric(12,7) bi_cell_y_3sigma
-        numeric(12,7) fdsc_y_error
-        numeric(12,7) fdsc_y_3sigma
-        numeric(12,7) max_cross_interval
-        numeric(12,7) xint_3sigma
-        numeric(12,7) euv_3sigma
+        numeric exposure_length
+        numeric duty_cycle
+        numeric min_dose_error
+        numeric max_dose_error
+        numeric on_drop_euv_energy
+        numeric on_drop_pp_energy
+        numeric on_drop_mp_energy
+        numeric on_drop_pp_dlgc1
+        numeric on_drop_mp_dlgc1
+        numeric bi_cell_y_3sigma
+        numeric fdsc_y_error
+        numeric fdsc_y_3sigma
+        numeric max_cross_interval
+        numeric xint_3sigma
+        numeric euv_3sigma
         integer pulses_euv_lt_0_6dt_tot
         integer fed_pulses
-        numeric(12,7) l2dx_maxce
-        numeric(12,7) l2dy_maxce
-        numeric(12,7) sensitivity_at_l2dx_maxce
-        numeric(12,7) sensitivity_at_l2dy_maxce
-        numeric(12,7) dose_margin
-        numeric(12,7) l2dx_qc_etdc_3sigma
-        numeric(12,7) l2dx_qc_etdc_median
-        numeric(12,7) l2dy_qc_etdc_3sigma
-        numeric(12,7) l2dy_qc_etdc_median
-        numeric(12,7) rbdy_peak_frequency_hf
-        numeric(12,7) rbdy_peak_frequency_lf
-        numeric(12,7) rbdy_peak_frequency_mf
-        numeric(12,7) rbdy_peak_power_hf
-        numeric(12,7) rbdy_qc_etdc_3sigma
-        numeric(12,7) rbdy_total_power_lf
-        numeric(12,7) rbdy_total_power_mf
+        numeric l2dx_maxce
+        numeric l2dy_maxce
+        numeric sensitivity_at_l2dx_maxce
+        numeric sensitivity_at_l2dy_maxce
+        numeric dose_margin
+        numeric l2dx_qc_etdc_3sigma
+        numeric l2dx_qc_etdc_median
+        numeric l2dy_qc_etdc_3sigma
+        numeric l2dy_qc_etdc_median
+        numeric rbdy_peak_frequency_hf
+        numeric rbdy_peak_frequency_lf
+        numeric rbdy_peak_frequency_mf
+        numeric rbdy_peak_power_hf
+        numeric rbdy_qc_etdc_3sigma
+        numeric rbdy_total_power_lf
+        numeric rbdy_total_power_mf
         text software_version
     }
 ```
 
-`varchar` 길이와 `numeric` 정밀도는 이 repo의 DDL 기준이다. `mbeat.er_data_raw`는 기존 원천 테이블이므로 배치가 읽는 컬럼만 표시한다.
-`mbeat.er_dose_error_parsed`와 `mbeat.er_dose_error_root_cause`는 모두 `code_occur_time` 기준 range partition을 사용한다.
+Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. 실제 `varchar` 길이와 `numeric` 정밀도는 이 repo의 DDL 기준이다. `mbeat.er_data_raw`는 기존 원천 테이블이므로 배치가 읽는 컬럼만 표시한다.
+`mbeat.er_dose_error_parsed`와 `mbeat.er_dose_error_root_cause`는 실제 DB에서는 모두 `code_occur_time` 기준 range partition을 사용한다.
 
 ## 배치 동작
 
