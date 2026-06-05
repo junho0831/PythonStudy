@@ -44,21 +44,10 @@ class ERDoseBatch:
             chunk_size=chunk_size,
         ):
             fetched_count += int(len(raw_df))
-            parsed_rows = []
-
-            for _, row in raw_df.iterrows():
-                try:
-                    raw = self._row_to_raw_log(row)
-                    parsed = parse_raw_er_log(raw)
-                    if parsed is None:
-                        regex_fail_count += 1
-                        parsed_rows.append(self._build_unparsed_row(raw))
-                        continue
-                    parsed_rows.append(asdict(parsed))
-                    success_count += 1
-                except Exception as exc:
-                    parser_error_count += 1
-                    parsed_rows.append(self._build_error_row(row, exc))
+            parsed_rows, chunk_success_count, chunk_regex_fail_count, chunk_parser_error_count = self._parse_chunk(raw_df)
+            success_count += chunk_success_count
+            regex_fail_count += chunk_regex_fail_count
+            parser_error_count += chunk_parser_error_count
 
             if parsed_rows:
                 parsed_df = pd.DataFrame(parsed_rows)
@@ -154,16 +143,13 @@ class ERDoseBatch:
             )
 
     def _row_to_raw_log(self, row) -> RawErLog:
-        code_occur_time = row.get("code_occur_time")
+        code_occur_time = self._normalize_datetime(row.get("code_occur_time"))
         contents = row.get("contents")
 
         if pd.isna(code_occur_time):
             raise ValueError("code_occur_time is required")
         if contents is None or pd.isna(contents):
             raise ValueError("contents is required")
-
-        if hasattr(code_occur_time, "to_pydatetime"):
-            code_occur_time = code_occur_time.to_pydatetime()
 
         return RawErLog(
             er_date=self._nullable_int(row.get("er_date")),
@@ -188,14 +174,34 @@ class ERDoseBatch:
             return None
         return int(value)
 
-    def _build_error_row(self, row, exc: Exception) -> dict[str, DoseErrorValue]:
+    def _parse_chunk(self, raw_df) -> tuple[list[dict[str, DoseErrorValue]], int, int, int]:
+        parsed_rows: list[dict[str, DoseErrorValue]] = []
+        success_count = 0
+        regex_fail_count = 0
+        parser_error_count = 0
+
+        for _, row in raw_df.iterrows():
+            try:
+                raw = self._row_to_raw_log(row)
+                parsed = parse_raw_er_log(raw)
+                if parsed is None:
+                    regex_fail_count += 1
+                    parsed_rows.append(self._build_unparsed_row(raw))
+                    continue
+                parsed_rows.append(asdict(parsed))
+                success_count += 1
+            except Exception:
+                parser_error_count += 1
+                parsed_rows.append(self._build_error_row(row))
+
+        return parsed_rows, success_count, regex_fail_count, parser_error_count
+
+    def _build_error_row(self, row) -> dict[str, DoseErrorValue]:
         try:
             raw = self._row_to_raw_log(row)
             return self._build_unparsed_row(raw)
         except Exception:
-            code_occur_time = row.get("code_occur_time")
-            if hasattr(code_occur_time, "to_pydatetime"):
-                code_occur_time = code_occur_time.to_pydatetime()
+            code_occur_time = self._normalize_datetime(row.get("code_occur_time"))
             if pd.isna(code_occur_time):
                 code_occur_time = datetime.min
             return self._empty_parsed_row(
@@ -255,6 +261,11 @@ class ERDoseBatch:
             "de_err": None,
             "n_slit": None,
         }
+
+    def _normalize_datetime(self, value):
+        if hasattr(value, "to_pydatetime"):
+            return value.to_pydatetime()
+        return value
 
     def _iter_day_starts(self, start_time: datetime, end_time: datetime):
         current = start_time.replace(hour=0, minute=0, second=0, microsecond=0)

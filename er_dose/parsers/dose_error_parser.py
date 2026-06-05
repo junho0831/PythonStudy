@@ -8,8 +8,13 @@ from er_dose.parsers.base import ParsedErDoseError, RawErLog
 
 _DECIMAL_RE = r"([+-]?\d+(?:\.\d+)?)"
 _INT_RE = r"([+-]?\d+)"
+_SUPPORT_KEYWORDS = (
+    "dose evaluation",
+    "de_err",
+    "dwdc_eval_determine_dose_performance_result",
+)
 
-_WAFER_SEQ_PATTERNS = [
+_WAFER_ID_PATTERNS = [
     r"\bwafer_seq\s*[:=]\s*" + _INT_RE,
     r"\bwafer\s+seq\s*[:=]\s*" + _INT_RE,
     r"\bwafer_id\s*[:=]\s*" + _INT_RE,
@@ -25,11 +30,7 @@ class DoseErrorParser:
     def supports(self, raw: RawErLog) -> bool:
         code = (raw.code or "").lower()
         contents = raw.contents.lower()
-        return code.startswith("dw-") and (
-            "dose evaluation" in contents
-            or "de_err" in contents
-            or "dwdc_eval_determine_dose_performance_result" in contents
-        )
+        return code.startswith("dw-") and any(keyword in contents for keyword in _SUPPORT_KEYWORDS)
 
     def parse(self, raw: RawErLog) -> ParsedErDoseError | None:
         if not self.supports(raw):
@@ -49,7 +50,7 @@ class DoseErrorParser:
             contents=raw.contents,
             exposure_handle=self._extract_int(contents, r"\bexposure_handle\s*[:=]\s*" + _INT_RE),
             action_handle=self._extract_int(contents, r"\baction_handle\s*[:=]\s*" + _INT_RE),
-            wafer_id=self._extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1),
+            wafer_id=self._extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1),
             de_err=self._extract_decimal(contents, r"\bde_err\s*[:=]\s*" + _DECIMAL_RE),
             n_slit=self._extract_int(contents, r"\bn_slit\s*[:=]\s*" + _INT_RE),
         )
