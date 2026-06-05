@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 from contextlib import contextmanager
+from io import StringIO
 
 import pandas as pd
 
@@ -36,6 +37,18 @@ class PostgresDB:
         conn = connection or self._connect()
         try:
             return pd.read_sql_query(query, conn, params=params)
+        finally:
+            if own_connection:
+                conn.close()
+
+    def fetch_df_in_chunks(self, query: str, params=None, chunk_size: int = 10000, connection=None):
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be greater than 0")
+
+        own_connection = connection is None
+        conn = connection or self._connect()
+        try:
+            yield from pd.read_sql_query(query, conn, params=params, chunksize=chunk_size)
         finally:
             if own_connection:
                 conn.close()
@@ -88,6 +101,46 @@ class PostgresDB:
                 conn.close()
 
         return insert_count
+
+    def copy_insert_df(self, table_name: str, df, connection=None) -> int:
+        if df.empty:
+            return 0
+
+        normalized_df = df.where(pd.notna(df), None)
+        columns = list(normalized_df.columns)
+        table_sql = self._quote_identifier_path(table_name)
+        column_sql = ", ".join(self._quote_identifier(column) for column in columns)
+        query = f"copy {table_sql} ({column_sql}) from stdin with csv null ''"
+
+        stream = StringIO()
+        for row in normalized_df.itertuples(index=False, name=None):
+            serialized = []
+            for value in row:
+                if value is None or pd.isna(value):
+                    serialized.append("")
+                    continue
+                text = str(value).replace('"', '""')
+                serialized.append(f'"{text}"')
+            stream.write(",".join(serialized))
+            stream.write("\n")
+        stream.seek(0)
+
+        own_connection = connection is None
+        conn = connection or self._connect()
+        try:
+            with conn.cursor() as cur:
+                cur.copy_expert(query, stream)
+            if own_connection:
+                conn.commit()
+        except Exception:
+            if own_connection:
+                conn.rollback()
+            raise
+        finally:
+            if own_connection:
+                conn.close()
+
+        return len(normalized_df)
 
     def execute(self, query: str, params=None, connection=None) -> int:
         own_connection = connection is None

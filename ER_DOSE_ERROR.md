@@ -178,11 +178,12 @@ erDiagram
 `ERDoseBatch.run()`은 다음만 수행한다.
 
 1. 기간에 해당하는 `er_dose_error_parsed` 일별 파티션 생성
-2. `mbeat.er_data_raw`에서 Dose Error 후보 조회
-3. RAW contents 파싱
-4. `mbeat.er_dose_error_parsed`에 append insert
+2. `mbeat.er_data_raw`에서 Dose Error 후보를 `chunk` 단위로 조회
+3. 각 `chunk`의 RAW contents 파싱
+4. 각 `chunk`를 `mbeat.er_dose_error_parsed`에 `COPY` append insert
 
 배치는 `mbeat.er_data_raw_euv`와 `mbeat.er_dose_error_root_cause`를 조회하거나 적재하지 않는다.
+대용량 일별 파티션을 고려해 전체 결과를 한 번에 메모리로 올리지 않고 `read chunk -> parse -> insert` 방식으로 반복 처리한다.
 
 ## Root Cause 파싱 대상
 
@@ -224,10 +225,12 @@ software version : 2.0 [nxe3400 mv 250w]
 ## 실행
 
 DB 접속은 `--dsn`, `ER_DOSE_DB_DSN`, `DATABASE_URL` 순서로 사용한다.
+기본 `chunk` 크기는 `10000`이며 `--chunk-size`로 조정할 수 있다.
 
 ```bash
 python -m er_dose.run_er_dose_batch \
   --start-time 2026-04-13T00:00:00 \
   --end-time 2026-04-14T00:00:00 \
+  --chunk-size 10000 \
   --limit 1000
 ```

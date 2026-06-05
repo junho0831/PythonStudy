@@ -39,6 +39,8 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 `ER_DOSE` 배치는 `mbeat.er_data_raw`의 dose warning 로그를 파싱해 `mbeat.er_dose_error_parsed`에 적재합니다. 원천 식별 컬럼인 `er_date`, `er_index`, `er_line`, `eq_name`, `code`, `code_occur_time`, `belong`, `type`, `title`, `contents`는 그대로 보존하고, `contents`에서 실제 추출되는 dose/action/exposure/sequence 값만 별도 컬럼으로 저장합니다.
 
+배치는 `code_occur_time` 기간 조건으로 조회한 후보를 한 번에 메모리로 올리지 않고, `chunk` 단위로 읽어서 파싱 후 바로 `COPY` 적재합니다. 기본 `chunk` 크기는 `10000`이며 실행 시 조정할 수 있습니다.
+
 `er_dose_error_parsed`에는 배치 상태 관리용 컬럼을 두지 않습니다. 파싱 실패 여부는 실행 summary로만 집계하고, 테이블에는 상태값 없이 원천 로그와 추출 가능한 값만 적재합니다.
 
 기존 운영 테이블이 repo DDL과 다르게 만들어진 경우를 대비해 migration SQL은 `er_date`, `er_index`뿐 아니라 `er_line`, `eq_name`, `code`, `code_occur_time`도 `add column if not exists`로 보강합니다.
@@ -195,6 +197,7 @@ RBI_PARSER=COMBINED \
 BATCH_TARGET=ER_DOSE \
 ER_DOSE_START_TIME=2026-05-31T00:00:00 \
 ER_DOSE_END_TIME=2026-06-01T00:00:00 \
+ER_DOSE_CHUNK_SIZE=10000 \
 ER_DOSE_LIMIT=1000 \
 ER_DOSE_DB_DSN='postgresql://user:password@host:5432/dbname' \
 .venv/bin/python main.py
@@ -211,6 +214,7 @@ ER_DOSE_DB_DSN='postgresql://user:password@host:5432/dbname' \
 선택 환경변수:
 
 - `RBI_PARSER`: `RUBI`, `RUPI`, `COMBINED`, 기본값 `COMBINED`
+- `ER_DOSE_CHUNK_SIZE`: ER Dose raw fetch chunk 크기
 - `ER_DOSE_LIMIT`: 최대 처리 row 수
 - `INPUT_DATE`: `RBI_INPUT_DATE` 대체값
 - `START_TIME`: `ER_DOSE_START_TIME` 대체값

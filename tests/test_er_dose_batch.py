@@ -46,6 +46,12 @@ class FakeDB:
         self.fetch_params = params
         return self.raw_df
 
+    def fetch_df_in_chunks(self, query, params=None, chunk_size=10000):
+        self.fetch_query = query
+        self.fetch_params = params
+        for start in range(0, len(self.raw_df), chunk_size):
+            yield self.raw_df.iloc[start : start + chunk_size].copy()
+
     def transaction(self):
         return FakeTransaction(self.connection)
 
@@ -53,7 +59,7 @@ class FakeDB:
         self.executed.append((query, params, connection))
         return 0
 
-    def bulk_insert_df(self, table_name, df, connection=None):
+    def copy_insert_df(self, table_name, df, connection=None):
         self.insert_table_name = table_name
         self.inserted.append((table_name, df))
         self.insert_connection = connection
@@ -116,6 +122,30 @@ class ERDoseBatchTest(unittest.TestCase):
         self.assertEqual(parsed_insert.loc[0, "contents"], SAMPLE_CONTENTS)
         inserted_tables = [table_name for table_name, _ in db.inserted]
         self.assertEqual(inserted_tables, ["mbeat.er_dose_error_parsed"])
+
+    def test_run_processes_multiple_chunks(self):
+        raw_df = pd.DataFrame(
+            [
+                self._row(1, "dw-3411", SAMPLE_CONTENTS),
+                self._row(2, "dw-3411", SAMPLE_CONTENTS),
+                self._row(3, "dw-3411", SAMPLE_CONTENTS),
+            ]
+        )
+        db = FakeDB(raw_df)
+        batch = ERDoseBatch(db)
+
+        with redirect_stdout(StringIO()):
+            summary = batch.run(
+                start_time=datetime(2026, 5, 1),
+                end_time=datetime(2026, 5, 2),
+                chunk_size=2,
+            )
+
+        self.assertEqual(summary["fetched"], 3)
+        self.assertEqual(summary["inserted"], 3)
+        self.assertEqual(len(db.inserted), 2)
+        self.assertEqual(len(db.inserted[0][1]), 2)
+        self.assertEqual(len(db.inserted[1][1]), 1)
 
     def test_partition_creation_covers_each_day_in_range(self):
         db = FakeDB(pd.DataFrame())

@@ -20,36 +20,53 @@ class ERDoseBatch:
     def __init__(self, db: PostgresDB):
         self.db = db
 
-    def run(self, start_time: datetime, end_time: datetime, limit: int | None = None) -> dict[str, int]:
+    def run(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        limit: int | None = None,
+        chunk_size: int = 10000,
+    ) -> dict[str, int]:
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be greater than 0")
+
         self.ensure_partitions(start_time=start_time, end_time=end_time)
-        raw_df = self.fetch_raw_logs(start_time=start_time, end_time=end_time, limit=limit)
-        parsed_rows = []
+        fetched_count = 0
         success_count = 0
         regex_fail_count = 0
         parser_error_count = 0
-
-        for _, row in raw_df.iterrows():
-            try:
-                raw = self._row_to_raw_log(row)
-                parsed = parse_raw_er_log(raw)
-                if parsed is None:
-                    regex_fail_count += 1
-                    parsed_rows.append(self._build_unparsed_row(raw))
-                    continue
-                parsed_rows.append(asdict(parsed))
-                success_count += 1
-            except Exception as exc:
-                parser_error_count += 1
-                parsed_rows.append(self._build_error_row(row, exc))
-
         insert_count = 0
-        with self.db.transaction() as connection:
+
+        for raw_df in self.fetch_raw_logs_in_chunks(
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit,
+            chunk_size=chunk_size,
+        ):
+            fetched_count += int(len(raw_df))
+            parsed_rows = []
+
+            for _, row in raw_df.iterrows():
+                try:
+                    raw = self._row_to_raw_log(row)
+                    parsed = parse_raw_er_log(raw)
+                    if parsed is None:
+                        regex_fail_count += 1
+                        parsed_rows.append(self._build_unparsed_row(raw))
+                        continue
+                    parsed_rows.append(asdict(parsed))
+                    success_count += 1
+                except Exception as exc:
+                    parser_error_count += 1
+                    parsed_rows.append(self._build_error_row(row, exc))
+
             if parsed_rows:
                 parsed_df = pd.DataFrame(parsed_rows)
-                insert_count = self.db.bulk_insert_df(PARSED_TABLE, parsed_df, connection=connection)
+                with self.db.transaction() as connection:
+                    insert_count += self.db.copy_insert_df(PARSED_TABLE, parsed_df, connection=connection)
 
         summary = {
-            "fetched": int(len(raw_df)),
+            "fetched": int(fetched_count),
             "success": int(success_count),
             "regex_fail": int(regex_fail_count),
             "parser_error": int(parser_error_count),
@@ -68,6 +85,20 @@ class ERDoseBatch:
         return summary
 
     def fetch_raw_logs(self, start_time: datetime, end_time: datetime, limit: int | None = None):
+        query, params = self._build_fetch_raw_logs_query(start_time=start_time, end_time=end_time, limit=limit)
+        return self.db.fetch_df(query, params=params)
+
+    def fetch_raw_logs_in_chunks(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        limit: int | None = None,
+        chunk_size: int = 10000,
+    ):
+        query, params = self._build_fetch_raw_logs_query(start_time=start_time, end_time=end_time, limit=limit)
+        return self.db.fetch_df_in_chunks(query, params=params, chunk_size=chunk_size)
+
+    def _build_fetch_raw_logs_query(self, start_time: datetime, end_time: datetime, limit: int | None = None):
         params = {
             "start_time": start_time,
             "end_time": end_time,
@@ -103,7 +134,7 @@ class ERDoseBatch:
             order by r.code_occur_time
             {limit_sql}
         """
-        return self.db.fetch_df(query, params=params)
+        return query, params
 
     def ensure_partitions(self, start_time: datetime, end_time: datetime) -> None:
         for day_start in self._iter_day_starts(start_time, end_time):

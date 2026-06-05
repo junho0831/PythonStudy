@@ -38,6 +38,7 @@ class MainTest(unittest.TestCase):
             "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
             "ER_DOSE_END_TIME": "2026-06-01T00:00:00",
             "ER_DOSE_LIMIT": "100",
+            "ER_DOSE_CHUNK_SIZE": "20000",
             "ER_DOSE_DB_DSN": "postgresql://user:pass@localhost:5432/db",
         }
         batch = Mock()
@@ -55,6 +56,7 @@ class MainTest(unittest.TestCase):
             start_time=datetime(2026, 5, 31, 0, 0, 0),
             end_time=datetime(2026, 6, 1, 0, 0, 0),
             limit=100,
+            chunk_size=20000,
         )
 
     def test_er_does_alias_is_supported(self):
@@ -87,7 +89,20 @@ class MainTest(unittest.TestCase):
             start_time=datetime(2026, 5, 31, 0, 0, 0),
             end_time=datetime(2026, 6, 1, 0, 0, 0),
             limit=None,
+            chunk_size=10000,
         )
+
+    def test_er_dose_chunk_size_must_be_positive(self):
+        env = {
+            "BATCH_TARGET": "ER_DOSE",
+            "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
+            "ER_DOSE_END_TIME": "2026-06-01T00:00:00",
+            "ER_DOSE_CHUNK_SIZE": "0",
+            "DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
+        }
+
+        with self.assertRaises(ValueError):
+            Main(env=env).run()
 
     def test_er_dose_requires_dsn_or_database_url(self):
         env = {

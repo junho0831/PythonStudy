@@ -19,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-time", required=True, type=parse_datetime, help="inclusive start time")
     parser.add_argument("--end-time", required=True, type=parse_datetime, help="exclusive end time")
     parser.add_argument("--limit", type=int, default=None, help="optional max raw rows to process")
+    parser.add_argument("--chunk-size", type=int, default=10000, help="raw row chunk size for streaming processing")
     parser.add_argument("--dsn", default=None, help="PostgreSQL DSN. Defaults to ER_DOSE_DB_DSN or DATABASE_URL.")
     return parser
 
@@ -30,10 +31,14 @@ def main(argv=None) -> int:
 
     db = PostgresDB(dsn=args.dsn)
     batch = ERDoseBatch(db)
-    batch.run(start_time=args.start_time, end_time=args.end_time, limit=args.limit)
+    batch.run(
+        start_time=args.start_time,
+        end_time=args.end_time,
+        limit=args.limit,
+        chunk_size=args.chunk_size,
+    )
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
