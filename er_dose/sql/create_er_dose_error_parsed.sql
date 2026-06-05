@@ -12,21 +12,10 @@ create table if not exists mbeat.er_dose_error_parsed (
     title               varchar,
     contents            varchar,
     exposure_handle     bigint,
-    source_exposure_id  bigint,
     action_handle       bigint,
-    wafer_seq           integer,
-    shot_seq            integer,
-    field_seq           integer,
-    dose_error          numeric(12,7),
-    dose_warn_level     numeric(12,7),
+    wafer_id            integer,
     de_err              numeric(12,7),
-    de_warn_lvl         numeric(12,7),
-    eset                bigint,
-    freq                integer,
     n_slit              integer,
-    mb_enabled          boolean,
-    function_name       text,
-    result_type         text,
     created_at          timestamp default now(),
     primary key (code_occur_time)
 )
@@ -35,11 +24,8 @@ partition by range (code_occur_time);
 create index if not exists idx_er_dose_error_line_eq_time
 on mbeat.er_dose_error_parsed (er_line, eq_name, code_occur_time);
 
-comment on column mbeat.er_dose_error_parsed.wafer_seq is
-'ER wafer sequence / slot sequence. Starts at 1 and matches lot_report.slot_seq, not lot_report.wafer_id.';
+comment on column mbeat.er_dose_error_parsed.wafer_id is
+'ER wafer id / slot sequence parsed from the raw message. Starts at 1 and matches lot_report.slot_seq.';
 
-comment on column mbeat.er_dose_error_parsed.dose_error is
-'ER max(abs(dose error)) value. Equivalent to po_sd_slot_info_detail.dose_err_tot_valn when available.';
-
-comment on column mbeat.er_dose_error_parsed.source_exposure_id is
-'Source exposure id parsed from ER log description when exported with the scanner dose warning.';
+comment on column mbeat.er_dose_error_parsed.de_err is
+'Dose error value parsed from de_err in the raw message when available.';

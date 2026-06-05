@@ -16,7 +16,6 @@ eset:89898 [bits]
 freq=50000 [hz]
 n_slit=44
 mb_enabled=t
-source_exposure_id=90001
 action_handle=2625
 exposure_handle:2631
 [dwdc_eval_determine_dose_performance_result:dwdc_warn_total_dose]"""
@@ -30,26 +29,9 @@ class ERDoseParserTest(unittest.TestCase):
 
         self.assertIsNotNone(parsed)
         self.assertEqual(parsed.exposure_handle, 2631)
-        self.assertEqual(parsed.source_exposure_id, 90001)
         self.assertEqual(parsed.action_handle, 2625)
-        self.assertEqual(parsed.dose_error, Decimal("0.0461075"))
-        self.assertEqual(parsed.dose_warn_level, Decimal("0"))
         self.assertEqual(parsed.de_err, Decimal("0.0461075"))
-        self.assertEqual(parsed.de_warn_lvl, Decimal("0"))
-        self.assertEqual(parsed.eset, 89898)
-        self.assertEqual(parsed.freq, 50000)
         self.assertEqual(parsed.n_slit, 44)
-        self.assertEqual(parsed.mb_enabled, True)
-        self.assertEqual(parsed.function_name, "dwdc_eval_determine_dose_performance_result")
-        self.assertEqual(parsed.result_type, "dwdc_warn_total_dose")
-
-    def test_bool_false_is_supported(self):
-        raw = self._raw(SAMPLE_CONTENTS.replace("mb_enabled=t", "mb_enabled=f"))
-
-        parsed = parse_raw_er_log(raw)
-
-        self.assertIsNotNone(parsed)
-        self.assertEqual(parsed.mb_enabled, False)
 
     def test_missing_nullable_fields_return_none(self):
         raw = self._raw("system warning: dw-3411 skip the dose evaluation 0.1 [%]")
@@ -57,27 +39,22 @@ class ERDoseParserTest(unittest.TestCase):
         parsed = parse_raw_er_log(raw)
 
         self.assertIsNotNone(parsed)
-        self.assertEqual(parsed.dose_error, Decimal("0.1"))
         self.assertIsNone(parsed.exposure_handle)
-        self.assertIsNone(parsed.source_exposure_id)
-        self.assertIsNone(parsed.function_name)
+        self.assertIsNone(parsed.action_handle)
+        self.assertIsNone(parsed.de_err)
 
-    def test_explicit_sequence_fields_are_extracted(self):
+    def test_wafer_id_is_extracted(self):
         raw = self._raw(
             """system warning: dw-3411 skip the dose evaluation 0.1 [%]
-wafer_id=1
-shot_seq=25
-field_seq=2"""
+wafer_id=1"""
         )
 
         parsed = parse_raw_er_log(raw)
 
         self.assertIsNotNone(parsed)
-        self.assertEqual(parsed.wafer_seq, 1)
-        self.assertEqual(parsed.shot_seq, 25)
-        self.assertEqual(parsed.field_seq, 2)
+        self.assertEqual(parsed.wafer_id, 1)
 
-    def test_slot_seq_maps_to_wafer_seq_for_lot_report_matching(self):
+    def test_slot_seq_maps_to_wafer_id_for_lot_report_matching(self):
         raw = self._raw(
             """system warning: dw-3411 skip the dose evaluation 0.1 [%]
 slot_seq=3"""
@@ -86,9 +63,9 @@ slot_seq=3"""
         parsed = parse_raw_er_log(raw)
 
         self.assertIsNotNone(parsed)
-        self.assertEqual(parsed.wafer_seq, 3)
+        self.assertEqual(parsed.wafer_id, 3)
 
-    def test_wafer_no_is_not_treated_as_wafer_seq(self):
+    def test_wafer_no_is_not_treated_as_wafer_id(self):
         raw = self._raw(
             """system warning: dw-3411 skip the dose evaluation 0.1 [%]
 wafer_no=7"""
@@ -97,7 +74,7 @@ wafer_no=7"""
         parsed = parse_raw_er_log(raw)
 
         self.assertIsNotNone(parsed)
-        self.assertIsNone(parsed.wafer_seq)
+        self.assertIsNone(parsed.wafer_id)
 
     def test_non_dose_log_is_skipped(self):
         raw = self._raw("system info: dw-3411 normal message")

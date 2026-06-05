@@ -56,8 +56,10 @@ def test_parsed_table_has_line_eq_time_index():
     assert "parsing_status" not in ddl
     assert "parsing_error" not in ddl
     assert "idx_er_dose_error_line_eq_exposure_time" not in ddl
-    assert "source_exposure_id  bigint" in ddl
-    assert "idx_er_dose_error_source_exposure_time" not in ddl
+    assert "source_exposure_id" not in ddl
+    assert "wafer_id            integer" in ddl
+    assert "de_err              numeric(12,7)" in ddl
+    assert "n_slit              integer" in ddl
 
 
 def test_parsed_existing_table_migration_preserves_raw_source_fields():
@@ -71,6 +73,18 @@ def test_parsed_existing_table_migration_preserves_raw_source_fields():
     assert "drop column if exists parser_version" in ddl
     assert "drop column if exists parsing_status" in ddl
     assert "drop column if exists parsing_error" in ddl
+    assert "drop column if exists source_exposure_id" in ddl
+    assert "drop column if exists wafer_seq" in ddl
+    assert "drop column if exists shot_seq" in ddl
+    assert "drop column if exists field_seq" in ddl
+    assert "drop column if exists dose_error" in ddl
+    assert "drop column if exists dose_warn_level" in ddl
+    assert "drop column if exists de_warn_lvl" in ddl
+    assert "drop column if exists eset" in ddl
+    assert "drop column if exists freq" in ddl
+    assert "drop column if exists mb_enabled" in ddl
+    assert "drop column if exists function_name" in ddl
+    assert "drop column if exists result_type" in ddl
     assert "add column if not exists er_date int4" in ddl
     assert "add column if not exists er_index int4" in ddl
     assert "add column if not exists er_line varchar(20)" in ddl
@@ -81,15 +95,19 @@ def test_parsed_existing_table_migration_preserves_raw_source_fields():
     assert 'add column if not exists "type" varchar(8)' in ddl
     assert "add column if not exists title varchar" in ddl
     assert "add column if not exists contents varchar" in ddl
+    assert "add column if not exists exposure_handle bigint" in ddl
+    assert "add column if not exists action_handle bigint" in ddl
+    assert "add column if not exists wafer_id integer" in ddl
+    assert "add column if not exists de_err numeric(12,7)" in ddl
+    assert "add column if not exists n_slit integer" in ddl
 
 
-def test_parsed_table_documents_lot_report_sequence_semantics():
+def test_parsed_table_documents_retained_parsed_columns():
     ddl = _ddl()
 
+    assert "comment on column mbeat.er_dose_error_parsed.wafer_id" in ddl
     assert "matches lot_report.slot_seq" in ddl
-    assert "not lot_report.wafer_id" in ddl
-    assert "max(abs(dose error))" in ddl
-    assert "po_sd_slot_info_detail.dose_err_tot_valn" in ddl
+    assert "parsed from de_err" in ddl
 
 
 def test_raw_euv_table_matches_source_schema():

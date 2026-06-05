@@ -29,14 +29,14 @@ mbeat.er_data_raw_euv
 
 DDL:
 
-- [create_er_dose_error_parsed.sql](er_dose/sql/create_er_dose_error_parsed.sql)
-- [alter_er_dose_error_parsed_preserve_source_fields.sql](er_dose/sql/alter_er_dose_error_parsed_preserve_source_fields.sql)
-- [create_er_dose_error_root_cause.sql](er_dose/sql/create_er_dose_error_root_cause.sql)
-- [alter_er_dose_error_root_cause_add_euv_metrics.sql](er_dose/sql/alter_er_dose_error_root_cause_add_euv_metrics.sql)
-- [create_er_data_raw_euv.sql](er_dose/sql/create_er_data_raw_euv.sql)
+- [Parsed 테이블 생성](er_dose/sql/create_er_dose_error_parsed.sql)
+- [Parsed 테이블 정리 및 보강](er_dose/sql/alter_er_dose_error_parsed_preserve_source_fields.sql)
+- [Root cause 테이블 생성](er_dose/sql/create_er_dose_error_root_cause.sql)
+- [Root cause 컬럼 보강](er_dose/sql/alter_er_dose_error_root_cause_add_euv_metrics.sql)
+- [RAW EUV 테이블 생성](er_dose/sql/create_er_data_raw_euv.sql)
 
-기존 운영 `mbeat.er_dose_error_parsed`가 repo DDL과 다르게 만들어진 경우를 대비해
-`alter_er_dose_error_parsed_preserve_source_fields.sql`는 아래 원천 기본 컬럼도 `add column if not exists`로 보강한다.
+기존 운영 `mbeat.er_dose_error_parsed`가 repo 기준과 다르게 만들어진 경우를 대비해
+`Parsed 테이블 정리 및 보강` 스크립트는 아래 원천 기본 컬럼을 맞춰준다.
 
 - `er_date`
 - `er_index`
@@ -96,21 +96,10 @@ erDiagram
         varchar title
         varchar contents
         bigint exposure_handle
-        bigint source_exposure_id
         bigint action_handle
-        integer wafer_seq
-        integer shot_seq
-        integer field_seq
-        numeric dose_error
-        numeric dose_warn_level
+        integer wafer_id
         numeric de_err
-        numeric de_warn_lvl
-        bigint eset
-        integer freq
         integer n_slit
-        boolean mb_enabled
-        text function_name
-        text result_type
         timestamp created_at
     }
 
@@ -215,10 +204,7 @@ software version : 2.0 [nxe3400 mv 250w]
 주요 파싱 필드:
 
 - 원천 보존: `er_date`, `er_index`, `er_line`, `eq_name`, `code`, `code_occur_time`, `belong`, `type`, `title`, `contents`
-- exposure/action: `exposure_handle`, `source_exposure_id`, `action_handle`
-- sequence: `wafer_seq`, `shot_seq`, `field_seq`
-- dose: `dose_error`, `dose_warn_level`, `de_err`, `de_warn_lvl`
-- dose context: `eset`, `freq`, `n_slit`, `mb_enabled`, `function_name`, `result_type`
+- 추가 컬럼: `exposure_handle`, `action_handle`, `wafer_id`, `de_err`, `n_slit`
 
 필드가 없으면 nullable 컬럼은 `NULL`로 저장한다.
 

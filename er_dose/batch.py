@@ -250,21 +250,10 @@ class ERDoseBatch:
             "title": title,
             "contents": contents,
             "exposure_handle": None,
-            "source_exposure_id": None,
             "action_handle": None,
-            "wafer_seq": None,
-            "shot_seq": None,
-            "field_seq": None,
-            "dose_error": None,
-            "dose_warn_level": None,
+            "wafer_id": None,
             "de_err": None,
-            "de_warn_lvl": None,
-            "eset": None,
-            "freq": None,
             "n_slit": None,
-            "mb_enabled": None,
-            "function_name": None,
-            "result_type": None,
         }
 
     def _iter_day_starts(self, start_time: datetime, end_time: datetime):
