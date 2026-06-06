@@ -142,6 +142,40 @@ class PostgresDB:
 
         return len(normalized_df)
 
+    def copy_insert_to_partition_table(
+        self,
+        schema: str,
+        table_name: str,
+        target_date: str,
+        df: pd.DataFrame,
+        is_truncate: bool = False,
+    ) -> None:
+        if df.empty:
+            return
+
+        partition_suffix = target_date.replace("-", "")
+        partition_table = f"{table_name}_1_prt_p{partition_suffix}"
+        partition_sql = f"{self._quote_identifier(schema)}.{self._quote_identifier(partition_table)}"
+        query = f"copy {partition_sql} from stdin with csv header null ''"
+
+        buffer = StringIO()
+        df.drop_duplicates().to_csv(buffer, index=False, na_rep="")
+        buffer.seek(0)
+
+        conn = self._connect()
+        try:
+            with conn.cursor() as cursor:
+                if is_truncate:
+                    cursor.execute(f"truncate table {partition_sql}")
+                cursor.copy_expert(query, buffer)
+                cursor.execute(f"analyze {partition_sql}")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def execute(self, query: str, params=None, connection=None) -> int:
         own_connection = connection is None
         conn = connection or self._connect()
