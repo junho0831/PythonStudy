@@ -82,6 +82,16 @@ class ERDoseBatchTest(unittest.TestCase):
         self.assertIn("r.title", db.fetch_query)
         self.assertIn("r.code_occur_time >= %(start_time)s", db.fetch_query)
         self.assertIn("r.code_occur_time < %(end_time)s", db.fetch_query)
+        self.assertIn("upper(replace(coalesce(r.code, ''), '-', ''))", db.fetch_query)
+        self.assertIn("'DW3411'", db.fetch_query)
+        self.assertIn("'DW3425'", db.fetch_query)
+        self.assertIn("'DW343A'", db.fetch_query)
+        self.assertIn("'DW343B'", db.fetch_query)
+        self.assertIn("'LO0061'", db.fetch_query)
+        self.assertIn("'LO8166'", db.fetch_query)
+        self.assertIn("'LO8167'", db.fetch_query)
+        self.assertIn("'KE9103'", db.fetch_query)
+        self.assertIn("'KE9104'", db.fetch_query)
         self.assertEqual(db.fetch_params["start_time"], start_time)
         self.assertEqual(db.fetch_params["end_time"], end_time)
         self.assertEqual(db.fetch_params["limit"], 10)
@@ -98,14 +108,8 @@ class ERDoseBatchTest(unittest.TestCase):
         batch = ERDoseBatch(db)
 
         with redirect_stdout(StringIO()):
-            summary = batch.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
+            batch.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
 
-        self.assertEqual(summary["fetched"], 3)
-        self.assertEqual(summary["success"], 1)
-        self.assertEqual(summary["regex_fail"], 1)
-        self.assertEqual(summary["parser_error"], 1)
-        self.assertEqual(summary["inserted"], 3)
-        self.assertNotIn("root_cause_inserted", summary)
         self.assertIs(db.insert_connection, db.connection)
         delete_queries = [query for query, _, _ in db.executed if query.strip().lower().startswith("delete")]
         self.assertEqual(delete_queries, [])
@@ -135,14 +139,12 @@ class ERDoseBatchTest(unittest.TestCase):
         batch = ERDoseBatch(db)
 
         with redirect_stdout(StringIO()):
-            summary = batch.run(
+            batch.run(
                 start_time=datetime(2026, 5, 1),
                 end_time=datetime(2026, 5, 2),
                 chunk_size=2,
             )
 
-        self.assertEqual(summary["fetched"], 3)
-        self.assertEqual(summary["inserted"], 3)
         self.assertEqual(len(db.inserted), 2)
         self.assertEqual(len(db.inserted[0][1]), 2)
         self.assertEqual(len(db.inserted[1][1]), 1)

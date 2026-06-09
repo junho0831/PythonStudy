@@ -35,13 +35,6 @@ class ParsedErDoseError:
     exposure_handle: int | None
     action_handle: int | None
     wafer_id: int | None
+    wafer_seq: int | None
     de_err: Decimal | None
     n_slit: int | None
-
-
-class ERLogParser(Protocol):
-    def supports(self, raw: RawErLog) -> bool:
-        ...
-
-    def parse(self, raw: RawErLog) -> ParsedErDoseError | None:
-        ...

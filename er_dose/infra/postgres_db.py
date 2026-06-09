@@ -53,55 +53,6 @@ class PostgresDB:
             if own_connection:
                 conn.close()
 
-    def bulk_insert_df(
-        self,
-        table_name: str,
-        df,
-        connection=None,
-        page_size: int = 1000,
-        on_conflict_column: str | None = None,
-    ) -> int:
-        if df.empty:
-            return 0
-
-        normalized_df = df.where(pd.notna(df), None)
-        columns = list(normalized_df.columns)
-        rows = list(normalized_df.itertuples(index=False, name=None))
-        table_sql = self._quote_identifier_path(table_name)
-        column_sql = ", ".join(self._quote_identifier(column) for column in columns)
-        conflict_sql = ""
-        if on_conflict_column:
-            conflict_sql = f" on conflict ({self._quote_identifier(on_conflict_column)}) do nothing returning 1"
-
-        query = f"""
-            insert into {table_sql} ({column_sql})
-            values %s
-            {conflict_sql}
-        """
-
-        own_connection = connection is None
-        conn = connection or self._connect()
-        insert_count = len(rows)
-        try:
-            from psycopg2.extras import execute_values
-
-            with conn.cursor() as cur:
-                if on_conflict_column is not None:
-                    insert_count = len(execute_values(cur, query, rows, page_size=page_size, fetch=True))
-                else:
-                    execute_values(cur, query, rows, page_size=page_size)
-            if own_connection:
-                conn.commit()
-        except Exception:
-            if own_connection:
-                conn.rollback()
-            raise
-        finally:
-            if own_connection:
-                conn.close()
-
-        return insert_count
-
     def copy_insert_df(self, table_name: str, df, connection=None) -> int:
         if df.empty:
             return 0
@@ -141,40 +92,6 @@ class PostgresDB:
                 conn.close()
 
         return len(normalized_df)
-
-    def copy_insert_to_partition_table(
-        self,
-        schema: str,
-        table_name: str,
-        target_date: str,
-        df: pd.DataFrame,
-        is_truncate: bool = False,
-    ) -> None:
-        if df.empty:
-            return
-
-        partition_suffix = target_date.replace("-", "")
-        partition_table = f"{table_name}_1_prt_p{partition_suffix}"
-        partition_sql = f"{self._quote_identifier(schema)}.{self._quote_identifier(partition_table)}"
-        query = f"copy {partition_sql} from stdin with csv header null ''"
-
-        buffer = StringIO()
-        df.drop_duplicates().to_csv(buffer, index=False, na_rep="")
-        buffer.seek(0)
-
-        conn = self._connect()
-        try:
-            with conn.cursor() as cursor:
-                if is_truncate:
-                    cursor.execute(f"truncate table {partition_sql}")
-                cursor.copy_expert(query, buffer)
-                cursor.execute(f"analyze {partition_sql}")
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
 
     def execute(self, query: str, params=None, connection=None) -> int:
         own_connection = connection is None

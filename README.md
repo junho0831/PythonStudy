@@ -37,9 +37,9 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 ## ER Dose Error 배치
 
-`ER_DOSE` 배치는 `mbeat.er_data_raw`의 dose warning 로그를 파싱해 `mbeat.er_dose_error_parsed`에 적재합니다. 원천 식별 컬럼인 `er_date`, `er_index`, `er_line`, `eq_name`, `code`, `code_occur_time`, `belong`, `type`, `title`, `contents`는 그대로 보존하고, `contents`에서 실제로 필요한 `exposure_handle`, `action_handle`, `wafer_id`, `de_err`, `n_slit`만 별도 컬럼으로 저장합니다.
+`ER_DOSE` 배치는 `mbeat.er_data_raw`의 dose warning 로그를 파싱해 `mbeat.er_dose_error_parsed`에 적재합니다. 원천 식별 컬럼인 `er_date`, `er_index`, `er_line`, `eq_name`, `code`, `code_occur_time`, `belong`, `type`, `title`, `contents`는 그대로 보존하고, `contents`에서 실제로 필요한 `exposure_handle`, `action_handle`, `wafer_id`, `wafer_seq`, `de_err`, `n_slit`만 별도 컬럼으로 저장합니다. 조회 대상 `code`는 `DW-3411`, `DW-3425`, `DW-343A`, `DW-343B`, `LO-0061`, `LO-8166`, `LO-8167`, `KE-9103`, `KE9104`이며 하이픈 유무는 동일 코드로 취급합니다.
 
-배치는 `code_occur_time` 기간 조건으로 조회한 후보를 한 번에 메모리로 올리지 않고, `chunk` 단위로 읽어서 파싱 후 바로 `COPY` 적재합니다. 기본 `chunk` 크기는 `10000`이며 실행 시 조정할 수 있습니다.
+배치는 `code_occur_time` 기간 조건으로 조회한 후보를 한 번에 메모리로 올리지 않고, `chunk` 단위로 읽어서 파싱 후 바로 `COPY` 적재합니다. 기본 `chunk` 크기는 `10000`이며 실행 시 조정할 수 있습니다. 청크 단위로 처리되더라도 설비(`eq_name`)별로 이전에 파싱한 `wafer_id`와 `wafer_seq`를 기억하여, 해당 값이 없는 로그에 이전 값을 채워넣는 로직이 적용되어 있습니다.
 
 `er_dose_error_parsed`에는 배치 상태 관리용 컬럼을 두지 않습니다. 파싱 실패 여부는 실행 summary로만 집계하고, 테이블에는 상태값 없이 원천 로그와 추출 가능한 값만 적재합니다.
 
