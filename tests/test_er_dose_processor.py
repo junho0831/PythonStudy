@@ -7,7 +7,8 @@ from io import StringIO
 
 import pandas as pd
 
-from er_dose.batch import ERDoseBatch
+from er_dose.processor import ERDoseProcessor
+from er_dose.repository import ERDoseRepository
 
 
 SAMPLE_CONTENTS = """system warning: dw-3411 skip the dose evaluation 0.0461075 [%]
@@ -66,14 +67,14 @@ class FakeDB:
         return len(df)
 
 
-class ERDoseBatchTest(unittest.TestCase):
+class ERDoseProcessorTest(unittest.TestCase):
     def test_fetch_raw_logs_uses_general_raw_table_and_code_occur_time_range(self):
         db = FakeDB(pd.DataFrame())
-        batch = ERDoseBatch(db)
+        repo = ERDoseRepository(db)
         start_time = datetime(2026, 5, 1)
         end_time = datetime(2026, 5, 2)
 
-        batch.fetch_raw_logs(start_time=start_time, end_time=end_time, limit=10)
+        list(repo.fetch_raw_logs_in_chunks(start_time=start_time, end_time=end_time, limit=10, chunk_size=100))
 
         self.assertIn("from mbeat.er_data_raw r", db.fetch_query)
         self.assertIn("r.er_date", db.fetch_query)
@@ -105,10 +106,11 @@ class ERDoseBatchTest(unittest.TestCase):
             ]
         )
         db = FakeDB(raw_df)
-        batch = ERDoseBatch(db)
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
 
         with redirect_stdout(StringIO()):
-            batch.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
+            processor.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
 
         self.assertIs(db.insert_connection, db.connection)
         delete_queries = [query for query, _, _ in db.executed if query.strip().lower().startswith("delete")]
@@ -136,10 +138,11 @@ class ERDoseBatchTest(unittest.TestCase):
             ]
         )
         db = FakeDB(raw_df)
-        batch = ERDoseBatch(db)
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
 
         with redirect_stdout(StringIO()):
-            batch.run(
+            processor.run(
                 start_time=datetime(2026, 5, 1),
                 end_time=datetime(2026, 5, 2),
                 chunk_size=2,
@@ -151,9 +154,9 @@ class ERDoseBatchTest(unittest.TestCase):
 
     def test_partition_creation_covers_each_day_in_range(self):
         db = FakeDB(pd.DataFrame())
-        batch = ERDoseBatch(db)
+        repo = ERDoseRepository(db)
 
-        batch.ensure_partitions(start_time=datetime(2026, 5, 31, 12), end_time=datetime(2026, 6, 2, 1))
+        repo.ensure_partitions(start_time=datetime(2026, 5, 31, 12), end_time=datetime(2026, 6, 2, 1))
 
         create_queries = [query for query, _, _ in db.executed if "partition of mbeat.er_dose_error_parsed" in query]
         self.assertEqual(len(create_queries), 3)

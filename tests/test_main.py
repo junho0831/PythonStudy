@@ -44,14 +44,17 @@ class MainTest(unittest.TestCase):
         batch = Mock()
 
         with patch("batch_main.main.PostgresDB") as postgres_db, patch(
-            "batch_main.main.ERDoseBatch",
+            "batch_main.main.ERDoseRepository"
+        ) as repo_cls, patch(
+            "batch_main.main.ERDoseProcessor",
             return_value=batch,
-        ) as batch_cls:
+        ) as processor_cls:
             result = Main(env=env).run()
 
         self.assertEqual(result, 0)
         postgres_db.assert_called_once_with(dsn="postgresql://user:pass@localhost:5432/db")
-        batch_cls.assert_called_once_with(postgres_db.return_value)
+        repo_cls.assert_called_once_with(postgres_db.return_value)
+        processor_cls.assert_called_once_with(repo_cls.return_value)
         batch.run.assert_called_once_with(
             start_time=datetime(2026, 5, 31, 0, 0, 0),
             end_time=datetime(2026, 6, 1, 0, 0, 0),
@@ -67,11 +70,13 @@ class MainTest(unittest.TestCase):
             "DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
         }
 
-        with patch("batch_main.main.PostgresDB") as postgres_db, patch("batch_main.main.ERDoseBatch") as batch_cls:
+        with patch("batch_main.main.PostgresDB") as postgres_db, patch(
+            "batch_main.main.ERDoseRepository"
+        ), patch("batch_main.main.ERDoseProcessor") as processor_cls:
             Main(env=env).run()
 
         postgres_db.assert_called_once_with(dsn="postgresql://user:pass@localhost:5432/db")
-        batch_cls.return_value.run.assert_called_once()
+        processor_cls.return_value.run.assert_called_once()
 
     def test_er_dose_limit_defaults_to_none(self):
         env = {
@@ -82,7 +87,9 @@ class MainTest(unittest.TestCase):
         }
         batch = Mock()
 
-        with patch("batch_main.main.PostgresDB"), patch("batch_main.main.ERDoseBatch", return_value=batch):
+        with patch("batch_main.main.PostgresDB"), patch(
+            "batch_main.main.ERDoseRepository"
+        ), patch("batch_main.main.ERDoseProcessor", return_value=batch):
             Main(env=env).run()
 
         batch.run.assert_called_once_with(

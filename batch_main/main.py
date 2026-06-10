@@ -4,7 +4,8 @@ import os
 from datetime import datetime
 
 from airflow_modules.ftp_batch_jobs import run_batch
-from er_dose.batch import ERDoseBatch
+from er_dose.processor import ERDoseProcessor
+from er_dose.repository import ERDoseRepository
 from er_dose.infra.postgres_db import PostgresDB
 
 
@@ -37,8 +38,9 @@ class Main:
         dsn = self._get_required("ER_DOSE_DB_DSN", fallback_key="DATABASE_URL")
 
         db = PostgresDB(dsn=dsn)
-        batch = ERDoseBatch(db)
-        batch.run(start_time=start_time, end_time=end_time, limit=limit, chunk_size=chunk_size)
+        repository = ERDoseRepository(db)
+        processor = ERDoseProcessor(repository)
+        processor.run(start_time=start_time, end_time=end_time, limit=limit, chunk_size=chunk_size)
         return 0
 
     def _get_required(self, key: str, fallback_key: str | None = None) -> str:

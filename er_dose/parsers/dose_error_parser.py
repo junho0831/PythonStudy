@@ -8,25 +8,28 @@ from typing import Any
 from er_dose.parsers.base import ParsedErDoseError, RawErLog
 
 
-# 부호(+/-)가 포함될 수 있는 소수점 숫자 매칭 (예: 0.12, -1.5, 3)
-_DECIMAL_RE = r"([+-]?\d+(?:\.\d+)?)"
+# 숫자 매칭 정규식을 알아보기 쉽게 간소화
+_DECIMAL = r"([-+]?\d*\.?\d+)"
+_INT = r"([-+]?\d+)"
 
-# 부호(+/-)가 포함될 수 있는 정수 매칭 (예: 44, -10, 0)
-_INT_RE = r"([+-]?\d+)"
-
-# wafer_id 추출을 위한 키워드 패턴 목록 (wafer_seq, wafer id, slot_seq 등)
 _WAFER_ID_PATTERNS = [
-    r"\blot\s*\(\s*" + _INT_RE + r"\s*\)",
-    r"\bwafer_id\s*[:=]\s*" + _INT_RE,
-    r"\bwafer\s+id\s*[:=]\s*" + _INT_RE,
+    rf"lot\(\s*{_INT}\s*\)",
+    rf"lot id\s+{_INT}",
+    rf"wafer_id\s*[:=]\s*{_INT}",
+    rf"wafer id\s*[:=]\s*{_INT}",
 ]
 
 _WAFER_SEQ_PATTERNS = [
-    r"\bwafer\s*\(\s*" + _INT_RE + r"\s*\)",
-    r"\bwafer_seq\s*[:=]\s*" + _INT_RE,
-    r"\bwafer\s+seq\s*[:=]\s*" + _INT_RE,
-    r"\bslot_seq\s*[:=]\s*" + _INT_RE,
-    r"\bslot\s+seq\s*[:=]\s*" + _INT_RE,
+    rf"wafer\(\s*{_INT}\s*\)",
+    rf"wafer_seq\s*[:=]\s*{_INT}",
+    rf"wafer seq\s*[:=]\s*{_INT}",
+    rf"slot_seq\s*[:=]\s*{_INT}",
+    rf"slot seq\s*[:=]\s*{_INT}",
+]
+
+_DE_ERR_PATTERNS = [
+    rf"de_err\s*[:=]\s*{_DECIMAL}",
+    rf"min_de_error\s*[:=]\s*{_DECIMAL}",
 ]
 
 
@@ -44,18 +47,16 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
         type=raw.type,
         title=raw.title,
         contents=raw.contents,
-        # "exposure_handle: 1234" 또는 "exposure_handle=1234" 패턴에서 정수 추출
-        exposure_handle=_extract_int(contents, r"\bexposure_handle\s*[:=]\s*" + _INT_RE),
-        # "action_handle: 1234" 또는 "action_handle=1234" 패턴에서 정수 추출
-        action_handle=_extract_int(contents, r"\baction_handle\s*[:=]\s*" + _INT_RE),
-        # 여러 wafer 관련 키워드 패턴 중 가장 처음 매칭되는 1 이상의 정수 추출
+        # exposure_handle: 1234 또는 exposure_handle=1234
+        exposure_handle=_extract_int(contents, rf"exposure_handle\s*[:=]\s*{_INT}"),
+        # action_handle: 1234 또는 action_handle=1234
+        action_handle=_extract_int(contents, rf"action_handle\s*[:=]\s*{_INT}"),
+        # 정의된 패턴 목록 순서대로 매칭되는 값 추출
         wafer_id=_extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1),
-        # 여러 wafer_seq 패턴 중 가장 처음 매칭되는 1 이상의 정수 추출
         wafer_seq=_extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1),
-        # "de_err: 0.123" 또는 "de_err=0.123" 패턴에서 소수(Decimal) 추출
-        de_err=_extract_decimal(contents, r"\bde_err\s*[:=]\s*" + _DECIMAL_RE),
-        # "n_slit: 44" 또는 "n_slit=44" 패턴에서 정수 추출
-        n_slit=_extract_int(contents, r"\bn_slit\s*[:=]\s*" + _INT_RE),
+        de_err=_extract_first_decimal(contents, _DE_ERR_PATTERNS),
+        # n_slit: 44 또는 n_slit=44
+        n_slit=_extract_int(contents, rf"n_slit\s*[:=]\s*{_INT}"),
     )
 
 def _extract_value(contents: str, pattern: str, type_cast: type) -> Any | None:
@@ -78,4 +79,11 @@ def _extract_first_int(contents: str, patterns: list[str], minimum: int | None =
         if minimum is not None and value < minimum:
             continue
         return value
+    return None
+
+def _extract_first_decimal(contents: str, patterns: list[str]) -> Decimal | None:
+    for pattern in patterns:
+        value = _extract_decimal(contents, pattern)
+        if value is not None:
+            return value
     return None

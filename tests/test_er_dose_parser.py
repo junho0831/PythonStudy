@@ -77,6 +77,16 @@ wafer_no=7"""
         self.assertIsNotNone(parsed)
         self.assertIsNone(parsed.wafer_id)
 
+    def test_wafer_id_is_extracted_from_lot_id(self):
+        raw = self._raw("loading reticle 'gvhbrtb0v8' for lot id 2111.")
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.wafer_id, 2111)
+
+    def test_de_err_is_extracted_from_min_de_error(self):
+        raw = self._raw("min_de_error=-1.38157 [%] de_max_reexp_lvl=-15 [%] de_err_lvl=-1 [%]")
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.de_err, Decimal("-1.38157"))
+
     def _raw(self, contents):
         return RawErLog(
             er_date=20260413,

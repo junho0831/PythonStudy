@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 from datetime import datetime
 
-from er_dose.batch import ERDoseBatch
+from er_dose.processor import ERDoseProcessor
+from er_dose.repository import ERDoseRepository
 from er_dose.infra.postgres_db import PostgresDB
 
 
@@ -30,8 +31,9 @@ def main(argv=None) -> int:
         raise ValueError("--start-time must be earlier than --end-time")
 
     db = PostgresDB(dsn=args.dsn)
-    batch = ERDoseBatch(db)
-    batch.run(
+    repository = ERDoseRepository(db)
+    processor = ERDoseProcessor(repository)
+    processor.run(
         start_time=args.start_time,
         end_time=args.end_time,
         limit=args.limit,
