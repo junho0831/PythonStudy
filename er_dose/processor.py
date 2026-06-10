@@ -84,7 +84,7 @@ class ERDoseProcessor:
     def _parse_chunk(self, raw_df) -> list[dict[str, DoseErrorValue]]:
         parsed_rows: list[dict[str, DoseErrorValue]] = []
 
-        for _, row in raw_df.iterrows():
+        for row in raw_df.to_dict("records"):
             raw = self._row_to_raw_log(row)
             parsed_dict = asdict(parse_dose_error(raw))
 

@@ -53,6 +53,23 @@ class ParsedEuvRootCause:
     software_version: str | None
 
 
+_ROOT_CAUSE_MESSAGE_PATTERN = re.compile(r"\broot\s+cause\s*:\s*(.+)", flags=re.IGNORECASE | re.MULTILINE)
+_MIN_DOSE_ERROR_PATTERN = re.compile(r"\bmin\.\s*dose\s+error\s*:\s*" + _DECIMAL_RE, flags=re.IGNORECASE | re.MULTILINE)
+_MAX_DOSE_ERROR_PATTERN = re.compile(r"\bmax\.\s*dose\s+error\s*:\s*" + _DECIMAL_RE, flags=re.IGNORECASE | re.MULTILINE)
+_SOURCE_FILE_NAME_PATTERN = re.compile(r"\bdose\s+error\s+detected\s+in\s+file\s*:\s*(.+?)\s*\.?\s*$", flags=re.IGNORECASE | re.MULTILINE)
+_SOURCE_EXPOSURE_ID_PATTERN = re.compile(r"\bexposure\s+id\s*:\s*([+-]?\d+)", flags=re.IGNORECASE | re.MULTILINE)
+_SOFTWARE_VERSION_PATTERN = re.compile(r"\bsoftware\s+version\s*:\s*(.+)", flags=re.IGNORECASE | re.MULTILINE)
+_TIME_PATTERN = re.compile(r"\btime\s*:\s*([^\s]+)", flags=re.IGNORECASE | re.MULTILINE)
+
+_FIELD_PATTERNS: dict[tuple[str, str], re.Pattern] = {}
+
+def _get_field_pattern(label: str, value_pattern: str) -> re.Pattern:
+    key = (label, value_pattern)
+    if key not in _FIELD_PATTERNS:
+        _FIELD_PATTERNS[key] = re.compile(r"^" + re.escape(label) + r"\s*:\s*" + value_pattern, flags=re.IGNORECASE | re.MULTILINE)
+    return _FIELD_PATTERNS[key]
+
+
 def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
     """Parse er_data_raw_euv contents for dose error root cause details."""
     if not contents:
@@ -61,14 +78,14 @@ def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
     if "dose error detected in file:" not in normalized.lower() or "root cause" not in normalized.lower():
         return None
 
-    root_cause_message = _extract_text(normalized, r"\broot\s+cause\s*:\s*(.+)")
-    min_dose_error = _extract_decimal(normalized, r"\bmin\.\s*dose\s+error\s*:\s*" + _DECIMAL_RE)
-    max_dose_error = _extract_decimal(normalized, r"\bmax\.\s*dose\s+error\s*:\s*" + _DECIMAL_RE)
+    root_cause_message = _extract_text_compiled(normalized, _ROOT_CAUSE_MESSAGE_PATTERN)
+    min_dose_error = _extract_decimal_compiled(normalized, _MIN_DOSE_ERROR_PATTERN)
+    max_dose_error = _extract_decimal_compiled(normalized, _MAX_DOSE_ERROR_PATTERN)
 
     return ParsedEuvRootCause(
-        source_file_name=_extract_text(normalized, r"\bdose\s+error\s+detected\s+in\s+file\s*:\s*(.+?)\s*\.?\s*$"),
-        source_exposure_id=_extract_int(normalized, r"\bexposure\s+id\s*:\s*([+-]?\d+)"),
-        source_code_occur_time=_extract_time(normalized),
+        source_file_name=_extract_text_compiled(normalized, _SOURCE_FILE_NAME_PATTERN),
+        source_exposure_id=_extract_int_compiled(normalized, _SOURCE_EXPOSURE_ID_PATTERN),
+        source_code_occur_time=_extract_time_compiled(normalized),
         root_cause_code=_to_code(root_cause_message),
         root_cause_message=root_cause_message,
         exposure_length=_extract_decimal_field(normalized, "exposure length"),
@@ -105,42 +122,39 @@ def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
         rbdy_qc_etdc_3sigma=_extract_decimal_field(normalized, "rbdy qc etdc 3sigma"),
         rbdy_total_power_lf=_extract_decimal_field(normalized, "rbdy total power lf"),
         rbdy_total_power_mf=_extract_decimal_field(normalized, "rbdy total power mf"),
-        software_version=_extract_text(normalized, r"\bsoftware\s+version\s*:\s*(.+)"),
+        software_version=_extract_text_compiled(normalized, _SOFTWARE_VERSION_PATTERN),
     )
 
 def _normalize(contents: str) -> str:
     return contents.replace("\\n", "\n").strip()
 
-def _extract_text(contents: str, pattern: str) -> str | None:
-    match = re.search(pattern, contents, flags=re.IGNORECASE | re.MULTILINE)
+def _extract_text_compiled(contents: str, pattern: re.Pattern) -> str | None:
+    match = pattern.search(contents)
     if match is None:
         return None
     value = match.group(1).strip()
     return value.removesuffix(".").strip() or None
 
-def _extract_int(contents: str, pattern: str) -> int | None:
-    match = re.search(pattern, contents, flags=re.IGNORECASE | re.MULTILINE)
+def _extract_int_compiled(contents: str, pattern: re.Pattern) -> int | None:
+    match = pattern.search(contents)
     if match is None:
         return None
     return int(match.group(1))
 
-def _extract_decimal(contents: str, pattern: str) -> Decimal | None:
-    match = re.search(pattern, contents, flags=re.IGNORECASE | re.MULTILINE)
+def _extract_decimal_compiled(contents: str, pattern: re.Pattern) -> Decimal | None:
+    match = pattern.search(contents)
     if match is None:
         return None
     return Decimal(match.group(1))
 
 def _extract_decimal_field(contents: str, label: str) -> Decimal | None:
-    return _extract_decimal(contents, _field_pattern(label, _DECIMAL_RE))
+    return _extract_decimal_compiled(contents, _get_field_pattern(label, _DECIMAL_RE))
 
 def _extract_int_field(contents: str, label: str) -> int | None:
-    return _extract_int(contents, _field_pattern(label, r"([+-]?\d+)"))
+    return _extract_int_compiled(contents, _get_field_pattern(label, r"([+-]?\d+)"))
 
-def _field_pattern(label: str, value_pattern: str) -> str:
-    return r"^" + re.escape(label) + r"\s*:\s*" + value_pattern
-
-def _extract_time(contents: str) -> datetime | None:
-    value = _extract_text(contents, r"\btime\s*:\s*([^\s]+)")
+def _extract_time_compiled(contents: str) -> datetime | None:
+    value = _extract_text_compiled(contents, _TIME_PATTERN)
     if value is None:
         return None
     return datetime.fromisoformat(value)
