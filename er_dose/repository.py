@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+import pandas as pd
+
 from er_dose.infra.postgres_db import PostgresDB
 
 
@@ -72,7 +74,8 @@ class ERDoseRepository:
     def ensure_partitions(self, start_time: datetime, end_time: datetime) -> None:
         for day_start in self._iter_day_starts(start_time, end_time):
             next_day = day_start + timedelta(days=1)
-            partition_name = f"er_dose_error_parsed_{day_start:%Y%m%d}"
+            # Match the convention in copy_insert_to_partition_table: {table_name}_1_prt_p{YYYYMMDD}
+            partition_name = f"er_dose_error_parsed_1_prt_p{day_start:%Y%m%d}"
             query = f"""
                 create table if not exists mbeat.{partition_name}
                 partition of {PARSED_TABLE}
@@ -87,7 +90,52 @@ class ERDoseRepository:
             )
 
     def insert_parsed_df(self, df, connection=None):
-        return self.db.copy_insert_df(PARSED_TABLE, df, connection=connection)
+        if df is None or df.empty:
+            return 0
+
+        # Define columns that exist in mbeat.er_dose_error_parsed
+        # Based on create_er_dose_error_parsed.sql
+        table_columns = [
+            "er_date",
+            "er_index",
+            "er_line",
+            "eq_name",
+            "code",
+            "code_occur_time",
+            "belong",
+            "type",
+            "title",
+            "contents",
+            "exposure_handle",
+            "action_handle",
+            "wafer_id",
+            "de_err",
+            "n_slit",
+            "created_at",
+        ]
+
+        # Filter columns to match table exactly for COPY command
+        df_to_insert = df[[col for col in table_columns if col in df.columns]].copy()
+        if "created_at" not in df_to_insert.columns:
+            df_to_insert["created_at"] = datetime.now()
+
+        # Group by date to call copy_insert_to_partition_table for each partition
+        df_to_insert["_target_date"] = (
+            pd.to_datetime(df_to_insert["code_occur_time"]).dt.strftime("%Y-%m-%d")
+        )
+
+        inserted_count = 0
+        for target_date, group_df in df_to_insert.groupby("_target_date"):
+            group_df_clean = group_df.drop(columns=["_target_date"])
+            self.db.copy_insert_to_partition_table(
+                schema="mbeat",
+                table_name="er_dose_error_parsed",
+                target_date=target_date,
+                df=group_df_clean,
+            )
+            inserted_count += len(group_df_clean)
+
+        return inserted_count
 
     def transaction(self):
         return self.db.transaction()

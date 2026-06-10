@@ -45,8 +45,7 @@ class ERDoseProcessor:
 
             if parsed_rows:
                 parsed_df = pd.DataFrame(parsed_rows)
-                with self.repository.transaction() as connection:
-                    insert_count += self.repository.insert_parsed_df(parsed_df, connection=connection)
+                insert_count += self.repository.insert_parsed_df(parsed_df)
 
         print(
             "[ER_DOSE] "

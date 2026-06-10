@@ -66,6 +66,11 @@ class FakeDB:
         self.insert_connection = connection
         return len(df)
 
+    def copy_insert_to_partition_table(self, schema, table_name, target_date, df, is_truncate=False):
+        full_table_name = f"{schema}.{table_name}"
+        self.inserted.append((full_table_name, df))
+        return len(df)
+
 
 class ERDoseProcessorTest(unittest.TestCase):
     def test_fetch_raw_logs_uses_general_raw_table_and_code_occur_time_range(self):
@@ -112,7 +117,6 @@ class ERDoseProcessorTest(unittest.TestCase):
         with redirect_stdout(StringIO()):
             processor.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
 
-        self.assertIs(db.insert_connection, db.connection)
         delete_queries = [query for query, _, _ in db.executed if query.strip().lower().startswith("delete")]
         self.assertEqual(delete_queries, [])
         parsed_insert = self._inserted_df(db, "mbeat.er_dose_error_parsed")
@@ -160,9 +164,9 @@ class ERDoseProcessorTest(unittest.TestCase):
 
         create_queries = [query for query, _, _ in db.executed if "partition of mbeat.er_dose_error_parsed" in query]
         self.assertEqual(len(create_queries), 3)
-        self.assertIn("er_dose_error_parsed_20260531", create_queries[0])
-        self.assertIn("er_dose_error_parsed_20260601", create_queries[1])
-        self.assertIn("er_dose_error_parsed_20260602", create_queries[2])
+        self.assertIn("er_dose_error_parsed_1_prt_p20260531", create_queries[0])
+        self.assertIn("er_dose_error_parsed_1_prt_p20260601", create_queries[1])
+        self.assertIn("er_dose_error_parsed_1_prt_p20260602", create_queries[2])
 
     def _row(self, row_no, code, contents, code_occur_time=None, belong="SCANNER", eq_name="EQ1"):
         return {
