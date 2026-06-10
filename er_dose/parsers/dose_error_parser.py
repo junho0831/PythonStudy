@@ -36,6 +36,28 @@ _DE_ERR_PATTERNS = [
 def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
     """Parse dw-xxxx dose evaluation warning logs."""
     contents = raw.contents
+    code_norm = raw.code.upper().replace("-", "") if raw.code else ""
+    
+    exposure_handle = None
+    action_handle = None
+    wafer_id = None
+    wafer_seq = None
+    de_err = None
+    n_slit = None
+
+    if code_norm.startswith("DW"):
+        exposure_handle = _extract_int(contents, rf"exposure_handle\s*[:=]\s*{_INT}")
+        action_handle = _extract_int(contents, rf"action_handle\s*[:=]\s*{_INT}")
+        wafer_id = _extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
+        wafer_seq = _extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
+        de_err = _extract_first_decimal(contents, _DE_ERR_PATTERNS)
+        n_slit = _extract_int(contents, rf"n_slit\s*[:=]\s*{_INT}")
+    elif code_norm.startswith("LO"):
+        wafer_id = _extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
+        wafer_seq = _extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
+    elif code_norm.startswith("KE"):
+        pass
+
     return ParsedErDoseError(
         er_date=raw.er_date,
         er_index=raw.er_index,
@@ -47,16 +69,12 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
         type=raw.type,
         title=raw.title,
         contents=raw.contents,
-        # exposure_handle: 1234 또는 exposure_handle=1234
-        exposure_handle=_extract_int(contents, rf"exposure_handle\s*[:=]\s*{_INT}"),
-        # action_handle: 1234 또는 action_handle=1234
-        action_handle=_extract_int(contents, rf"action_handle\s*[:=]\s*{_INT}"),
-        # 정의된 패턴 목록 순서대로 매칭되는 값 추출
-        wafer_id=_extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1),
-        wafer_seq=_extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1),
-        de_err=_extract_first_decimal(contents, _DE_ERR_PATTERNS),
-        # n_slit: 44 또는 n_slit=44
-        n_slit=_extract_int(contents, rf"n_slit\s*[:=]\s*{_INT}"),
+        exposure_handle=exposure_handle,
+        action_handle=action_handle,
+        wafer_id=wafer_id,
+        wafer_seq=wafer_seq,
+        de_err=de_err,
+        n_slit=n_slit,
     )
 
 def _extract_value(contents: str, pattern: str, type_cast: type) -> Any | None:

@@ -87,6 +87,70 @@ wafer_no=7"""
         parsed = parse_dose_error(raw)
         self.assertEqual(parsed.de_err, Decimal("-1.38157"))
 
+    def test_parse_dw_3411(self):
+        contents = "de_err=0.112627 [%] de_warn_lvl=0 [%] eset:112496 [bits]\nfreq=62100 [hz] n_slit=19 mb_enabled=t action_handle=57229 exposure_handle:57366\n[dwme_analysis_log_dose_performance_result]"
+        raw = self._raw(contents)
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.de_err, Decimal("0.112627"))
+        self.assertEqual(parsed.n_slit, 19)
+        self.assertEqual(parsed.action_handle, 57229)
+        self.assertEqual(parsed.exposure_handle, 57366)
+
+    def test_parse_dw_3425(self):
+        contents = "de_err=51.8706 [%] de_err_lvl=1 [%] eset:75074.6 [bits]\nfreq=50000 [hz] n_slit=51 mb_enabled=t action_handle=857 exposure_handle:903\n[dwme_analysis_determine_dose_performance_result]"
+        raw = self._raw(contents)
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.de_err, Decimal("51.8706"))
+        self.assertEqual(parsed.n_slit, 51)
+        self.assertEqual(parsed.action_handle, 857)
+        self.assertEqual(parsed.exposure_handle, 903)
+
+    def test_parse_dw_343a(self):
+        contents = "min_de_error=-1.38157 [%] de_max_reexp_lvl=-15 [%] de_err_lvl=-1 [%] \neset:115032 [bits] freq=50000 [hz] n_slit=63 mb_enabled=t action_handle=42355 exposure_handle:42417\n[dwme_analysis_determine_dose_performance_result]"
+        raw = self._raw(contents)
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.de_err, Decimal("-1.38157"))
+        self.assertEqual(parsed.n_slit, 63)
+        self.assertEqual(parsed.action_handle, 42355)
+        self.assertEqual(parsed.exposure_handle, 42417)
+
+    def test_parse_dw_343b(self):
+        contents = "de_err=2.64948 [%] de_err_lvl=1 [%] eset:124341 [bits]\nfreq=50000 [hz] n_slit=50 mb_enabled=t action_handle=48994 exposure_handle:49100\n[dwme_analysis_determine_dose_performance_result]"
+        raw = self._raw(contents)
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.de_err, Decimal("2.64948"))
+        self.assertEqual(parsed.n_slit, 50)
+        self.assertEqual(parsed.action_handle, 48994)
+        self.assertEqual(parsed.exposure_handle, 49100)
+
+    def test_parse_lo_0061(self):
+        contents = "loading reticle 'gvhbrtb0v8' for lot id 2111."
+        raw = self._raw(contents)
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.wafer_id, 2111)
+
+    def test_parse_lo_8166(self):
+        contents = "expose image(0) of production wafer(23) for lot(2111) started on chuck(wpxchuck_chuck_id_1)"
+        raw = self._raw(contents)
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.wafer_id, 2111)
+        self.assertEqual(parsed.wafer_seq, 23)
+
+    def test_parse_lo_8167(self):
+        contents = "expose image(0) of production wafer(23) for lot(2111) finished on chuck(wpxchuck_chuck_id_1)"
+        raw = self._raw(contents)
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.wafer_id, 2111)
+        self.assertEqual(parsed.wafer_seq, 23)
+
+    def test_parse_ke_9103(self):
+        contents = "die re-exposures have started."
+        raw = self._raw(contents)
+        parsed = parse_dose_error(raw)
+        self.assertIsNone(parsed.de_err)
+        self.assertIsNone(parsed.wafer_id)
+        self.assertIsNone(parsed.wafer_seq)
+
     def _raw(self, contents):
         return RawErLog(
             er_date=20260413,

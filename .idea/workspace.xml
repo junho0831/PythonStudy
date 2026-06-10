@@ -20,9 +20,9 @@
   <component name="ChangeListManager">
     <list default="true" id="9fc81ff4-5cda-47d6-ad9b-ac08b12c0f95" name="변경" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ER_DOSE_ERROR.md" beforeDir="false" afterPath="$PROJECT_DIR$/ER_DOSE_ERROR.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/er_dose_flow.drawio" beforeDir="false" afterPath="$PROJECT_DIR$/docs/er_dose_flow.drawio" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/er_dose/parsers/dose_error_parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/parsers/dose_error_parser.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_er_dose_parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_er_dose_parser.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -35,7 +35,7 @@
     </persistenceIdMap>
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="62" />
+    <option name="cachedIndexableFilesCount" value="69" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="FileTemplateManagerImpl">
@@ -68,6 +68,65 @@
     <commands />
     <urls />
   </component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.8806374458666781" />
+      <entry key="MS500" value="3.2862373580478197" />
+      <entry key="S2" value="4.806894012989216" />
+      <entry key="S5" value="5.450093852843042" />
+      <entry key="S10" value="5.951745231642845" />
+      <entry key="S30" value="10.27387362716802" />
+      <entry key="S60" value="15.615201208030209" />
+      <entry key="M2" value="23.13255047024235" />
+      <entry key="M5" value="42.25683506769098" />
+      <entry key="M10" value="62.18208374560309" />
+      <entry key="M15" value="72.888929964894" />
+      <entry key="M30" value="86.80012927845725" />
+      <entry key="H1" value="95.28257926781723" />
+      <entry key="H2" value="99.97533558714825" />
+      <entry key="H4" value="102.4446328793858" />
+      <entry key="D1" value="104.56799228926292" />
+      <entry key="W1" value="104.93813309322942" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="0.0" />
+      <entry key="S5" value="0.0" />
+      <entry key="S10" value="0.0" />
+      <entry key="S30" value="0.0" />
+      <entry key="S60" value="0.0" />
+      <entry key="M2" value="0.0" />
+      <entry key="M5" value="0.0" />
+      <entry key="M10" value="0.0" />
+      <entry key="M15" value="0.0" />
+      <entry key="M30" value="0.0" />
+      <entry key="H1" value="0.0" />
+      <entry key="H2" value="0.0" />
+      <entry key="H4" value="0.0" />
+      <entry key="D1" value="0.0" />
+      <entry key="W1" value="0.0" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="1.8374182997638435" />
+      <entry key="MS500" value="3.2684479808887863" />
+      <entry key="S2" value="4.7962994612574805" />
+      <entry key="S5" value="5.444466315492478" />
+      <entry key="S10" value="5.94855990934374" />
+      <entry key="S30" value="10.272314001217545" />
+      <entry key="S60" value="15.614064452484625" />
+      <entry key="M2" value="23.131641043885068" />
+      <entry key="M5" value="42.256082849658505" />
+      <entry key="M10" value="62.18149699684443" />
+      <entry key="M15" value="72.88846185831025" />
+      <entry key="M30" value="86.79984465804579" />
+      <entry key="H1" value="95.28242140467603" />
+      <entry key="H2" value="99.97525233387455" />
+      <entry key="H4" value="102.44459011311193" />
+      <entry key="D1" value="104.56798499798975" />
+      <entry key="W1" value="104.93813204754277" />
+    </decayedShown>
+  </component>
   <component name="ProblemsViewState">
     <option name="selectedTabId" value="AISelfReview" />
   </component>
@@ -79,34 +138,34 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;Python.generate_troubleshooting_docs.executor&quot;: &quot;Run&quot;,
-    &quot;Python.remote_batch_processor.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;ai.playground.ignore.import.keys.banner.in.settings&quot;: &quot;true&quot;,
-    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/parkjunho/PycharmProjects/PythonStudy&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.generate_troubleshooting_docs.executor": "Run",
+    "Python.remote_batch_processor.executor": "Run",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "ai.playground.ignore.import.keys.banner.in.settings": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "master",
+    "last_opened_file_path": "/Users/parkjunho/PycharmProjects/PythonStudy",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "terminal",
+    "vue.rearranger.settings.migration": "true"
   },
-  &quot;keyToStringList&quot;: {
-    &quot;DatabaseDriversLRU&quot;: [
-      &quot;postgresql&quot;
+  "keyToStringList": {
+    "DatabaseDriversLRU": [
+      "postgresql"
     ]
   }
-}</component>
+}]]></component>
   <component name="RunManager" selected="Python.remote_batch_processor">
     <configuration name="generate_troubleshooting_docs" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="PythonStudy" />

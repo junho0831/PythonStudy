@@ -55,7 +55,7 @@
         <mxCell id="fetch" value="RAW 로그 조회&#10;&#10;- mbeat.er_data_raw 사용&#10;- code_occur_time 범위 조건&#10;- dw-% 또는 dose 관련 contents 후보 필터&#10;- code_occur_time 기준 정렬&#10;- chunk 단위 streaming fetch&#10;- limit 선택 적용" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="450" y="240" width="300" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="parser" value="DoseErrorParser&#10;&#10;- chunk 내부 row별 RawErLog 생성&#10;- code_occur_time은 DB timestamp 그대로 사용&#10;- belong/type은 원천 그대로 보존&#10;- exposure_handle, action_handle, wafer_id, de_err, n_slit 추출" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+        <mxCell id="parser" value="DoseErrorParser&#10;&#10;- chunk 내부 row별 RawErLog 생성&#10;- code_occur_time은 DB timestamp 그대로 사용&#10;- belong/type은 원천 그대로 보존&#10;- exposure_handle, action_handle, wafer_id, wafer_seq, de_err, n_slit 추출" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="810" y="240" width="300" height="170" as="geometry" />
         </mxCell>
         <mxCell id="status" value="파싱 결과 분기&#10;&#10;- 파싱 성공 row 적재&#10;- 파싱 실패 row도 contents와 함께 적재&#10;- summary count는 콘솔 출력" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
@@ -106,16 +106,19 @@
         <mxCell id="parsed-row-14" value="wafer_id : int4" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="426" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-15" value="de_err : numeric" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-14b" value="wafer_seq : int4" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="454" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-16" value="n_slit : int4" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-15" value="de_err : numeric" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="482" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-31" value="created_at : timestamp" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-16" value="n_slit : int4" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="510" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="index" value="키 / 파티션 / 인덱스&#10;&#10;PK: code_occur_time&#10;파티션: code_occur_time 일별 범위&#10;인덱스: er_line + eq_name + code_occur_time&#10;추가 파싱 컬럼은 exposure_handle, action_handle, wafer_id, de_err, n_slit만 저장" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+        <mxCell id="parsed-row-31" value="created_at : timestamp" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+          <mxGeometry x="0" y="538" width="380" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="index" value="키 / 파티션 / 인덱스&#10;&#10;PK: code_occur_time&#10;파티션: code_occur_time 일별 범위&#10;인덱스: er_line + eq_name + code_occur_time&#10;추가 파싱 컬럼은 exposure_handle, action_handle, wafer_id, wafer_seq, de_err, n_slit만 저장" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
           <mxGeometry x="60" y="630" width="330" height="190" as="geometry" />
         </mxCell>
         <mxCell id="source" value="Root cause contents 조회&#10;&#10;- mbeat.er_data_raw_euv 사용&#10;- contents에 dose error detected/root cause 포함&#10;- exposure id/time/source file 추출&#10;- 원문은 contents에 보존" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
