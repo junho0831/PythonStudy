@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import os
 import re
 from contextlib import contextmanager
@@ -14,11 +15,61 @@ _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 class PostgresDB:
     def __init__(self, dsn: str | None = None):
         self.dsn = dsn or os.getenv("ER_DOSE_DB_DSN") or os.getenv("DATABASE_URL") or ""
+        self.__engine = self  # Support user-provided copy_insert_to_partition_table
+
+    def raw_connection(self):
+        return self._connect()
 
     def _connect(self):
         import psycopg2
 
         return psycopg2.connect(self.dsn)
+
+    def copy_insert_to_partition_table(
+        self,
+        schema: str,
+        table_name: str,
+        target_date: str,
+        df: pd.DataFrame,
+        is_truncate: bool = False
+    ) -> None:
+        if df is None or df.empty:
+            print("insert 대상 데이터가 없습니다.")
+            return
+
+        partition_table = f'{schema}.{table_name}_1_prt_p{target_date.replace("-", "")}'
+        query = f'COPY {partition_table} FROM STDIN WITH CSV HEADER'
+
+        buffer = io.StringIO()
+        insert_df = df.drop_duplicates()
+        insert_df.to_csv(buffer, index=False)
+        buffer.seek(0)
+
+        conn = self.__engine.raw_connection()
+        cursor = conn.cursor()
+
+        try:
+            if is_truncate:
+                print(f"TRUNCATE TABLE {partition_table}")
+                cursor.execute(f"TRUNCATE TABLE {partition_table}")
+
+            cursor.copy_expert(query, buffer)
+
+            print(f"{len(insert_df)} rows were saved.")
+
+            cursor.execute(f"ANALYZE {partition_table}")
+            conn.commit()
+
+            print(f"data inserted into table {partition_table} successfully.")
+
+        except Exception as e:
+            conn.rollback()
+            print(f"[ERROR] copy insert failed: {e}")
+            raise
+
+        finally:
+            cursor.close()
+            conn.close()
 
     @contextmanager
     def transaction(self):

@@ -5,47 +5,41 @@ from decimal import Decimal
 
 from typing import Any
 
-from er_dose.parsers.base import (
-    ParsedErDoseError, 
-    RawErLog,
-    DW_TARGET_CODES_NORM,
-    LO_TARGET_CODES_NORM,
-    KE_TARGET_CODES_NORM,
-)
+from er_dose.parsers.base import ParsedErDoseError, RawErLog
 
-# 숫자 매칭 정규식을 알아보기 쉽게 간소화
+
+# 소수/정수 값을 캡처한다. group(1) 값을 Decimal/int 로 변환해 사용한다.
 _DECIMAL = r"([-+]?\d*\.?\d+)"
 _INT = r"([-+]?\d+)"
 
+# wafer_id 는 lot(2111), lot id 2111, wafer_id=2111 같은 표기를 모두 허용한다.
 _WAFER_ID_PATTERNS = [
-    re.compile(rf"lot\(\s*{_INT}\s*\)", flags=re.IGNORECASE),
-    re.compile(rf"lot id\s+{_INT}", flags=re.IGNORECASE),
-    re.compile(rf"wafer_id\s*[:=]\s*{_INT}", flags=re.IGNORECASE),
-    re.compile(rf"wafer id\s*[:=]\s*{_INT}", flags=re.IGNORECASE),
+    rf"lot\(\s*{_INT}\s*\)",
+    rf"lot id\s+{_INT}",
+    rf"wafer_id\s*[:=]\s*{_INT}",
+    rf"wafer id\s*[:=]\s*{_INT}",
 ]
 
+# wafer_seq 는 wafer(23), wafer_seq=23, slot_seq=23 같은 표기를 모두 wafer_seq 로 본다.
 _WAFER_SEQ_PATTERNS = [
-    re.compile(rf"wafer\(\s*{_INT}\s*\)", flags=re.IGNORECASE),
-    re.compile(rf"wafer_seq\s*[:=]\s*{_INT}", flags=re.IGNORECASE),
-    re.compile(rf"wafer seq\s*[:=]\s*{_INT}", flags=re.IGNORECASE),
-    re.compile(rf"slot_seq\s*[:=]\s*{_INT}", flags=re.IGNORECASE),
-    re.compile(rf"slot seq\s*[:=]\s*{_INT}", flags=re.IGNORECASE),
+    rf"wafer\(\s*{_INT}\s*\)",
+    rf"wafer_seq\s*[:=]\s*{_INT}",
+    rf"wafer seq\s*[:=]\s*{_INT}",
+    rf"slot_seq\s*[:=]\s*{_INT}",
+    rf"slot seq\s*[:=]\s*{_INT}",
 ]
 
+# dose error 값은 de_err=... 또는 min_de_error=... 에서 추출한다.
 _DE_ERR_PATTERNS = [
-    re.compile(rf"de_err\s*[:=]\s*{_DECIMAL}", flags=re.IGNORECASE),
-    re.compile(rf"min_de_error\s*[:=]\s*{_DECIMAL}", flags=re.IGNORECASE),
+    rf"de_err\s*[:=]\s*{_DECIMAL}",
+    rf"min_de_error\s*[:=]\s*{_DECIMAL}",
 ]
-
-_EXPOSURE_HANDLE_PATTERN = re.compile(rf"exposure_handle\s*[:=]\s*{_INT}", flags=re.IGNORECASE)
-_ACTION_HANDLE_PATTERN = re.compile(rf"action_handle\s*[:=]\s*{_INT}", flags=re.IGNORECASE)
-_N_SLIT_PATTERN = re.compile(rf"n_slit\s*[:=]\s*{_INT}", flags=re.IGNORECASE)
 
 
 def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
-    """Parse dw-xxxx dose evaluation warning logs."""
+    """Parse DW-/LO-/KE- dose warning logs using raw code format."""
     contents = raw.contents
-    code_norm = raw.code.upper().replace("-", "") if raw.code else ""
+    code_norm = raw.code if raw.code else ""
     
     exposure_handle = None
     action_handle = None
@@ -54,17 +48,17 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
     de_err = None
     n_slit = None
 
-    if code_norm in DW_TARGET_CODES_NORM:
-        exposure_handle = _extract_int_compiled(contents, _EXPOSURE_HANDLE_PATTERN)
-        action_handle = _extract_int_compiled(contents, _ACTION_HANDLE_PATTERN)
-        wafer_id = _extract_first_int_compiled(contents, _WAFER_ID_PATTERNS, minimum=1)
-        wafer_seq = _extract_first_int_compiled(contents, _WAFER_SEQ_PATTERNS, minimum=1)
-        de_err = _extract_first_decimal_compiled(contents, _DE_ERR_PATTERNS)
-        n_slit = _extract_int_compiled(contents, _N_SLIT_PATTERN)
-    elif code_norm in LO_TARGET_CODES_NORM:
-        wafer_id = _extract_first_int_compiled(contents, _WAFER_ID_PATTERNS, minimum=1)
-        wafer_seq = _extract_first_int_compiled(contents, _WAFER_SEQ_PATTERNS, minimum=1)
-    elif code_norm in KE_TARGET_CODES_NORM:
+    if code_norm.startswith("DW-"):
+        exposure_handle = _extract_int(contents, rf"exposure_handle\s*[:=]\s*{_INT}")
+        action_handle = _extract_int(contents, rf"action_handle\s*[:=]\s*{_INT}")
+        wafer_id = _extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
+        wafer_seq = _extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
+        de_err = _extract_first_decimal(contents, _DE_ERR_PATTERNS)
+        n_slit = _extract_int(contents, rf"n_slit\s*[:=]\s*{_INT}")
+    elif code_norm.startswith("LO-"):
+        wafer_id = _extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
+        wafer_seq = _extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
+    elif code_norm.startswith("KE-"):
         pass
 
     return ParsedErDoseError(
@@ -86,21 +80,21 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
         n_slit=n_slit,
     )
 
-def _extract_value_compiled(contents: str, pattern: re.Pattern, type_cast: type) -> Any | None:
-    match = pattern.search(contents)
+def _extract_value(contents: str, pattern: str, type_cast: type) -> Any | None:
+    match = re.search(pattern, contents, flags=re.IGNORECASE)
     if match is None:
         return None
     return type_cast(match.group(1))
 
-def _extract_decimal_compiled(contents: str, pattern: re.Pattern) -> Decimal | None:
-    return _extract_value_compiled(contents, pattern, Decimal)
+def _extract_decimal(contents: str, pattern: str) -> Decimal | None:
+    return _extract_value(contents, pattern, Decimal)
 
-def _extract_int_compiled(contents: str, pattern: re.Pattern) -> int | None:
-    return _extract_value_compiled(contents, pattern, int)
+def _extract_int(contents: str, pattern: str) -> int | None:
+    return _extract_value(contents, pattern, int)
 
-def _extract_first_int_compiled(contents: str, patterns: list[re.Pattern], minimum: int | None = None) -> int | None:
+def _extract_first_int(contents: str, patterns: list[str], minimum: int | None = None) -> int | None:
     for pattern in patterns:
-        value = _extract_int_compiled(contents, pattern)
+        value = _extract_int(contents, pattern)
         if value is None:
             continue
         if minimum is not None and value < minimum:
@@ -108,9 +102,9 @@ def _extract_first_int_compiled(contents: str, patterns: list[re.Pattern], minim
         return value
     return None
 
-def _extract_first_decimal_compiled(contents: str, patterns: list[re.Pattern]) -> Decimal | None:
+def _extract_first_decimal(contents: str, patterns: list[str]) -> Decimal | None:
     for pattern in patterns:
-        value = _extract_decimal_compiled(contents, pattern)
+        value = _extract_decimal(contents, pattern)
         if value is not None:
             return value
     return None
