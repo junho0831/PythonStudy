@@ -8,10 +8,11 @@ from typing import Any
 from er_dose.parsers.base import ParsedErDoseError, RawErLog
 
 
-# 숫자 매칭 정규식을 알아보기 쉽게 간소화
+# 소수/정수 값을 캡처한다. group(1) 값을 Decimal/int 로 변환해 사용한다.
 _DECIMAL = r"([-+]?\d*\.?\d+)"
 _INT = r"([-+]?\d+)"
 
+# wafer_id 는 lot(2111), lot id 2111, wafer_id=2111 같은 표기를 모두 허용한다.
 _WAFER_ID_PATTERNS = [
     rf"lot\(\s*{_INT}\s*\)",
     rf"lot id\s+{_INT}",
@@ -19,6 +20,7 @@ _WAFER_ID_PATTERNS = [
     rf"wafer id\s*[:=]\s*{_INT}",
 ]
 
+# wafer_seq 는 wafer(23), wafer_seq=23, slot_seq=23 같은 표기를 모두 wafer_seq 로 본다.
 _WAFER_SEQ_PATTERNS = [
     rf"wafer\(\s*{_INT}\s*\)",
     rf"wafer_seq\s*[:=]\s*{_INT}",
@@ -27,6 +29,7 @@ _WAFER_SEQ_PATTERNS = [
     rf"slot seq\s*[:=]\s*{_INT}",
 ]
 
+# dose error 값은 de_err=... 또는 min_de_error=... 에서 추출한다.
 _DE_ERR_PATTERNS = [
     rf"de_err\s*[:=]\s*{_DECIMAL}",
     rf"min_de_error\s*[:=]\s*{_DECIMAL}",
