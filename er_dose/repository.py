@@ -48,7 +48,7 @@ class ERDoseRepository:
             params["limit"] = limit
             limit_sql = "limit %(limit)s"
 
-        target_codes_sql = ", ".join(f"'{code.replace('-', '').upper()}'" for code in TARGET_CODES)
+        target_codes_sql = ", ".join(f"'{code}'" for code in TARGET_CODES)
 
         query = f"""
             select
@@ -65,7 +65,7 @@ class ERDoseRepository:
             from {MAIN_RAW_TABLE} r
             where r.code_occur_time >= %(start_time)s
               and r.code_occur_time < %(end_time)s
-              and upper(replace(coalesce(r.code, ''), '-', '')) in ({target_codes_sql})
+              and r.code in ({target_codes_sql})
             order by r.code_occur_time
             {limit_sql}
         """
