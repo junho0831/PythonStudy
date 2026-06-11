@@ -36,7 +36,7 @@ _DE_ERR_PATTERNS = [
 def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
     """Parse dw-xxxx dose evaluation warning logs."""
     contents = raw.contents
-    code_norm = raw.code.upper().replace("-", "") if raw.code else ""
+    code_norm = raw.code if raw.code else ""
     
     exposure_handle = None
     action_handle = None
@@ -45,17 +45,17 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
     de_err = None
     n_slit = None
 
-    if code_norm.startswith("DW"):
+    if code_norm.startswith("DW-"):
         exposure_handle = _extract_int(contents, rf"exposure_handle\s*[:=]\s*{_INT}")
         action_handle = _extract_int(contents, rf"action_handle\s*[:=]\s*{_INT}")
         wafer_id = _extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
         wafer_seq = _extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
         de_err = _extract_first_decimal(contents, _DE_ERR_PATTERNS)
         n_slit = _extract_int(contents, rf"n_slit\s*[:=]\s*{_INT}")
-    elif code_norm.startswith("LO"):
+    elif code_norm.startswith("LO-"):
         wafer_id = _extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
         wafer_seq = _extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
-    elif code_norm.startswith("KE"):
+    elif code_norm.startswith("KE-"):
         pass
 
     return ParsedErDoseError(
