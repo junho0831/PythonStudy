@@ -37,7 +37,7 @@ _DE_ERR_PATTERNS = [
 
 
 def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
-    """Parse dw-xxxx dose evaluation warning logs."""
+    """Parse DW-/LO-/KE- dose warning logs using raw code format."""
     contents = raw.contents
     code_norm = raw.code if raw.code else ""
     
