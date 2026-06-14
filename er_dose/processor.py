@@ -30,7 +30,6 @@ class ERDoseProcessor:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be greater than 0")
 
-        self.repository.ensure_partitions(start_time=start_time, end_time=end_time)
         fetched_count = 0
         insert_count = 0
 

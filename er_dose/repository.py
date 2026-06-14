@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pandas as pd
 
@@ -56,28 +56,10 @@ class ERDoseRepository:
             where r.code_occur_time >= %(start_time)s
               and r.code_occur_time < %(end_time)s
               and r.code in ({target_codes_sql})
-            order by r.code_occur_time
+            order by r.code_occur_time, r.eq_name, r.er_date, r.er_index
             {limit_sql}
         """
         return query, params
-
-    def ensure_partitions(self, start_time: datetime, end_time: datetime) -> None:
-        for day_start in self._iter_day_starts(start_time, end_time):
-            next_day = day_start + timedelta(days=1)
-            # Match the convention in copy_insert_to_partition_table: {table_name}_1_prt_p{YYYYMMDD}
-            partition_name = f"er_dose_error_parsed_1_prt_p{day_start:%Y%m%d}"
-            query = f"""
-                create table if not exists mbeat.{partition_name}
-                partition of {PARSED_TABLE}
-                for values from (%(start_time)s) to (%(end_time)s)
-            """
-            self.db.execute(
-                query,
-                params={
-                    "start_time": day_start,
-                    "end_time": next_day,
-                },
-            )
 
     def insert_parsed_df(self, df, connection=None):
         if df is None or df.empty:
@@ -130,8 +112,3 @@ class ERDoseRepository:
     def transaction(self):
         return self.db.transaction()
 
-    def _iter_day_starts(self, start_time: datetime, end_time: datetime):
-        current = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
-        while current < end_time:
-            yield current
-            current += timedelta(days=1)
