@@ -33,21 +33,54 @@ class ERDoseProcessor:
         fetched_count = 0
         insert_count = 0
 
-        for raw_df in self.repository.fetch_raw_logs_in_chunks(
-            start_time=start_time,
-            end_time=end_time,
-            chunk_size=chunk_size,
-        ):
-            fetched_count += int(len(raw_df))
-            parsed_rows = self._parse_chunk(raw_df)
+        print(
+            "[ER_DOSE] "
+            f"start_time={start_time.isoformat()} "
+            f"end_time={end_time.isoformat()} "
+            f"chunk_size={chunk_size}"
+        )
 
-            if parsed_rows:
-                parsed_df = pd.DataFrame(parsed_rows)
-                insert_count += self.repository.insert_parsed_df(parsed_df)
+        for chunk_index, raw_df in enumerate(
+            self.repository.fetch_raw_logs_in_chunks(
+                start_time=start_time,
+                end_time=end_time,
+                chunk_size=chunk_size,
+            ),
+            start=1,
+        ):
+            chunk_fetched = int(len(raw_df))
+            fetched_count += chunk_fetched
+            print(
+                "[ER_DOSE] "
+                f"chunk={chunk_index} "
+                f"fetched={chunk_fetched} "
+                f"fetched_total={fetched_count}"
+            )
+
+            parsed_rows = self._parse_chunk(raw_df)
+            parsed_count = len(parsed_rows)
+            print(
+                "[ER_DOSE] "
+                f"chunk={chunk_index} "
+                f"parsed={parsed_count}"
+            )
+
+            if not parsed_rows:
+                continue
+
+            parsed_df = pd.DataFrame(parsed_rows)
+            chunk_inserted = self.repository.insert_parsed_df(parsed_df)
+            insert_count += chunk_inserted
+            print(
+                "[ER_DOSE] "
+                f"chunk={chunk_index} "
+                f"inserted={chunk_inserted} "
+                f"inserted_total={insert_count}"
+            )
 
         print(
             "[ER_DOSE] "
-            f"fetched={fetched_count} "
+            f"done fetched={fetched_count} "
             f"inserted={insert_count}"
         )
 
