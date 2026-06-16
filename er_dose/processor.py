@@ -24,7 +24,6 @@ class ERDoseProcessor:
         self,
         start_time: datetime,
         end_time: datetime,
-        limit: int | None = None,
         chunk_size: int = 10000,
     ) -> None:
         if chunk_size <= 0:
@@ -36,7 +35,6 @@ class ERDoseProcessor:
         for raw_df in self.repository.fetch_raw_logs_in_chunks(
             start_time=start_time,
             end_time=end_time,
-            limit=limit,
             chunk_size=chunk_size,
         ):
             fetched_count += int(len(raw_df))

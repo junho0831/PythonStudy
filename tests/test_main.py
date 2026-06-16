@@ -37,7 +37,6 @@ class MainTest(unittest.TestCase):
             "BATCH_TARGET": "ER_DOSE",
             "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
             "ER_DOSE_END_TIME": "2026-06-01T00:00:00",
-            "ER_DOSE_LIMIT": "100",
             "ER_DOSE_CHUNK_SIZE": "20000",
             "ER_DOSE_DB_DSN": "postgresql://user:pass@localhost:5432/db",
         }
@@ -58,7 +57,6 @@ class MainTest(unittest.TestCase):
         batch.run.assert_called_once_with(
             start_time=datetime(2026, 5, 31, 0, 0, 0),
             end_time=datetime(2026, 6, 1, 0, 0, 0),
-            limit=100,
             chunk_size=20000,
         )
 
@@ -78,7 +76,7 @@ class MainTest(unittest.TestCase):
         postgres_db.assert_called_once_with(dsn="postgresql://user:pass@localhost:5432/db")
         processor_cls.return_value.run.assert_called_once()
 
-    def test_er_dose_limit_defaults_to_none(self):
+    def test_er_dose_chunk_size_defaults_to_10000(self):
         env = {
             "BATCH_TARGET": "ER_DOSE",
             "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
@@ -95,7 +93,6 @@ class MainTest(unittest.TestCase):
         batch.run.assert_called_once_with(
             start_time=datetime(2026, 5, 31, 0, 0, 0),
             end_time=datetime(2026, 6, 1, 0, 0, 0),
-            limit=None,
             chunk_size=10000,
         )
 

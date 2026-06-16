@@ -33,14 +33,13 @@ class Main:
         if start_time >= end_time:
             raise ValueError("ER_DOSE_START_TIME must be earlier than ER_DOSE_END_TIME")
 
-        limit = self._parse_optional_int(self.env.get("ER_DOSE_LIMIT"))
         chunk_size = self._parse_optional_int(self.env.get("ER_DOSE_CHUNK_SIZE"), field_name="ER_DOSE_CHUNK_SIZE") or 10000
         dsn = self._get_required("ER_DOSE_DB_DSN", fallback_key="DATABASE_URL")
 
         db = PostgresDB(dsn=dsn)
         repository = ERDoseRepository(db)
         processor = ERDoseProcessor(repository)
-        processor.run(start_time=start_time, end_time=end_time, limit=limit, chunk_size=chunk_size)
+        processor.run(start_time=start_time, end_time=end_time, chunk_size=chunk_size)
         return 0
 
     def _get_required(self, key: str, fallback_key: str | None = None) -> str:
@@ -61,7 +60,7 @@ class Main:
         except ValueError as exc:
             raise ValueError(f"invalid datetime: {value}") from exc
 
-    def _parse_optional_int(self, value: str | None, field_name: str = "ER_DOSE_LIMIT") -> int | None:
+    def _parse_optional_int(self, value: str | None, field_name: str) -> int | None:
         if value is None or value.strip() == "":
             return None
         parsed = int(value)

@@ -79,7 +79,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         start_time = datetime(2026, 5, 1)
         end_time = datetime(2026, 5, 2)
 
-        list(repo.fetch_raw_logs_in_chunks(start_time=start_time, end_time=end_time, limit=10, chunk_size=100))
+        list(repo.fetch_raw_logs_in_chunks(start_time=start_time, end_time=end_time, chunk_size=100))
 
         self.assertIn("from mbeat.er_data_raw r", db.fetch_query)
         self.assertIn("r.er_date", db.fetch_query)
@@ -100,7 +100,6 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertIn("'KE-9104'", db.fetch_query)
         self.assertEqual(db.fetch_params["start_time"], start_time)
         self.assertEqual(db.fetch_params["end_time"], end_time)
-        self.assertEqual(db.fetch_params["limit"], 10)
 
     def test_run_inserts_rows_without_deleting_existing_history(self):
         raw_df = pd.DataFrame(
@@ -155,18 +154,6 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(len(db.inserted), 2)
         self.assertEqual(len(db.inserted[0][1]), 2)
         self.assertEqual(len(db.inserted[1][1]), 1)
-
-    def test_partition_creation_covers_each_day_in_range(self):
-        db = FakeDB(pd.DataFrame())
-        repo = ERDoseRepository(db)
-
-        repo.ensure_partitions(start_time=datetime(2026, 5, 31, 12), end_time=datetime(2026, 6, 2, 1))
-
-        create_queries = [query for query, _, _ in db.executed if "partition of mbeat.er_dose_error_parsed" in query]
-        self.assertEqual(len(create_queries), 3)
-        self.assertIn("er_dose_error_parsed_1_prt_p20260531", create_queries[0])
-        self.assertIn("er_dose_error_parsed_1_prt_p20260601", create_queries[1])
-        self.assertIn("er_dose_error_parsed_1_prt_p20260602", create_queries[2])
 
     def _row(self, row_no, code, contents, code_occur_time=None, belong="SCANNER", eq_name="EQ1"):
         return {

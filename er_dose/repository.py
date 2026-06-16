@@ -30,23 +30,16 @@ class ERDoseRepository:
         self,
         start_time: datetime,
         end_time: datetime,
-        limit: int | None = None,
         chunk_size: int = 10000,
     ):
-        query, params = self._build_fetch_raw_logs_query(start_time=start_time, end_time=end_time, limit=limit)
+        query, params = self._build_fetch_raw_logs_query(start_time=start_time, end_time=end_time)
         return self.db.fetch_df_in_chunks(query, params=params, chunk_size=chunk_size)
 
-    def _build_fetch_raw_logs_query(self, start_time: datetime, end_time: datetime, limit: int | None = None):
+    def _build_fetch_raw_logs_query(self, start_time: datetime, end_time: datetime):
         params = {
             "start_time": start_time,
             "end_time": end_time,
         }
-        limit_sql = ""
-        if limit is not None:
-            if limit <= 0:
-                raise ValueError("limit must be greater than 0")
-            params["limit"] = limit
-            limit_sql = "limit %(limit)s"
 
         target_codes_sql = ", ".join(f"'{code}'" for code in TARGET_CODES)
 
@@ -67,7 +60,6 @@ class ERDoseRepository:
               and r.code_occur_time < %(end_time)s
               and r.code in ({target_codes_sql})
             order by r.code_occur_time, r.eq_name, r.er_date, r.er_index
-            {limit_sql}
         """
         return query, params
 
