@@ -198,9 +198,8 @@ BATCH_TARGET=ER_DOSE \
 ER_DOSE_START_TIME=2026-05-31T00:00:00 \
 ER_DOSE_END_TIME=2026-06-01T00:00:00 \
 ER_DOSE_CHUNK_SIZE=10000 \
-ER_DOSE_LIMIT=1000 \
 ER_DOSE_DB_DSN='postgresql://user:password@host:5432/dbname' \
-.venv/bin/python main.py
+python3 main.py
 ```
 
 필수 환경변수:
@@ -215,10 +214,18 @@ ER_DOSE_DB_DSN='postgresql://user:password@host:5432/dbname' \
 
 - `RBI_PARSER`: `RUBI`, `RUPI`, `COMBINED`, 기본값 `COMBINED`
 - `ER_DOSE_CHUNK_SIZE`: ER Dose raw fetch chunk 크기
-- `ER_DOSE_LIMIT`: 최대 처리 row 수
 - `INPUT_DATE`: `RBI_INPUT_DATE` 대체값
 - `START_TIME`: `ER_DOSE_START_TIME` 대체값
 - `END_TIME`: `ER_DOSE_END_TIME` 대체값
+
+로컬 패키지 설치:
+
+```bash
+mkdir -p .vendor
+pip3 install --target .vendor SQLAlchemy psycopg2-binary
+```
+
+`sitecustomize.py` 가 `.vendor` 를 자동으로 `sys.path` 에 추가하므로 별도 `PYTHONPATH` 설정 없이 실행할 수 있습니다.
 
 실행 규칙:
 
