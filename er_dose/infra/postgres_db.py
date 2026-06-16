@@ -95,10 +95,10 @@ class PostgresDB:
         if connection is not None:
             return pd.read_sql_query(query, connection, params=params)
 
-        from sqlalchemy import text
-
-        with self._connect_sqlalchemy().connect() as conn:
-            return pd.read_sql_query(text(query), conn, params=params)
+        chunks = list(self.fetch_df_in_chunks(query, params=params, chunk_size=100000))
+        if not chunks:
+            return pd.DataFrame()
+        return pd.concat(chunks, ignore_index=True)
 
     def fetch_df_in_chunks(self, query: str, params=None, chunk_size: int = 10000, connection=None):
         if chunk_size <= 0:
@@ -111,7 +111,14 @@ class PostgresDB:
         from sqlalchemy import text
 
         with self._connect_sqlalchemy().connect() as conn:
-            yield from pd.read_sql_query(text(query), conn, params=params, chunksize=chunk_size)
+            result = conn.execute(text(query), params or {})
+            columns = list(result.keys())
+
+            while True:
+                rows = result.fetchmany(chunk_size)
+                if not rows:
+                    break
+                yield pd.DataFrame(rows, columns=columns)
 
     def copy_insert_df(self, table_name: str, df, connection=None) -> int:
         if df.empty:
