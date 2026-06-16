@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2026-06-01T00:00:00.000Z" agent="Codex" version="24.7.17">
+<mxfile host="app.diagrams.net" modified="2026-06-15T00:00:00.000Z" agent="Codex" version="24.7.17">
   <diagram id="er-dose-history-flow" name="ER Dose 이력 구조">
     <mxGraphModel dx="1600" dy="1400" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1400" math="0" shadow="0">
       <root>
@@ -7,7 +7,7 @@
         <mxCell id="title" value="ER Dose Error 적재 구조" style="text;html=1;strokeColor=none;fillColor=none;fontSize=24;fontStyle=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
           <mxGeometry x="60" y="40" width="520" height="40" as="geometry" />
         </mxCell>
-        <mxCell id="note" value="현재 기준: RAW는 수정하지 않는다. 일반 RAW 로그 조회/파싱은 mbeat.er_data_raw에서 mbeat.er_dose_error_parsed로 이어진다. 대용량 일별 파티션을 고려해 조회 결과는 chunk 단위로 읽고, 각 chunk를 파싱 후 COPY append insert 한다. er_dose_error_root_cause는 parsed와 무관한 별도 FE 조회용 테이블이며, EUV root cause는 mbeat.er_data_raw_euv.contents의 dose error detected/root cause 포맷을 파싱한다." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+        <mxCell id="note" value="현재 기준: RAW는 수정하지 않는다. ER Dose 배치는 mbeat.er_data_raw에서 대상 code만 조회해 mbeat.er_dose_error_parsed로 적재한다. 조회는 SQLAlchemy execute + fetchmany 기반 chunk streaming 이고, 각 chunk를 파싱한 뒤 code_occur_time 날짜별 파티션으로 COPY append insert 한다. er_dose_error_root_cause는 parsed와 무관한 별도 FE 조회용 구조이며, 현재 ER Dose 배치 실행 경로에서는 함께 적재하지 않는다." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
           <mxGeometry x="60" y="95" width="840" height="60" as="geometry" />
         </mxCell>
         <mxCell id="raw" value="mbeat.er_data_raw" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
@@ -52,16 +52,16 @@
         <mxCell id="raw-row-12" value="compile_script : varchar" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="raw">
           <mxGeometry x="0" y="370" width="330" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="fetch" value="RAW 로그 조회&#10;&#10;- mbeat.er_data_raw 사용&#10;- code_occur_time 범위 조건&#10;- dw-% 또는 dose 관련 contents 후보 필터&#10;- code_occur_time 기준 정렬&#10;- chunk 단위 streaming fetch&#10;- limit 선택 적용" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+        <mxCell id="fetch" value="RAW 로그 조회&#10;&#10;- mbeat.er_data_raw 사용&#10;- code_occur_time 범위 조건&#10;- TARGET_CODES exact match 필터&#10;- code_occur_time, eq_name, er_date, er_index 정렬&#10;- SQLAlchemy execute + fetchmany&#10;- chunk 단위 streaming fetch" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="450" y="240" width="300" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="parser" value="DoseErrorParser&#10;&#10;- chunk 내부 row별 RawErLog 생성&#10;- code_occur_time은 DB timestamp 그대로 사용&#10;- belong/type은 원천 그대로 보존&#10;- exposure_handle, action_handle, wafer_id, wafer_seq, de_err, n_slit 추출" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+        <mxCell id="parser" value="ERDoseProcessor + DoseErrorParser&#10;&#10;- chunk 내부 row별 RawErLog 생성&#10;- code_occur_time은 Python datetime으로 정규화&#10;- belong/type/title/contents는 원천 그대로 보존&#10;- DW/LO/KE code 기준 파싱&#10;- exposure_handle, action_handle, wafer_id, wafer_seq, de_err, n_slit 추출&#10;- wafer state는 eq_name 기준 chunk 간 유지" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="810" y="240" width="300" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="status" value="파싱 결과 분기&#10;&#10;- 파싱 성공 row 적재&#10;- 파싱 실패 row도 contents와 함께 적재&#10;- summary count는 콘솔 출력" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+        <mxCell id="status" value="chunk 진행 로그&#10;&#10;- start_time / end_time / chunk_size 출력&#10;- chunk별 fetched / parsed / inserted 출력&#10;- partition_date별 row 수 출력&#10;- 최종 fetched / inserted summary 출력" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="1170" y="240" width="300" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="append" value="적재 정책&#10;&#10;- 일별 파티션 자동 생성&#10;- chunk마다 transaction 처리&#10;- COPY append insert&#10;- parsed append only&#10;- RAW update/delete 없음" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+        <mxCell id="append" value="적재 정책&#10;&#10;- parsed 테이블 컬럼만 선별&#10;- created_at 없으면 현재 시각 채움&#10;- code_occur_time 날짜별 groupby&#10;- 대상 파티션에 COPY append insert&#10;- parsed append only&#10;- RAW update/delete 없음" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="450" y="610" width="300" height="170" as="geometry" />
         </mxCell>
         <mxCell id="parsed" value="mbeat.er_dose_error_parsed" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
@@ -121,7 +121,7 @@
         <mxCell id="index" value="키 / 파티션 / 인덱스&#10;&#10;PK: code_occur_time&#10;파티션: code_occur_time 일별 범위&#10;인덱스: er_line + eq_name + code_occur_time&#10;추가 파싱 컬럼은 exposure_handle, action_handle, wafer_id, wafer_seq, de_err, n_slit만 저장" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
           <mxGeometry x="60" y="630" width="330" height="190" as="geometry" />
         </mxCell>
-        <mxCell id="source" value="Root cause contents 조회&#10;&#10;- mbeat.er_data_raw_euv 사용&#10;- contents에 dose error detected/root cause 포함&#10;- exposure id/time/source file 추출&#10;- 원문은 contents에 보존" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+        <mxCell id="source" value="Root cause contents 구조&#10;&#10;- mbeat.er_data_raw_euv 사용&#10;- contents에 dose error detected/root cause 포함&#10;- exposure id/time/source file 추출&#10;- 원문은 contents에 보존&#10;- 현재 ER Dose 배치 실행 경로와는 분리" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
           <mxGeometry x="60" y="860" width="330" height="150" as="geometry" />
         </mxCell>
         <mxCell id="source-raw" value="mbeat.er_data_raw_euv" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
@@ -151,7 +151,7 @@
         <mxCell id="source-raw-row-9" value="reason_code / task / compile_script" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="source-raw">
           <mxGeometry x="0" y="286" width="330" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="root-match" value="EuvRootCauseParser&#10;&#10;- parsed 테이블과 무관&#10;- root cause / exposure id / time 파싱&#10;- min/max dose error와 EUV 지표 구조화&#10;- dose_error는 절대값이 큰 대표값&#10;- root_cause도 code_occur_time range partition" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+        <mxCell id="root-match" value="EuvRootCauseParser&#10;&#10;- parsed 테이블과 무관&#10;- root cause / exposure id / time 파싱&#10;- min/max dose error와 EUV 지표 구조화&#10;- dose_error는 절대값이 큰 대표값&#10;- 별도 FE 조회용 모델" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
           <mxGeometry x="450" y="860" width="300" height="170" as="geometry" />
         </mxCell>
         <mxCell id="rootcause" value="mbeat.er_dose_error_root_cause" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">

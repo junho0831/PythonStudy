@@ -41,6 +41,7 @@ class FakeDB:
         self.executed = []
         self.inserted = []
         self.connection = object()
+        self.partition_inserts = []
 
     def fetch_df(self, query, params=None):
         self.fetch_query = query
@@ -69,6 +70,7 @@ class FakeDB:
     def copy_insert_to_partition_table(self, schema, table_name, target_date, df, is_truncate=False):
         full_table_name = f"{schema}.{table_name}"
         self.inserted.append((full_table_name, df))
+        self.partition_inserts.append((full_table_name, target_date, df.copy()))
         return len(df)
 
 
@@ -154,6 +156,58 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(len(db.inserted), 2)
         self.assertEqual(len(db.inserted[0][1]), 2)
         self.assertEqual(len(db.inserted[1][1]), 1)
+
+    def test_insert_parsed_df_keeps_integer_columns_as_nullable_int(self):
+        db = FakeDB(pd.DataFrame())
+        repo = ERDoseRepository(db)
+        df = pd.DataFrame(
+            [
+                {
+                    "er_date": 20260615,
+                    "er_index": 1,
+                    "er_line": "L1",
+                    "eq_name": "EQ1",
+                    "code": "DW-3411",
+                    "code_occur_time": datetime(2026, 6, 15, 10, 0, 0),
+                    "belong": "SCANNER",
+                    "type": "ER",
+                    "title": "Dose warning",
+                    "contents": SAMPLE_CONTENTS,
+                    "exposure_handle": 11388,
+                    "action_handle": None,
+                    "wafer_id": None,
+                    "de_err": "0.0461075",
+                    "n_slit": 44,
+                },
+                {
+                    "er_date": 20260615,
+                    "er_index": 2,
+                    "er_line": "L1",
+                    "eq_name": "EQ1",
+                    "code": "DW-3411",
+                    "code_occur_time": datetime(2026, 6, 15, 10, 1, 0),
+                    "belong": "SCANNER",
+                    "type": "ER",
+                    "title": "Dose warning",
+                    "contents": SAMPLE_CONTENTS,
+                    "exposure_handle": None,
+                    "action_handle": 2625,
+                    "wafer_id": 2111,
+                    "de_err": "0.0461075",
+                    "n_slit": None,
+                },
+            ]
+        )
+
+        repo.insert_parsed_df(df)
+
+        inserted_df = db.partition_inserts[0][2]
+        self.assertEqual(str(inserted_df["exposure_handle"].dtype), "Int64")
+        self.assertEqual(str(inserted_df["action_handle"].dtype), "Int64")
+        self.assertEqual(str(inserted_df["wafer_id"].dtype), "Int64")
+        self.assertEqual(str(inserted_df["n_slit"].dtype), "Int64")
+        self.assertEqual(inserted_df.loc[0, "exposure_handle"], 11388)
+        self.assertTrue(pd.isna(inserted_df.loc[1, "exposure_handle"]))
 
     def _row(self, row_no, code, contents, code_occur_time=None, belong="SCANNER", eq_name="EQ1"):
         return {

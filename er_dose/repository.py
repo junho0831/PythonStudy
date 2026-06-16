@@ -97,6 +97,18 @@ class ERDoseRepository:
         if "created_at" not in df_to_insert.columns:
             df_to_insert["created_at"] = datetime.now()
 
+        int_columns = [
+            "er_date",
+            "er_index",
+            "exposure_handle",
+            "action_handle",
+            "wafer_id",
+            "n_slit",
+        ]
+        for column in int_columns:
+            if column in df_to_insert.columns:
+                df_to_insert[column] = pd.to_numeric(df_to_insert[column], errors="coerce").astype("Int64")
+
         # 파티션 날짜별로 나눠 적재한다.
         df_to_insert["_target_date"] = (
             pd.to_datetime(df_to_insert["code_occur_time"]).dt.strftime("%Y-%m-%d")
