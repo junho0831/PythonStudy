@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Iterator
 
 import pandas as pd
 
@@ -31,11 +32,15 @@ class ERDoseRepository:
         start_time: datetime,
         end_time: datetime,
         chunk_size: int = 10000,
-    ):
+    ) -> Iterator[pd.DataFrame]:
         query, params = self._build_fetch_raw_logs_query(start_time=start_time, end_time=end_time)
         return self.db.fetch_df_in_chunks(query, params=params, chunk_size=chunk_size)
 
-    def _build_fetch_raw_logs_query(self, start_time: datetime, end_time: datetime):
+    def _build_fetch_raw_logs_query(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+    ) -> tuple[str, dict[str, datetime]]:
         params = {
             "start_time": start_time,
             "end_time": end_time,
@@ -63,12 +68,11 @@ class ERDoseRepository:
         """
         return query, params
 
-    def insert_parsed_df(self, df, connection=None):
+    def insert_parsed_df(self, df: pd.DataFrame, connection=None) -> int:
         if df is None or df.empty:
             return 0
 
-        # Define columns that exist in mbeat.er_dose_error_parsed
-        # Based on create_er_dose_error_parsed.sql
+        # mbeat.er_dose_error_parsed 에 존재하는 컬럼만 적재한다.
         table_columns = [
             "er_date",
             "er_index",
@@ -88,22 +92,24 @@ class ERDoseRepository:
             "created_at",
         ]
 
-        # Filter columns to match table exactly for COPY command
+        # COPY 대상 테이블 컬럼과 정확히 맞춘다.
         df_to_insert = df[[col for col in table_columns if col in df.columns]].copy()
         if "created_at" not in df_to_insert.columns:
             df_to_insert["created_at"] = datetime.now()
 
-        # Group by date to call copy_insert_to_partition_table for each partition
+        # 파티션 날짜별로 나눠 적재한다.
         df_to_insert["_target_date"] = (
             pd.to_datetime(df_to_insert["code_occur_time"]).dt.strftime("%Y-%m-%d")
         )
+
+        schema, table_name = PARSED_TABLE.split(".", maxsplit=1)
 
         inserted_count = 0
         for target_date, group_df in df_to_insert.groupby("_target_date"):
             group_df_clean = group_df.drop(columns=["_target_date"])
             self.db.copy_insert_to_partition_table(
-                schema="mbeat",
-                table_name="er_dose_error_parsed",
+                schema=schema,
+                table_name=table_name,
                 target_date=target_date,
                 df=group_df_clean,
             )

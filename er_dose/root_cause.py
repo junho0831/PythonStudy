@@ -108,8 +108,12 @@ def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
         software_version=_extract_text(normalized, r"\bsoftware\s+version\s*:\s*(.+)"),
     )
 
+
+
 def _normalize(contents: str) -> str:
     return contents.replace("\\n", "\n").strip()
+
+
 
 def _extract_text(contents: str, pattern: str) -> str | None:
     match = re.search(pattern, contents, flags=re.IGNORECASE | re.MULTILINE)
@@ -118,11 +122,15 @@ def _extract_text(contents: str, pattern: str) -> str | None:
     value = match.group(1).strip()
     return value.removesuffix(".").strip() or None
 
+
+
 def _extract_int(contents: str, pattern: str) -> int | None:
     match = re.search(pattern, contents, flags=re.IGNORECASE | re.MULTILINE)
     if match is None:
         return None
     return int(match.group(1))
+
+
 
 def _extract_decimal(contents: str, pattern: str) -> Decimal | None:
     match = re.search(pattern, contents, flags=re.IGNORECASE | re.MULTILINE)
@@ -130,14 +138,22 @@ def _extract_decimal(contents: str, pattern: str) -> Decimal | None:
         return None
     return Decimal(match.group(1))
 
+
+
 def _extract_decimal_field(contents: str, label: str) -> Decimal | None:
     return _extract_decimal(contents, _field_pattern(label, _DECIMAL_RE))
+
+
 
 def _extract_int_field(contents: str, label: str) -> int | None:
     return _extract_int(contents, _field_pattern(label, r"([+-]?\d+)"))
 
+
+
 def _field_pattern(label: str, value_pattern: str) -> str:
     return r"^" + re.escape(label) + r"\s*:\s*" + value_pattern
+
+
 
 def _extract_time(contents: str) -> datetime | None:
     value = _extract_text(contents, r"\btime\s*:\s*([^\s]+)")
@@ -145,11 +161,15 @@ def _extract_time(contents: str) -> datetime | None:
         return None
     return datetime.fromisoformat(value)
 
+
+
 def _to_code(value: str | None) -> str | None:
     if value is None:
         return None
     code = re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
     return code or None
+
+
 
 def _dominant_dose_error(min_value: Decimal | None, max_value: Decimal | None) -> Decimal | None:
     values = [value for value in (min_value, max_value) if value is not None]

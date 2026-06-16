@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 import pandas as pd
 
@@ -50,7 +51,7 @@ class ERDoseProcessor:
             f"inserted={insert_count}"
         )
 
-    def _row_to_raw_log(self, row) -> RawErLog:
+    def _row_to_raw_log(self, row: Any) -> RawErLog:
         code_occur_time = self._normalize_datetime(row.get("code_occur_time"))
         contents = row.get("contents")
 
@@ -67,12 +68,12 @@ class ERDoseProcessor:
             contents=str(contents) if pd.notna(contents) else "",
         )
 
-    def _nullable_str(self, value):
+    def _nullable_str(self, value: Any) -> str | None:
         if value is None or pd.isna(value):
             return None
         return str(value)
 
-    def _nullable_int(self, value):
+    def _nullable_int(self, value: Any) -> int | None:
         if value is None or pd.isna(value):
             return None
         return int(value)
@@ -87,7 +88,7 @@ class ERDoseProcessor:
             eq_name = parsed_dict.get("eq_name")
             if eq_name is not None:
                 state = self.wafer_states.setdefault(eq_name, {"wafer_id": None, "wafer_seq": None})
-                
+
                 if parsed_dict.get("wafer_id") is not None:
                     state["wafer_id"] = parsed_dict["wafer_id"]
                 else:
@@ -102,7 +103,7 @@ class ERDoseProcessor:
 
         return parsed_rows
 
-    def _normalize_datetime(self, value):
+    def _normalize_datetime(self, value: Any) -> datetime | None:
         if hasattr(value, "to_pydatetime"):
             return value.to_pydatetime()
         return value
