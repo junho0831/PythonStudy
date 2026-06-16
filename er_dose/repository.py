@@ -61,8 +61,8 @@ class ERDoseRepository:
                 r.title,
                 r.contents
             from {MAIN_RAW_TABLE} r
-            where r.code_occur_time >= %(start_time)s
-              and r.code_occur_time < %(end_time)s
+            where r.code_occur_time >= :start_time
+              and r.code_occur_time < :end_time
               and r.code in ({target_codes_sql})
             order by r.code_occur_time, r.eq_name, r.er_date, r.er_index
         """
