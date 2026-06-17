@@ -179,6 +179,26 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(parsed_insert.loc[0, "wafer_id"], 2111)
         self.assertEqual(parsed_insert.loc[0, "wafer_seq"], 23)
 
+    def test_run_skips_dw_row_when_exposure_handle_jump_exceeds_threshold(self):
+        jump_contents = SAMPLE_CONTENTS.replace("exposure_handle:2631", "exposure_handle:5000")
+        raw_df = pd.DataFrame(
+            [
+                self._row(1, "DW-3411", SAMPLE_CONTENTS, eq_name="EQ1"),
+                self._row(2, "DW-3411", jump_contents, eq_name="EQ1"),
+            ]
+        )
+        db = FakeDB(raw_df)
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+
+        with redirect_stdout(StringIO()) as stdout:
+            processor.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
+
+        parsed_insert = self._inserted_df(db, "prism_common.er_dose_error_parsed")
+        self.assertEqual(len(parsed_insert), 1)
+        self.assertEqual(parsed_insert.loc[0, "exposure_handle"], 2631)
+        self.assertIn("skip_test_shot", stdout.getvalue())
+
     def test_run_processes_multiple_chunks(self):
         raw_df = pd.DataFrame(
             [

@@ -13,6 +13,7 @@ from er_dose.repository import ERDoseRepository
 
 
 DoseErrorValue = Decimal | int | bool | str | datetime | None
+EXPOSURE_HANDLE_JUMP_THRESHOLD = 1000
 
 
 class ERDoseProcessor:
@@ -20,6 +21,7 @@ class ERDoseProcessor:
         self.repository = repository
         # 설비별 가장 최근의 wafer_id, wafer_seq를 기억 (청크가 나뉘어도 유지)
         self.wafer_states: dict[str, dict[str, int | None]] = {}
+        self.exposure_handles: dict[str, int] = {}
 
     def run(
         self,
@@ -31,6 +33,7 @@ class ERDoseProcessor:
             raise ValueError("chunk_size must be greater than 0")
 
         self.wafer_states = self.repository.fetch_latest_wafer_states(start_time)
+        self.exposure_handles = {}
 
         fetched_count = 0
         insert_count = 0
@@ -122,6 +125,23 @@ class ERDoseProcessor:
             parsed_dict = asdict(parse_dose_error(raw))
 
             eq_name = parsed_dict.get("eq_name")
+            code = parsed_dict.get("code")
+            exposure_handle = parsed_dict.get("exposure_handle")
+            if eq_name is not None and code is not None and code.upper().startswith("DW-") and exposure_handle is not None:
+                previous_exposure_handle = self.exposure_handles.get(eq_name)
+                if previous_exposure_handle is not None:
+                    exposure_handle_diff = exposure_handle - previous_exposure_handle
+                    if exposure_handle_diff > EXPOSURE_HANDLE_JUMP_THRESHOLD:
+                        print(
+                            "[ER_DOSE] "
+                            f"skip_test_shot eq_name={eq_name} "
+                            f"prev_exposure_handle={previous_exposure_handle} "
+                            f"exposure_handle={exposure_handle} "
+                            f"diff={exposure_handle_diff}"
+                        )
+                        continue
+                self.exposure_handles[eq_name] = exposure_handle
+
             if eq_name is not None:
                 state = self.wafer_states.setdefault(eq_name, {"wafer_id": None, "wafer_seq": None})
 
