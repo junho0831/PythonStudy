@@ -1,4 +1,4 @@
-alter table mbeat.er_dose_error_root_cause
+alter table prism_common.er_dose_error_root_cause
     drop column if exists source_log_source,
     drop column if exists source_belong,
     drop column if exists source_type,

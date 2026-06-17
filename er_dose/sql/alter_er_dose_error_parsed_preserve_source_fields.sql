@@ -1,4 +1,4 @@
-alter table mbeat.er_dose_error_parsed
+alter table prism_common.er_dose_error_parsed
     drop column if exists log_source,
     drop column if exists raw_contents,
     drop column if exists repair_yn,

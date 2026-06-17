@@ -9,7 +9,7 @@ from er_dose.infra.postgres_db import PostgresDB
 
 
 MAIN_RAW_TABLE = "mbeat.er_data_raw"
-PARSED_TABLE = "mbeat.er_dose_error_parsed"
+PARSED_TABLE = "prism_common.er_dose_error_parsed"
 TARGET_CODES = (
     "DW-3411",
     "DW-3425",
@@ -72,7 +72,7 @@ class ERDoseRepository:
         if df is None or df.empty:
             return 0
 
-        # mbeat.er_dose_error_parsed 에 존재하는 컬럼만 적재한다.
+        # prism_common.er_dose_error_parsed 에 존재하는 컬럼만 적재한다.
         table_columns = [
             "er_date",
             "er_index",

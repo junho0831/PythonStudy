@@ -65,7 +65,7 @@ def test_parsed_table_has_line_eq_time_index():
 def test_parsed_existing_table_migration_preserves_raw_source_fields():
     ddl = _parsed_alter()
 
-    assert "alter table mbeat.er_dose_error_parsed" in ddl
+    assert "alter table prism_common.er_dose_error_parsed" in ddl
     assert "drop column if exists log_source" in ddl
     assert "drop column if exists raw_contents" in ddl
     assert "drop column if exists repair_yn" in ddl
@@ -105,7 +105,7 @@ def test_parsed_existing_table_migration_preserves_raw_source_fields():
 def test_parsed_table_documents_retained_parsed_columns():
     ddl = _ddl()
 
-    assert "comment on column mbeat.er_dose_error_parsed.wafer_id" in ddl
+    assert "comment on column prism_common.er_dose_error_parsed.wafer_id" in ddl
     assert "matches lot_report.slot_seq" in ddl
     assert "parsed from de_err" in ddl
 
@@ -124,7 +124,7 @@ def test_raw_euv_table_matches_source_schema():
 def test_root_cause_table_is_fe_facing_matching_table():
     ddl = _root_cause_ddl()
 
-    assert "create table if not exists mbeat.er_dose_error_root_cause" in ddl
+    assert "create table if not exists prism_common.er_dose_error_root_cause" in ddl
     assert "partition by range (code_occur_time)" in ddl
     assert "scanner_exposure_handle bigint" not in ddl
     assert "er_type                 varchar(10)" in ddl
@@ -159,7 +159,7 @@ def test_root_cause_table_is_fe_facing_matching_table():
 def test_root_cause_existing_table_migration_adds_euv_metric_columns():
     ddl = _root_cause_alter()
 
-    assert "alter table mbeat.er_dose_error_root_cause" in ddl
+    assert "alter table prism_common.er_dose_error_root_cause" in ddl
     assert "drop column if exists source_log_source" in ddl
     assert "drop column if exists source_belong" in ddl
     assert "drop column if exists source_type" in ddl

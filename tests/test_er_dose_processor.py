@@ -120,7 +120,7 @@ class ERDoseProcessorTest(unittest.TestCase):
 
         delete_queries = [query for query, _, _ in db.executed if query.strip().lower().startswith("delete")]
         self.assertEqual(delete_queries, [])
-        parsed_insert = self._inserted_df(db, "mbeat.er_dose_error_parsed")
+        parsed_insert = self._inserted_df(db, "prism_common.er_dose_error_parsed")
         self.assertNotIn("parser_version", parsed_insert.columns)
         self.assertNotIn("parsing_status", parsed_insert.columns)
         self.assertNotIn("parsing_error", parsed_insert.columns)
@@ -132,7 +132,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(parsed_insert.loc[0, "title"], "Dose warning")
         self.assertEqual(parsed_insert.loc[0, "contents"], SAMPLE_CONTENTS)
         inserted_tables = [table_name for table_name, _ in db.inserted]
-        self.assertEqual(inserted_tables, ["mbeat.er_dose_error_parsed"])
+        self.assertEqual(inserted_tables, ["prism_common.er_dose_error_parsed"])
 
     def test_run_processes_multiple_chunks(self):
         raw_df = pd.DataFrame(
