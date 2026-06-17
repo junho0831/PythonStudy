@@ -43,8 +43,6 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 `er_dose_error_parsed`에는 배치 상태 관리용 컬럼을 두지 않습니다. 파싱 실패 여부는 실행 summary로만 집계하고, 테이블에는 상태값 없이 원천 로그와 추출 가능한 값만 적재합니다.
 
-기존 운영 테이블이 repo 기준과 다르게 만들어진 경우를 대비해 정리 스크립트는 `er_date`, `er_index`뿐 아니라 `er_line`, `eq_name`, `code`, `code_occur_time` 같은 원천 컬럼 구조도 맞춰줍니다.
-
 `mbeat.er_data_raw_euv` 기반 root cause 결과는 `prism_common.er_dose_error_root_cause`에 저장하는 별도 구조입니다. 이 테이블도 원천 컬럼과 root cause `contents`에서 실제 파싱되는 값만 보관합니다.
 
 상세 스키마와 파싱 규칙은 [ER_DOSE_ERROR.md](ER_DOSE_ERROR.md)를 기준으로 관리합니다.

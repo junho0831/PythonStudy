@@ -30,24 +30,8 @@ mbeat.er_data_raw_euv
 DDL:
 
 - [Parsed 테이블 생성](er_dose/sql/create_er_dose_error_parsed.sql)
-- [Parsed 테이블 정리 및 보강](er_dose/sql/alter_er_dose_error_parsed_preserve_source_fields.sql)
 - [Root cause 테이블 생성](er_dose/sql/create_er_dose_error_root_cause.sql)
-- [Root cause 컬럼 보강](er_dose/sql/alter_er_dose_error_root_cause_add_euv_metrics.sql)
 - [RAW EUV 테이블 생성](er_dose/sql/create_er_data_raw_euv.sql)
-
-기존 운영 `prism_common.er_dose_error_parsed`가 repo 기준과 다르게 만들어진 경우를 대비해
-`Parsed 테이블 정리 및 보강` 스크립트는 아래 원천 기본 컬럼을 맞춰준다.
-
-- `er_date`
-- `er_index`
-- `er_line`
-- `eq_name`
-- `code`
-- `code_occur_time`
-- `belong`
-- `type`
-- `title`
-- `contents`
 
 ## ERD
 

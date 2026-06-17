@@ -87,6 +87,7 @@ class ERDoseRepository:
             "exposure_handle",
             "action_handle",
             "wafer_id",
+            "wafer_seq",
             "de_err",
             "n_slit",
             "created_at",
@@ -103,6 +104,7 @@ class ERDoseRepository:
             "exposure_handle",
             "action_handle",
             "wafer_id",
+            "wafer_seq",
             "n_slit",
         ]
         for column in int_columns:

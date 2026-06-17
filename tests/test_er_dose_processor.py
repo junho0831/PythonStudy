@@ -131,6 +131,8 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(parsed_insert.loc[0, "type"], "ER")
         self.assertEqual(parsed_insert.loc[0, "title"], "Dose warning")
         self.assertEqual(parsed_insert.loc[0, "contents"], SAMPLE_CONTENTS)
+        self.assertIn("wafer_seq", parsed_insert.columns)
+        self.assertTrue(pd.isna(parsed_insert.loc[0, "wafer_seq"]))
         inserted_tables = [table_name for table_name, _ in db.inserted]
         self.assertEqual(inserted_tables, ["prism_common.er_dose_error_parsed"])
 
@@ -176,6 +178,7 @@ class ERDoseProcessorTest(unittest.TestCase):
                     "exposure_handle": 11388,
                     "action_handle": None,
                     "wafer_id": None,
+                    "wafer_seq": 44,
                     "de_err": "0.0461075",
                     "n_slit": 44,
                 },
@@ -193,6 +196,7 @@ class ERDoseProcessorTest(unittest.TestCase):
                     "exposure_handle": None,
                     "action_handle": 2625,
                     "wafer_id": 2111,
+                    "wafer_seq": None,
                     "de_err": "0.0461075",
                     "n_slit": None,
                 },
@@ -205,6 +209,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(str(inserted_df["exposure_handle"].dtype), "Int64")
         self.assertEqual(str(inserted_df["action_handle"].dtype), "Int64")
         self.assertEqual(str(inserted_df["wafer_id"].dtype), "Int64")
+        self.assertEqual(str(inserted_df["wafer_seq"].dtype), "Int64")
         self.assertEqual(str(inserted_df["n_slit"].dtype), "Int64")
         self.assertEqual(inserted_df.loc[0, "exposure_handle"], 11388)
         self.assertTrue(pd.isna(inserted_df.loc[1, "exposure_handle"]))

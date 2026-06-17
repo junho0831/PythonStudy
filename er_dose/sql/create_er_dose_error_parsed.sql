@@ -14,6 +14,7 @@ create table if not exists prism_common.er_dose_error_parsed (
     exposure_handle     bigint,
     action_handle       bigint,
     wafer_id            integer,
+    wafer_seq           integer,
     de_err              numeric(12,7),
     n_slit              integer,
     created_at          timestamp default now(),
