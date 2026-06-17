@@ -36,6 +36,33 @@ class ERDoseRepository:
         query, params = self._build_fetch_raw_logs_query(start_time=start_time, end_time=end_time)
         return self.db.fetch_df_in_chunks(query, params=params, chunk_size=chunk_size)
 
+    def fetch_latest_wafer_states(self, start_time: datetime) -> dict[str, dict[str, int | None]]:
+        query = f"""
+            select distinct on (p.eq_name)
+                p.eq_name,
+                p.wafer_id,
+                p.wafer_seq
+            from {PARSED_TABLE} p
+            where p.code_occur_time < :start_time
+              and p.eq_name is not null
+              and (p.wafer_id is not null or p.wafer_seq is not null)
+            order by p.eq_name, p.code_occur_time desc
+        """
+        df = self.db.fetch_df(query, params={"start_time": start_time})
+        if df is None or df.empty:
+            return {}
+
+        wafer_states: dict[str, dict[str, int | None]] = {}
+        for _, row in df.iterrows():
+            eq_name = row["eq_name"]
+            if pd.isna(eq_name):
+                continue
+            wafer_states[str(eq_name)] = {
+                "wafer_id": None if pd.isna(row.get("wafer_id")) else int(row["wafer_id"]),
+                "wafer_seq": None if pd.isna(row.get("wafer_seq")) else int(row["wafer_seq"]),
+            }
+        return wafer_states
+
     def _build_fetch_raw_logs_query(
         self,
         start_time: datetime,

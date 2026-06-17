@@ -36,8 +36,9 @@ class FakeTransaction:
 
 
 class FakeDB:
-    def __init__(self, raw_df):
+    def __init__(self, raw_df, fetch_df_result=None):
         self.raw_df = raw_df
+        self.fetch_df_result = raw_df if fetch_df_result is None else fetch_df_result
         self.executed = []
         self.inserted = []
         self.connection = object()
@@ -46,7 +47,7 @@ class FakeDB:
     def fetch_df(self, query, params=None):
         self.fetch_query = query
         self.fetch_params = params
-        return self.raw_df
+        return self.fetch_df_result
 
     def fetch_df_in_chunks(self, query, params=None, chunk_size=10000):
         self.fetch_query = query
@@ -103,6 +104,30 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(db.fetch_params["start_time"], start_time)
         self.assertEqual(db.fetch_params["end_time"], end_time)
 
+    def test_fetch_latest_wafer_states_returns_latest_state_per_eq_name(self):
+        history_df = pd.DataFrame(
+            [
+                {"eq_name": "EQ1", "wafer_id": 1001, "wafer_seq": 21},
+                {"eq_name": "EQ2", "wafer_id": None, "wafer_seq": 7},
+            ]
+        )
+        db = FakeDB(pd.DataFrame(), fetch_df_result=history_df)
+        repo = ERDoseRepository(db)
+        start_time = datetime(2026, 5, 2)
+
+        wafer_states = repo.fetch_latest_wafer_states(start_time)
+
+        self.assertIn("from prism_common.er_dose_error_parsed p", db.fetch_query)
+        self.assertIn("p.code_occur_time < :start_time", db.fetch_query)
+        self.assertEqual(db.fetch_params["start_time"], start_time)
+        self.assertEqual(
+            wafer_states,
+            {
+                "EQ1": {"wafer_id": 1001, "wafer_seq": 21},
+                "EQ2": {"wafer_id": None, "wafer_seq": 7},
+            },
+        )
+
     def test_run_inserts_rows_without_deleting_existing_history(self):
         raw_df = pd.DataFrame(
             [
@@ -135,6 +160,24 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertTrue(pd.isna(parsed_insert.loc[0, "wafer_seq"]))
         inserted_tables = [table_name for table_name, _ in db.inserted]
         self.assertEqual(inserted_tables, ["prism_common.er_dose_error_parsed"])
+
+    def test_run_uses_preloaded_wafer_state_when_chunk_starts_without_wafer_info(self):
+        raw_df = pd.DataFrame([
+            self._row(1, "lo-0061", "system info: lo-0061 normal message", eq_name="EQ1")
+        ])
+        history_df = pd.DataFrame([
+            {"eq_name": "EQ1", "wafer_id": 2111, "wafer_seq": 23}
+        ])
+        db = FakeDB(raw_df, fetch_df_result=history_df)
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+
+        with redirect_stdout(StringIO()):
+            processor.run(start_time=datetime(2026, 5, 2), end_time=datetime(2026, 5, 3))
+
+        parsed_insert = self._inserted_df(db, "prism_common.er_dose_error_parsed")
+        self.assertEqual(parsed_insert.loc[0, "wafer_id"], 2111)
+        self.assertEqual(parsed_insert.loc[0, "wafer_seq"], 23)
 
     def test_run_processes_multiple_chunks(self):
         raw_df = pd.DataFrame(

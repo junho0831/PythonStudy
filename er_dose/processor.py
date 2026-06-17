@@ -30,6 +30,8 @@ class ERDoseProcessor:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be greater than 0")
 
+        self.wafer_states = self.repository.fetch_latest_wafer_states(start_time)
+
         fetched_count = 0
         insert_count = 0
 
@@ -37,7 +39,8 @@ class ERDoseProcessor:
             "[ER_DOSE] "
             f"start_time={start_time.isoformat()} "
             f"end_time={end_time.isoformat()} "
-            f"chunk_size={chunk_size}"
+            f"chunk_size={chunk_size} "
+            f"preloaded_eq={len(self.wafer_states)}"
         )
 
         for chunk_index, raw_df in enumerate(
