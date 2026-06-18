@@ -84,7 +84,7 @@ class ERDoseProcessorTest(unittest.TestCase):
 
         list(repo.fetch_raw_logs_in_chunks(start_time=start_time, end_time=end_time, chunk_size=100))
 
-        self.assertIn("from mbeat.er_data_raw r", db.fetch_query)
+        self.assertIn("from mbeat.er_data_raw_1_prt_p20260501 r", db.fetch_query)
         self.assertIn("r.er_date", db.fetch_query)
         self.assertIn("r.er_index", db.fetch_query)
         self.assertIn('r."type" as type', db.fetch_query)
@@ -118,8 +118,10 @@ class ERDoseProcessorTest(unittest.TestCase):
         wafer_states = repo.fetch_latest_wafer_states(start_time)
 
         self.assertIn("from prism_common.er_dose_error_parsed p", db.fetch_query)
+        self.assertIn("p.code_occur_time >= :previous_day_start", db.fetch_query)
         self.assertIn("p.code_occur_time < :start_time", db.fetch_query)
         self.assertEqual(db.fetch_params["start_time"], start_time)
+        self.assertEqual(db.fetch_params["previous_day_start"], datetime(2026, 5, 1, 0, 0, 0))
         self.assertEqual(
             wafer_states,
             {

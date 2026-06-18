@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Iterator
 
 import pandas as pd
@@ -37,18 +37,20 @@ class ERDoseRepository:
         return self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)
 
     def fetch_latest_wafer_states(self, start_time: datetime) -> dict[str, dict[str, int | None]]:
+        previous_day_start = datetime.combine((start_time - timedelta(days=1)).date(), datetime.min.time())
         query = f"""
             select distinct on (p.eq_name)
                 p.eq_name,
                 p.wafer_id,
                 p.wafer_seq
             from {PARSED_TABLE} p
-            where p.code_occur_time < :start_time
+            where p.code_occur_time >= :previous_day_start
+              and p.code_occur_time < :start_time
               and p.eq_name is not null
               and (p.wafer_id is not null or p.wafer_seq is not null)
             order by p.eq_name, p.code_occur_time desc
         """
-        df = self.db.select(query, params={"start_time": start_time})
+        df = self.db.select(query, params={"previous_day_start": previous_day_start, "start_time": start_time})
         if df is None or df.empty:
             return {}
 
@@ -75,6 +77,8 @@ class ERDoseRepository:
 
         target_codes_sql = ", ".join(f"'{code}'" for code in TARGET_CODES)
 
+        raw_table = self._partition_table_name(MAIN_RAW_TABLE, start_time.date())
+
         query = f"""
             select
                 r.er_date,
@@ -87,13 +91,16 @@ class ERDoseRepository:
                 r."type" as type,
                 r.title,
                 r.contents
-            from {MAIN_RAW_TABLE} r
+            from {raw_table} r
             where r.code_occur_time >= :start_time
               and r.code_occur_time < :end_time
               and r.code in ({target_codes_sql})
             order by r.code_occur_time, r.eq_name, r.er_date, r.er_index
         """
         return query, params
+
+    def _partition_table_name(self, table_name: str, target_date: date) -> str:
+        return f'{table_name}_1_prt_p{target_date.strftime("%Y%m%d")}'
 
     def insert_parsed_df(self, df: pd.DataFrame, connection=None) -> int:
         if df is None or df.empty:
