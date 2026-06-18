@@ -48,7 +48,7 @@ class ERDoseRepository:
               and (p.wafer_id is not null or p.wafer_seq is not null)
             order by p.eq_name, p.code_occur_time desc
         """
-        df = self.db.fetch_df(query, params={"start_time": start_time})
+        df = self.db.select(query, params={"start_time": start_time})
         if df is None or df.empty:
             return {}
 

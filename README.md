@@ -134,7 +134,7 @@ IMAGE_TEXT_MATCHING.md
 
 위치: [/Users/parkjunho/PycharmProjects/PythonStudy/ftp_batch/infra/db_manager.py](/Users/parkjunho/PycharmProjects/PythonStudy/ftp_batch/infra/db_manager.py)
 
-- `fetch_df(query, params=None, connection=None)`
+- `select(query, params=None, connection=None)`
 - `bulk_insert_df(table_name, df, connection=None)`
 - `execute(query, params=None, connection=None)`
 - `transaction()`

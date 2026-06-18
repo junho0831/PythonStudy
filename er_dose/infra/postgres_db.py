@@ -91,7 +91,7 @@ class PostgresDB:
         finally:
             conn.close()
 
-    def fetch_df(self, query: str, params=None, connection=None):
+    def select(self, query: str, params=None, connection=None):
         if connection is not None:
             return pd.read_sql_query(query, connection, params=params)
 

@@ -44,7 +44,7 @@ class FakeDB:
         self.connection = object()
         self.partition_inserts = []
 
-    def fetch_df(self, query, params=None):
+    def select(self, query, params=None):
         self.fetch_query = query
         self.fetch_params = params
         return self.fetch_df_result
