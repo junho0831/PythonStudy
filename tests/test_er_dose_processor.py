@@ -49,7 +49,7 @@ class FakeDB:
         self.fetch_params = params
         return self.fetch_df_result
 
-    def fetch_df_in_chunks(self, query, params=None, chunk_size=10000):
+    def select_in_chunks(self, query, params=None, chunk_size=10000):
         self.fetch_query = query
         self.fetch_params = params
         for start in range(0, len(self.raw_df), chunk_size):

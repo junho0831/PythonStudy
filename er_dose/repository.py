@@ -34,7 +34,7 @@ class ERDoseRepository:
         chunk_size: int = 10000,
     ) -> Iterator[pd.DataFrame]:
         query, params = self._build_fetch_raw_logs_query(start_time=start_time, end_time=end_time)
-        return self.db.fetch_df_in_chunks(query, params=params, chunk_size=chunk_size)
+        return self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)
 
     def fetch_latest_wafer_states(self, start_time: datetime) -> dict[str, dict[str, int | None]]:
         query = f"""

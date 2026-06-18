@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import datetime
 from decimal import Decimal
+from time import perf_counter
 from typing import Any
 
 import pandas as pd
@@ -46,6 +47,7 @@ class ERDoseProcessor:
             f"preloaded_eq={len(self.wafer_states)}"
         )
 
+        chunk_started_at = perf_counter()
         for chunk_index, raw_df in enumerate(
             self.repository.fetch_raw_logs_in_chunks(
                 start_time=start_time,
@@ -56,33 +58,61 @@ class ERDoseProcessor:
         ):
             chunk_fetched = int(len(raw_df))
             fetched_count += chunk_fetched
+            fetched_at = perf_counter()
+            fetch_sec = fetched_at - chunk_started_at
             print(
                 "[ER_DOSE] "
                 f"chunk={chunk_index} "
                 f"fetched={chunk_fetched} "
-                f"fetched_total={fetched_count}"
+                f"fetched_total={fetched_count} "
+                f"fetch_sec={fetch_sec:.3f}"
             )
 
+            parse_started_at = perf_counter()
             parsed_rows = self._parse_chunk(raw_df)
+            parsed_at = perf_counter()
+            parse_sec = parsed_at - parse_started_at
             parsed_count = len(parsed_rows)
             print(
                 "[ER_DOSE] "
                 f"chunk={chunk_index} "
-                f"parsed={parsed_count}"
+                f"parsed={parsed_count} "
+                f"parse_sec={parse_sec:.3f}"
             )
 
             if not parsed_rows:
+                chunk_total_sec = parsed_at - chunk_started_at
+                rows_per_sec = 0.0 if chunk_total_sec <= 0 else chunk_fetched / chunk_total_sec
+                print(
+                    "[ER_DOSE] "
+                    f"chunk={chunk_index} "
+                    f"inserted=0 "
+                    f"inserted_total={insert_count} "
+                    f"insert_sec=0.000 "
+                    f"total_sec={chunk_total_sec:.3f} "
+                    f"rows_per_sec={rows_per_sec:.1f}"
+                )
+                chunk_started_at = perf_counter()
                 continue
 
+            insert_started_at = perf_counter()
             parsed_df = pd.DataFrame(parsed_rows)
             chunk_inserted = self.repository.insert_parsed_df(parsed_df)
+            inserted_at = perf_counter()
+            insert_sec = inserted_at - insert_started_at
             insert_count += chunk_inserted
+            chunk_total_sec = inserted_at - chunk_started_at
+            rows_per_sec = 0.0 if chunk_total_sec <= 0 else chunk_fetched / chunk_total_sec
             print(
                 "[ER_DOSE] "
                 f"chunk={chunk_index} "
                 f"inserted={chunk_inserted} "
-                f"inserted_total={insert_count}"
+                f"inserted_total={insert_count} "
+                f"insert_sec={insert_sec:.3f} "
+                f"total_sec={chunk_total_sec:.3f} "
+                f"rows_per_sec={rows_per_sec:.1f}"
             )
+            chunk_started_at = perf_counter()
 
         print(
             "[ER_DOSE] "

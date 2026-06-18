@@ -95,12 +95,12 @@ class PostgresDB:
         if connection is not None:
             return pd.read_sql_query(query, connection, params=params)
 
-        chunks = list(self.fetch_df_in_chunks(query, params=params, chunk_size=100000))
+        chunks = list(self.select_in_chunks(query, params=params, chunk_size=100000))
         if not chunks:
             return pd.DataFrame()
         return pd.concat(chunks, ignore_index=True)
 
-    def fetch_df_in_chunks(self, query: str, params=None, chunk_size: int = 10000, connection=None):
+    def select_in_chunks(self, query: str, params=None, chunk_size: int = 10000, connection=None):
         if chunk_size <= 0:
             raise ValueError("chunk_size must be greater than 0")
 
