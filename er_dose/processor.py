@@ -161,7 +161,7 @@ class ERDoseProcessor:
                 previous_exposure_handle = self.exposure_handles.get(eq_name)
                 if previous_exposure_handle is not None:
                     exposure_handle_diff = exposure_handle - previous_exposure_handle
-                    if exposure_handle_diff > EXPOSURE_HANDLE_JUMP_THRESHOLD:
+                    if exposure_handle_diff >= EXPOSURE_HANDLE_JUMP_THRESHOLD:
                         print(
                             "[ER_DOSE] "
                             f"skip_test_shot eq_name={eq_name} "
@@ -169,6 +169,7 @@ class ERDoseProcessor:
                             f"exposure_handle={exposure_handle} "
                             f"diff={exposure_handle_diff}"
                         )
+                        self.exposure_handles[eq_name] = exposure_handle
                         continue
                 self.exposure_handles[eq_name] = exposure_handle
 
