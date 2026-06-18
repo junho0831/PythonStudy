@@ -23,6 +23,7 @@ class ERDoseProcessor:
         # 설비별 가장 최근의 wafer_id, wafer_seq를 기억 (청크가 나뉘어도 유지)
         self.wafer_states: dict[str, dict[str, int | None]] = {}
         self.exposure_handles: dict[str, int] = {}
+        self.test_shot_skip_counts: dict[str, int] = {}
 
     def run(
         self,
@@ -35,6 +36,7 @@ class ERDoseProcessor:
 
         self.wafer_states = self.repository.fetch_latest_wafer_states(start_time)
         self.exposure_handles = {}
+        self.test_shot_skip_counts = {}
 
         fetched_count = 0
         insert_count = 0
@@ -162,14 +164,25 @@ class ERDoseProcessor:
                 if previous_exposure_handle is not None:
                     exposure_handle_diff = exposure_handle - previous_exposure_handle
                     if exposure_handle_diff > EXPOSURE_HANDLE_JUMP_THRESHOLD:
+                        skip_count = self.test_shot_skip_counts.get(eq_name, 0) + 1
+                        self.test_shot_skip_counts[eq_name] = skip_count
                         print(
                             "[ER_DOSE] "
                             f"skip_test_shot eq_name={eq_name} "
                             f"prev_exposure_handle={previous_exposure_handle} "
                             f"exposure_handle={exposure_handle} "
-                            f"diff={exposure_handle_diff}"
+                            f"diff={exposure_handle_diff} "
+                            f"skip_count={skip_count}"
                         )
                         continue
+                previous_skip_count = self.test_shot_skip_counts.pop(eq_name, 0)
+                if previous_skip_count > 0:
+                    print(
+                        "[ER_DOSE] "
+                        f"resume_after_test_shot eq_name={eq_name} "
+                        f"exposure_handle={exposure_handle} "
+                        f"skipped_rows={previous_skip_count}"
+                    )
                 self.exposure_handles[eq_name] = exposure_handle
 
             if eq_name is not None:
