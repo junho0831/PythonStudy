@@ -24,7 +24,7 @@ mbeat.er_data_raw_euv
 
 - `mbeat.er_data_raw`: Dose Error 파싱 대상 RAW. `er_date`, `er_index`가 있다.
 - `prism_common.er_dose_raw_parsed`: `er_data_raw` 파싱 결과. 현재 배치가 적재하는 대상이다.
-- `mbeat.er_data_raw_euv`: Root cause source description 후보 RAW. `contents`에 `dose error detected in file`, `root cause`, `exposure id`, 각종 EUV 지표가 들어온다. `er_date`, `er_index`가 없다.
+- `mbeat.er_data_raw_euv`: Root cause source description 후보 RAW. `contents`에 `dose error detected in file`, root cause 라벨, exposure ID 라벨, 각종 EUV 지표가 들어온다. `er_date`, `er_index`가 없다.
 - `prism_common.er_dose_euv_parsed`: FE 조회용 root cause 결과 테이블. `er_data_raw_euv.contents`를 파싱한 구조화 컬럼과 원문을 저장하며, `er_dose_raw_parsed`와 무관하다.
 
 DDL:
@@ -174,10 +174,41 @@ max. dose error : 0.74 [perc]
 software version : 2.0 [nxe3400 mv 250w]
 ```
 
-파서는 `source_file_name`, `source_exposure_id`, `source_code_occur_time`, `root_cause_message`, `root_cause_code`를 추출한다.
-`dose_error`는 `min_dose_error`와 `max_dose_error` 중 절대값이 큰 대표값으로 저장한다. 예시에서는 `-2.02`가 저장된다.
+DB 문자열에 `\n`이 실제 줄바꿈이 아닌 두 문자로 저장된 경우에도 먼저 줄바꿈으로 정규화한다. `\t` 같은 다른 이스케이프 문자열은 별도로 변환하지 않는다.
 
-측정값은 조회/필터링을 위해 `exposure_length`, `duty_cycle`, `on_drop_*`, `fdsc_*`, `l2d*`, `rbdy_*`, `software_version` 등 개별 컬럼에 저장하고, 원문은 `contents`에 보존한다.
+### 파싱 시나리오
+
+1. 빈 `contents`는 파싱하지 않는다.
+2. `\n` 문자열을 실제 줄바꿈으로 정규화한다.
+3. 아래 두 조건을 모두 만족하는 행만 root cause 대상으로 인정한다.
+   - `Dose error detected in file:` 라벨이 있다. 대소문자는 구분하지 않는다.
+   - `Root cause:` 또는 `Root clause:` 라벨이 있다. `Root clause`는 실제 원천 데이터의 라벨 변형을 지원하기 위한 명시적 alias다.
+4. 각 줄의 라벨을 기준으로 값을 추출한다. 라벨 앞뒤 공백과 대소문자는 무시한다.
+5. 숫자 필드는 `Decimal` 또는 정수로 변환하고 `[s]`, `[perc]` 같은 단위 문자열은 저장하지 않는다.
+6. 개별 필드가 없거나 변환할 수 없으면 그 필드만 `NULL`로 둔다. 다른 필드의 파싱과 행 적재는 계속한다.
+7. 파싱 결과에 원본 `er_line`, `eq_name`, `code`, `code_occur_time`, `contents` 등을 합쳐 `code_occur_time` 날짜의 `prism_common.er_dose_euv_parsed` 파티션에 적재한다.
+
+### 식별 필드 매핑
+
+| 원문 라벨 | 저장 컬럼 | 처리 규칙 |
+| --- | --- | --- |
+| `Dose error detected in file` | `source_file_name` | 문장 마지막 구분용 `.`은 제거하고 실제 파일 확장자 `.zip`은 유지한다. |
+| `Root cause`, `Root clause` | `root_cause_message` | 원문 메시지를 저장한다. |
+| `Root cause`, `Root clause` | `root_cause_code` | 메시지를 소문자 snake case로 변환한다. 예: `Low dose margin` → `low_dose_margin`. |
+| `Exposure ID`, `Exposesue I D` | `source_exposure_id` | 정수로 변환한다. `Exposesue I D`는 확인된 원천 라벨 오타에 대한 명시적 alias다. |
+| `Time` | `source_code_occur_time` | ISO 8601 timestamp로 변환하며 timezone offset을 유지한다. |
+| `Min. dose error` | `min_dose_error` | 단위를 제외한 숫자를 저장한다. |
+| `Max. dose error` | `max_dose_error` | 단위를 제외한 숫자를 저장한다. |
+
+`dose_error`는 `min_dose_error`와 `max_dose_error` 중 절대값이 큰 대표값으로 저장한다. 절대값이 같으면 `min_dose_error`가 선택된다. 위 예시에서는 `-2.02`가 저장된다.
+
+### 측정값 처리
+
+측정값은 조회와 필터링을 위해 `exposure_length`, `duty_cycle`, `on_drop_*`, `fdsc_*`, `l2d*`, `rbdy_*` 등 개별 `numeric` 컬럼에 저장한다. 예를 들어 `0.2338 [s]`는 `0.2338`, `99.62 [perc]`는 `99.62`로 저장한다.
+
+`pulses_euv_lt_0_6dt_tot`와 `fed_pulses`는 정수 컬럼이다. 원문이 `3` 또는 `3.0`이면 정수 `3`으로 저장하지만, `3.5`처럼 정수로 표현할 수 없는 값은 `NULL`로 처리한다. `software_version`은 숫자로 변환하지 않고 라벨 뒤의 문자열 전체를 저장한다.
+
+파싱 여부와 관계없이 원천 데이터 자체는 `mbeat.er_data_raw_euv`에 남는다. 파싱 대상이 된 행은 원문도 `prism_common.er_dose_euv_parsed.contents`에 그대로 보존한다.
 
 ## 파싱 대상
 

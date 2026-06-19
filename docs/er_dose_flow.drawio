@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2026-06-15T00:00:00.000Z" agent="Codex" version="24.7.17">
+<mxfile host="app.diagrams.net" modified="2026-06-19T00:00:00.000Z" agent="Codex" version="24.7.17">
   <diagram id="er-dose-history-flow" name="ER Dose 이력 구조">
     <mxGraphModel dx="1600" dy="1400" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1400" math="0" shadow="0">
       <root>
@@ -121,8 +121,8 @@
         <mxCell id="index" value="키 / 파티션 / 인덱스&#10;&#10;PK: code_occur_time&#10;파티션: code_occur_time 일별 범위&#10;인덱스: er_line + eq_name + code_occur_time&#10;추가 파싱 컬럼은 exposure_handle, action_handle, wafer_id, wafer_seq, de_err, n_slit만 저장" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
           <mxGeometry x="60" y="630" width="330" height="190" as="geometry" />
         </mxCell>
-        <mxCell id="source" value="Root cause contents 구조&#10;&#10;- mbeat.er_data_raw_euv 사용&#10;- contents에 dose error detected/root cause 포함&#10;- exposure id/time/source file 추출&#10;- 원문은 contents에 보존&#10;- 현재 ER Dose 배치 실행 경로와는 분리" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
-          <mxGeometry x="60" y="860" width="330" height="150" as="geometry" />
+        <mxCell id="source" value="Root cause contents 판별&#10;&#10;- mbeat.er_data_raw_euv 사용&#10;- 빈 contents는 제외&#10;- 문자열 \n을 실제 줄바꿈으로 정규화&#10;- dose error detected in file 필수&#10;- Root cause 또는 Root clause 필수&#10;- 조건 불충족 행은 파싱/적재 제외&#10;- 원천 RAW는 변경하지 않음" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="840" width="330" height="190" as="geometry" />
         </mxCell>
         <mxCell id="source-raw" value="mbeat.er_data_raw_euv" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
           <mxGeometry x="60" y="1060" width="330" height="314" as="geometry" />
@@ -151,8 +151,8 @@
         <mxCell id="source-raw-row-9" value="reason_code / task / compile_script" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="source-raw">
           <mxGeometry x="0" y="286" width="330" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="root-match" value="EuvRootCauseParser&#10;&#10;- parsed 테이블과 무관&#10;- root cause / exposure id / time 파싱&#10;- min/max dose error와 EUV 지표 구조화&#10;- dose_error는 절대값이 큰 대표값&#10;- 별도 FE 조회용 모델" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
-          <mxGeometry x="450" y="860" width="300" height="170" as="geometry" />
+        <mxCell id="root-match" value="parse_root_cause&#10;&#10;- Root cause / Root clause 동일 처리&#10;- Exposure ID / Exposesue I D 동일 처리&#10;- file / time / EUV 지표 구조화&#10;- 단위 문자열 제외 후 숫자 변환&#10;- pulse 3 또는 3.0은 정수 3&#10;- 변환 실패 필드만 NULL 처리&#10;- dose_error는 절대값이 큰 대표값&#10;- 원문 contents는 그대로 보존" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+          <mxGeometry x="450" y="830" width="330" height="220" as="geometry" />
         </mxCell>
         <mxCell id="rootcause" value="prism_common.er_dose_euv_parsed" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
           <mxGeometry x="1230" y="470" width="430" height="1490" as="geometry" />
@@ -233,7 +233,7 @@
         <mxCell id="edge-source-raw" value="source 후보" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="source-raw" target="source">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-source-root-match" value="source description" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="source" target="root-match">
+        <mxCell id="edge-source-root-match" value="contents 파싱" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="source" target="root-match">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="edge-root-match-rootcause" value="FE 조회용 적재" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#666666;" edge="1" parent="1" source="root-match" target="rootcause">

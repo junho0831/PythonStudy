@@ -20,16 +20,23 @@ def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
     if not contents:
         return None
     normalized = normalize_multiline_text(contents)
-    if "dose error detected in file:" not in normalized.lower() or "root cause" not in normalized.lower():
+    if "dose error detected in file:" not in normalized.lower() or not _has_root_cause_label(normalized):
         return None
 
-    root_cause_message = extract_text(normalized, r"\broot\s+cause\s*:\s*(.+)", trim_trailing_period=True)
+    root_cause_message = extract_text(
+        normalized,
+        r"\broot\s+(?:cause|clause)\s*:\s*(.+)",
+        trim_trailing_period=True,
+    )
     min_dose_error = extract_decimal(normalized, r"\bmin\.\s*dose\s+error\s*:\s*" + DECIMAL_RE)
     max_dose_error = extract_decimal(normalized, r"\bmax\.\s*dose\s+error\s*:\s*" + DECIMAL_RE)
 
     return ParsedEuvRootCause(
         source_file_name=extract_text(normalized, r"\bdose\s+error\s+detected\s+in\s+file\s*:\s*(.+?)\s*\.?\s*$", trim_trailing_period=True),
-        source_exposure_id=extract_int(normalized, r"\bexposure\s+id\s*:\s*" + INT_RE),
+        source_exposure_id=extract_int(
+            normalized,
+            r"\b(?:exposure\s+id|exposesue\s+i\s*d)\s*:\s*" + INT_RE,
+        ),
         source_code_occur_time=extract_datetime_isoformat(normalized, r"\btime\s*:\s*([^\s]+)"),
         root_cause_code=to_snake_code(root_cause_message),
         root_cause_message=root_cause_message,
@@ -49,8 +56,8 @@ def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
         max_cross_interval=_extract_decimal_field(normalized, "max. cross. interval"),
         xint_3sigma=_extract_decimal_field(normalized, "xint 3sigma"),
         euv_3sigma=_extract_decimal_field(normalized, "euv 3sigma"),
-        pulses_euv_lt_0_6dt_tot=_extract_int_field(normalized, "pulses_euv<0.6dt_tot"),
-        fed_pulses=_extract_int_field(normalized, "fed pulses"),
+        pulses_euv_lt_0_6dt_tot=_extract_integral_field(normalized, "pulses_euv<0.6dt_tot"),
+        fed_pulses=_extract_integral_field(normalized, "fed pulses"),
         l2dx_maxce=_extract_decimal_field(normalized, "l2dx maxce"),
         l2dy_maxce=_extract_decimal_field(normalized, "l2dy maxce"),
         sensitivity_at_l2dx_maxce=_extract_decimal_field(normalized, "sensitivity at l2dx maxce"),
@@ -77,8 +84,15 @@ def _extract_decimal_field(contents: str, label: str) -> Decimal | None:
 
 
 
-def _extract_int_field(contents: str, label: str) -> int | None:
-    return extract_int(contents, field_pattern(label, INT_RE))
+def _extract_integral_field(contents: str, label: str) -> int | None:
+    value = _extract_decimal_field(contents, label)
+    if value is None or value != value.to_integral_value():
+        return None
+    return int(value)
+
+
+def _has_root_cause_label(contents: str) -> bool:
+    return extract_text(contents, r"\broot\s+(?:cause|clause)\s*:\s*(.+)") is not None
 
 
 
@@ -87,4 +101,3 @@ def _dominant_dose_error(min_value: Decimal | None, max_value: Decimal | None) -
     if not values:
         return None
     return max(values, key=lambda value: abs(value))
-
