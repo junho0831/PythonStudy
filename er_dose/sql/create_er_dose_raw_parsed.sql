@@ -1,6 +1,6 @@
 create schema if not exists prism_common;
 
-create table if not exists prism_common.er_dose_error_parsed (
+create table if not exists prism_common.er_dose_raw_parsed (
     er_date             int4,
     er_index            int4,
     er_line             varchar(20),
@@ -22,11 +22,11 @@ create table if not exists prism_common.er_dose_error_parsed (
 )
 partition by range (code_occur_time);
 
-create index if not exists idx_er_dose_error_line_eq_time
-on prism_common.er_dose_error_parsed (er_line, eq_name, code_occur_time);
+create index if not exists idx_er_dose_raw_parsed_line_eq_time
+on prism_common.er_dose_raw_parsed (er_line, eq_name, code_occur_time);
 
-comment on column prism_common.er_dose_error_parsed.wafer_id is
+comment on column prism_common.er_dose_raw_parsed.wafer_id is
 'ER wafer id / slot sequence parsed from the raw message. Starts at 1 and matches lot_report.slot_seq.';
 
-comment on column prism_common.er_dose_error_parsed.de_err is
+comment on column prism_common.er_dose_raw_parsed.de_err is
 'Dose error value parsed from de_err in the raw message when available.';

@@ -9,7 +9,7 @@ from er_dose.infra.postgres_db import PostgresDB
 
 
 EUV_RAW_TABLE = "mbeat.er_data_raw_euv"
-ROOT_CAUSE_TABLE = "prism_common.er_dose_error_root_cause"
+ROOT_CAUSE_TABLE = "prism_common.er_dose_euv_parsed"
 
 
 class ERDoseEUVRepository:

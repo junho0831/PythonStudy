@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 
-DDL_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "create_er_dose_error_parsed.sql"
+DDL_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "create_er_dose_raw_parsed.sql"
 RAW_EUV_DDL_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "create_er_data_raw_euv.sql"
-ROOT_CAUSE_DDL_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "create_er_dose_error_root_cause.sql"
+ROOT_CAUSE_DDL_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "create_er_dose_euv_parsed.sql"
 
 
 def _ddl() -> str:
@@ -31,7 +31,7 @@ def test_parsed_table_primary_key_matches_documented_partition_key():
 def test_parsed_table_has_line_eq_time_index():
     ddl = _ddl()
 
-    assert "idx_er_dose_error_line_eq_time" in ddl
+    assert "idx_er_dose_raw_parsed_line_eq_time" in ddl
     assert "(er_line, eq_name, code_occur_time)" in ddl
     assert "log_source" not in ddl
     assert "er_date             int4" in ddl
@@ -54,7 +54,7 @@ def test_parsed_table_has_line_eq_time_index():
 def test_parsed_table_documents_retained_parsed_columns():
     ddl = _ddl()
 
-    assert "comment on column prism_common.er_dose_error_parsed.wafer_id" in ddl
+    assert "comment on column prism_common.er_dose_raw_parsed.wafer_id" in ddl
     assert "matches lot_report.slot_seq" in ddl
     assert "parsed from de_err" in ddl
 
@@ -73,7 +73,7 @@ def test_raw_euv_table_matches_source_schema():
 def test_root_cause_table_is_fe_facing_matching_table():
     ddl = _root_cause_ddl()
 
-    assert "create table if not exists prism_common.er_dose_error_root_cause" in ddl
+    assert "create table if not exists prism_common.er_dose_euv_parsed" in ddl
     assert "partition by range (code_occur_time)" in ddl
     assert "scanner_exposure_handle bigint" not in ddl
     assert "er_type                 varchar(10)" in ddl
@@ -97,11 +97,11 @@ def test_root_cause_table_is_fe_facing_matching_table():
     assert "software_version        text" in ddl
     assert "parser_version" not in ddl
     assert "raw_description" not in ddl
-    assert "idx_er_dose_root_cause_line_eq_time" in ddl
+    assert "idx_er_dose_euv_parsed_line_eq_time" in ddl
     assert "(er_line, eq_name, code_occur_time)" in ddl
     assert "idx_er_dose_root_cause_scanner_exposure" not in ddl
     assert "idx_er_dose_root_cause_source_exposure" not in ddl
-    assert "independent from er_dose_error_parsed" in ddl
+    assert "independent from er_dose_raw_parsed" in ddl
     assert "er_data_raw_euv" in ddl
 
 

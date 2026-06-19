@@ -95,7 +95,7 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         self.assertEqual(db.fetch_params["end_time"], datetime(2026, 5, 5, 0, 0, 0))
         self.assertEqual(len(db.inserted), 1)
         table_name, inserted_df = db.inserted[0]
-        self.assertEqual(table_name, "prism_common.er_dose_error_root_cause")
+        self.assertEqual(table_name, "prism_common.er_dose_euv_parsed")
         self.assertEqual(len(inserted_df), 1)
         self.assertEqual(inserted_df.loc[0, "source_exposure_id"], 25415)
         self.assertEqual(inserted_df.loc[0, "root_cause_code"], "plasma_oscillations")

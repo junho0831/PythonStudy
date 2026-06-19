@@ -1,31 +1,37 @@
 from __future__ import annotations
 
-import re
-from datetime import datetime
 from decimal import Decimal
 
 from er_dose.euv_base import ParsedEuvRootCause
-
-
-_DECIMAL_RE = r"([+-]?\d+(?:\.\d+)?)"
+from er_dose.parsers.regex_utils import (
+    DECIMAL_RE,
+    INT_RE,
+    extract_datetime_isoformat,
+    extract_decimal,
+    extract_int,
+    extract_text,
+    field_pattern,
+    normalize_multiline_text,
+    to_snake_code,
+)
 
 def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
     """Parse er_data_raw_euv contents for dose error root cause details."""
     if not contents:
         return None
-    normalized = _normalize(contents)
+    normalized = normalize_multiline_text(contents)
     if "dose error detected in file:" not in normalized.lower() or "root cause" not in normalized.lower():
         return None
 
-    root_cause_message = _extract_text(normalized, r"\broot\s+cause\s*:\s*(.+)")
-    min_dose_error = _extract_decimal(normalized, r"\bmin\.\s*dose\s+error\s*:\s*" + _DECIMAL_RE)
-    max_dose_error = _extract_decimal(normalized, r"\bmax\.\s*dose\s+error\s*:\s*" + _DECIMAL_RE)
+    root_cause_message = extract_text(normalized, r"\broot\s+cause\s*:\s*(.+)", trim_trailing_period=True)
+    min_dose_error = extract_decimal(normalized, r"\bmin\.\s*dose\s+error\s*:\s*" + DECIMAL_RE)
+    max_dose_error = extract_decimal(normalized, r"\bmax\.\s*dose\s+error\s*:\s*" + DECIMAL_RE)
 
     return ParsedEuvRootCause(
-        source_file_name=_extract_text(normalized, r"\bdose\s+error\s+detected\s+in\s+file\s*:\s*(.+?)\s*\.?\s*$"),
-        source_exposure_id=_extract_int(normalized, r"\bexposure\s+id\s*:\s*([+-]?\d+)"),
-        source_code_occur_time=_extract_time(normalized),
-        root_cause_code=_to_code(root_cause_message),
+        source_file_name=extract_text(normalized, r"\bdose\s+error\s+detected\s+in\s+file\s*:\s*(.+?)\s*\.?\s*$", trim_trailing_period=True),
+        source_exposure_id=extract_int(normalized, r"\bexposure\s+id\s*:\s*" + INT_RE),
+        source_code_occur_time=extract_datetime_isoformat(normalized, r"\btime\s*:\s*([^\s]+)"),
+        root_cause_code=to_snake_code(root_cause_message),
         root_cause_message=root_cause_message,
         exposure_length=_extract_decimal_field(normalized, "exposure length"),
         duty_cycle=_extract_decimal_field(normalized, "duty cycle"),
@@ -61,69 +67,18 @@ def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
         rbdy_qc_etdc_3sigma=_extract_decimal_field(normalized, "rbdy qc etdc 3sigma"),
         rbdy_total_power_lf=_extract_decimal_field(normalized, "rbdy total power lf"),
         rbdy_total_power_mf=_extract_decimal_field(normalized, "rbdy total power mf"),
-        software_version=_extract_text(normalized, r"\bsoftware\s+version\s*:\s*(.+)"),
+        software_version=extract_text(normalized, r"\bsoftware\s+version\s*:\s*(.+)", trim_trailing_period=True),
     )
 
 
 
-def _normalize(contents: str) -> str:
-    return contents.replace("\\n", "\n").strip()
-
-
-
-def _extract_text(contents: str, pattern: str) -> str | None:
-    match = re.search(pattern, contents, flags=re.IGNORECASE | re.MULTILINE)
-    if match is None:
-        return None
-    value = match.group(1).strip()
-    return value.removesuffix(".").strip() or None
-
-
-
-def _extract_int(contents: str, pattern: str) -> int | None:
-    match = re.search(pattern, contents, flags=re.IGNORECASE | re.MULTILINE)
-    if match is None:
-        return None
-    return int(match.group(1))
-
-
-
-def _extract_decimal(contents: str, pattern: str) -> Decimal | None:
-    match = re.search(pattern, contents, flags=re.IGNORECASE | re.MULTILINE)
-    if match is None:
-        return None
-    return Decimal(match.group(1))
-
-
-
 def _extract_decimal_field(contents: str, label: str) -> Decimal | None:
-    return _extract_decimal(contents, _field_pattern(label, _DECIMAL_RE))
+    return extract_decimal(contents, field_pattern(label, DECIMAL_RE))
 
 
 
 def _extract_int_field(contents: str, label: str) -> int | None:
-    return _extract_int(contents, _field_pattern(label, r"([+-]?\d+)"))
-
-
-
-def _field_pattern(label: str, value_pattern: str) -> str:
-    return r"^" + re.escape(label) + r"\s*:\s*" + value_pattern
-
-
-
-def _extract_time(contents: str) -> datetime | None:
-    value = _extract_text(contents, r"\btime\s*:\s*([^\s]+)")
-    if value is None:
-        return None
-    return datetime.fromisoformat(value)
-
-
-
-def _to_code(value: str | None) -> str | None:
-    if value is None:
-        return None
-    code = re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
-    return code or None
+    return extract_int(contents, field_pattern(label, INT_RE))
 
 
 

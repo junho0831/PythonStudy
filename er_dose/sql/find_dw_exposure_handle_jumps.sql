@@ -10,7 +10,7 @@ with exposure_flow as (
             partition by eq_name
             order by code_occur_time, er_date, er_index
         ) as prev_exposure_handle
-    from prism_common.er_dose_error_parsed
+    from prism_common.er_dose_raw_parsed
     where code like 'DW-%'
       and exposure_handle is not null
 )

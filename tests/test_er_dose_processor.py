@@ -117,7 +117,7 @@ class ERDoseProcessorTest(unittest.TestCase):
 
         wafer_states = repo.fetch_latest_wafer_states(start_time)
 
-        self.assertIn("from prism_common.er_dose_error_parsed p", db.fetch_query)
+        self.assertIn("from prism_common.er_dose_raw_parsed p", db.fetch_query)
         self.assertIn("p.code_occur_time >= :previous_day_start", db.fetch_query)
         self.assertIn("p.code_occur_time < :start_time", db.fetch_query)
         self.assertEqual(db.fetch_params["start_time"], start_time)
@@ -147,7 +147,7 @@ class ERDoseProcessorTest(unittest.TestCase):
 
         delete_queries = [query for query, _, _ in db.executed if query.strip().lower().startswith("delete")]
         self.assertEqual(delete_queries, [])
-        parsed_insert = self._inserted_df(db, "prism_common.er_dose_error_parsed")
+        parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
         self.assertNotIn("parser_version", parsed_insert.columns)
         self.assertNotIn("parsing_status", parsed_insert.columns)
         self.assertNotIn("parsing_error", parsed_insert.columns)
@@ -161,7 +161,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertIn("wafer_seq", parsed_insert.columns)
         self.assertTrue(pd.isna(parsed_insert.loc[0, "wafer_seq"]))
         inserted_tables = [table_name for table_name, _ in db.inserted]
-        self.assertEqual(inserted_tables, ["prism_common.er_dose_error_parsed"])
+        self.assertEqual(inserted_tables, ["prism_common.er_dose_raw_parsed"])
 
     def test_run_uses_preloaded_wafer_state_when_chunk_starts_without_wafer_info(self):
         raw_df = pd.DataFrame([
@@ -177,7 +177,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         with redirect_stdout(StringIO()):
             processor.run(start_time=datetime(2026, 5, 2), end_time=datetime(2026, 5, 3))
 
-        parsed_insert = self._inserted_df(db, "prism_common.er_dose_error_parsed")
+        parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
         self.assertEqual(parsed_insert.loc[0, "wafer_id"], 2111)
         self.assertEqual(parsed_insert.loc[0, "wafer_seq"], 23)
 
@@ -198,7 +198,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         with redirect_stdout(StringIO()) as stdout:
             processor.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
 
-        parsed_insert = self._inserted_df(db, "prism_common.er_dose_error_parsed")
+        parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
         self.assertEqual(len(parsed_insert), 2)
         self.assertEqual(parsed_insert.loc[0, "exposure_handle"], 2631)
         self.assertEqual(parsed_insert.loc[1, "exposure_handle"], 3632)

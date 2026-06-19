@@ -11,7 +11,7 @@ select
     substring(r.contents from 'exposure_handle\s*[:=]\s*([0-9]+)') as exposure_handle_raw,
     r.contents
 from mbeat.er_data_raw r
-left join prism_common.er_dose_error_parsed p
+left join prism_common.er_dose_raw_parsed p
     on p.er_date = r.er_date
    and p.er_index = r.er_index
    and p.er_line = r.er_line

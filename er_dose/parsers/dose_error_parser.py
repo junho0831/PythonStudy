@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-import re
-from decimal import Decimal
-
-from typing import Any
-
 from er_dose.parsers.base import ParsedErDoseError, RawErLog
+from er_dose.parsers.regex_utils import (
+    DECIMAL_RE as DECIMAL_PATTERN,
+    INT_RE as INT_PATTERN,
+    extract_first_decimal,
+    extract_first_int,
+    extract_int,
+)
 
 
 # 소수/정수 값을 캡처한다. group(1) 값을 Decimal/int 로 변환해 사용한다.
-_DECIMAL_RE = r"([-+]?\d*\.?\d+)"
-_INT_RE = r"([-+]?\d+)"
+_DECIMAL_RE = DECIMAL_PATTERN
+_INT_RE = INT_PATTERN
 
 # wafer_id 는 lot(2111), lot id 2111, wafer_id=2111 같은 표기를 모두 허용한다.
 _WAFER_ID_PATTERNS = [
@@ -49,15 +51,15 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
     n_slit = None
 
     if code_norm.startswith("DW-"):
-        exposure_handle = _extract_int(contents, rf"exposure_handle\s*[:=]\s*{_INT_RE}")
-        action_handle = _extract_int(contents, rf"action_handle\s*[:=]\s*{_INT_RE}")
-        wafer_id = _extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
-        wafer_seq = _extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
-        de_err = _extract_first_decimal(contents, _DE_ERR_PATTERNS)
-        n_slit = _extract_int(contents, rf"n_slit\s*[:=]\s*{_INT_RE}")
+        exposure_handle = extract_int(contents, rf"exposure_handle\s*[:=]\s*{_INT_RE}")
+        action_handle = extract_int(contents, rf"action_handle\s*[:=]\s*{_INT_RE}")
+        wafer_id = extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
+        wafer_seq = extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
+        de_err = extract_first_decimal(contents, _DE_ERR_PATTERNS)
+        n_slit = extract_int(contents, rf"n_slit\s*[:=]\s*{_INT_RE}")
     elif code_norm.startswith("LO-"):
-        wafer_id = _extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
-        wafer_seq = _extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
+        wafer_id = extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
+        wafer_seq = extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
 
     return ParsedErDoseError(
         er_date=raw.er_date,
@@ -79,40 +81,3 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
     )
 
 
-
-def _extract_value(contents: str, pattern: str, type_cast: type) -> Any | None:
-    match = re.search(pattern, contents, flags=re.IGNORECASE)
-    if match is None:
-        return None
-    return type_cast(match.group(1))
-
-
-
-def _extract_decimal(contents: str, pattern: str) -> Decimal | None:
-    return _extract_value(contents, pattern, Decimal)
-
-
-
-def _extract_int(contents: str, pattern: str) -> int | None:
-    return _extract_value(contents, pattern, int)
-
-
-
-def _extract_first_int(contents: str, patterns: list[str], minimum: int | None = None) -> int | None:
-    for pattern in patterns:
-        value = _extract_int(contents, pattern)
-        if value is None:
-            continue
-        if minimum is not None and value < minimum:
-            continue
-        return value
-    return None
-
-
-
-def _extract_first_decimal(contents: str, patterns: list[str]) -> Decimal | None:
-    for pattern in patterns:
-        value = _extract_decimal(contents, pattern)
-        if value is not None:
-            return value
-    return None
