@@ -38,7 +38,6 @@ class MainTest(unittest.TestCase):
             "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
             "ER_DOSE_END_TIME": "2026-06-01T00:00:00",
             "ER_DOSE_CHUNK_SIZE": "20000",
-            "ER_DOSE_DB_DSN": "postgresql://user:pass@localhost:5432/db",
         }
         batch = Mock()
 
@@ -51,7 +50,7 @@ class MainTest(unittest.TestCase):
             result = Main(env=env).run()
 
         self.assertEqual(result, 0)
-        postgres_db.assert_called_once_with(dsn="postgresql://user:pass@localhost:5432/db")
+        postgres_db.assert_called_once_with()
         repo_cls.assert_called_once_with(postgres_db.return_value)
         processor_cls.assert_called_once_with(repo_cls.return_value)
         batch.run.assert_called_once_with(
@@ -66,7 +65,6 @@ class MainTest(unittest.TestCase):
             "BATCH_TARGET": "ER_DOSE",
             "START_TIME": "2026-05-31T00:00:00",
             "END_TIME": "2026-06-01T00:00:00",
-            "DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
         }
 
         with patch("batch_main.main.PostgresDB") as postgres_db, patch(
@@ -74,7 +72,7 @@ class MainTest(unittest.TestCase):
         ), patch("batch_main.main.ERDoseProcessor") as processor_cls:
             Main(env=env).run()
 
-        postgres_db.assert_called_once_with(dsn="postgresql://user:pass@localhost:5432/db")
+        postgres_db.assert_called_once_with()
         processor_cls.return_value.run.assert_called_once_with(
             start_time=datetime(2026, 5, 31, 0, 0, 0),
             end_time=datetime(2026, 6, 1, 0, 0, 0),
@@ -87,7 +85,6 @@ class MainTest(unittest.TestCase):
             "BATCH_TARGET": "ER_DOSE_RAW",
             "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
             "ER_DOSE_END_TIME": "2026-06-01T00:00:00",
-            "DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
         }
         batch = Mock()
 
@@ -109,17 +106,6 @@ class MainTest(unittest.TestCase):
             "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
             "ER_DOSE_END_TIME": "2026-06-01T00:00:00",
             "ER_DOSE_CHUNK_SIZE": "0",
-            "DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
-        }
-
-        with self.assertRaises(ValueError):
-            Main(env=env).run()
-
-    def test_er_dose_requires_dsn_or_database_url(self):
-        env = {
-            "BATCH_TARGET": "ER_DOSE_RAW",
-            "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
-            "ER_DOSE_END_TIME": "2026-06-01T00:00:00",
         }
 
         with self.assertRaises(ValueError):
@@ -129,7 +115,6 @@ class MainTest(unittest.TestCase):
         env = {
             "BATCH_TARGET": "ER_DOSE_RAW",
             "ER_DOSE_RAW_TARGET_DATE": "2026-06-16",
-            "ER_DOSE_DB_DSN": "postgresql://user:pass@localhost:5432/db",
         }
 
         with patch("batch_main.main.PostgresDB") as postgres_db, patch(
@@ -138,7 +123,7 @@ class MainTest(unittest.TestCase):
             result = Main(env=env).run()
 
         self.assertEqual(result, 0)
-        postgres_db.assert_called_once_with(dsn="postgresql://user:pass@localhost:5432/db")
+        postgres_db.assert_called_once_with()
         repo_cls.assert_called_once_with(postgres_db.return_value)
         processor_cls.assert_called_once_with(repo_cls.return_value)
         processor_cls.return_value.run.assert_called_once_with(

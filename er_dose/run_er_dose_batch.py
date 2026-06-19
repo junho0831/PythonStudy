@@ -35,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-time", type=parse_datetime, help="inclusive start time")
     parser.add_argument("--end-time", type=parse_datetime, help="exclusive end time")
     parser.add_argument("--chunk-size", type=int, default=10000, help="raw row chunk size for streaming processing")
-    parser.add_argument("--dsn", default=None, help="PostgreSQL DSN. Defaults to ER_DOSE_DB_DSN or DATABASE_URL.")
+    parser.add_argument("--dsn", default=None, help="PostgreSQL DSN override. Defaults to er_dose.properties or env.")
     return parser
 
 

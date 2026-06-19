@@ -5,21 +5,43 @@ import os
 import re
 from contextlib import contextmanager
 from io import StringIO
+from pathlib import Path
 
 import pandas as pd
 
 
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_PROPERTIES_PATH = Path(__file__).resolve().parents[2] / "er_dose.properties"
 
 
 class PostgresDB:
     def __init__(self, dsn: str | None = None):
-        self.dsn = dsn or os.getenv("ER_DOSE_DB_DSN") or os.getenv("DATABASE_URL") or ""
+        self.properties_path = _PROPERTIES_PATH
+        self.dsn = dsn or self._load_dsn_from_properties() or os.getenv("ER_DOSE_DB_DSN") or os.getenv("DATABASE_URL") or ""
+        if not self.dsn:
+            raise ValueError("database connection is required; set er_dose.properties or ER_DOSE_DB_DSN/DATABASE_URL")
         self.__engine = self  # Support user-provided copy_insert_to_partition_table
         self._sqlalchemy_engine = None
 
     def raw_connection(self):
         return self._connect_raw()
+
+    def _load_dsn_from_properties(self) -> str | None:
+        if not self.properties_path.exists():
+            return None
+
+        for raw_line in self.properties_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, value = line.split("=", maxsplit=1)
+            if key.strip() in {"ER_DOSE_DB_DSN", "DATABASE_URL"}:
+                resolved = value.strip()
+                if resolved:
+                    return resolved
+        return None
 
     def _connect_raw(self):
         import psycopg2

@@ -47,9 +47,8 @@ class Main:
             end_time = None
 
         chunk_size = self._parse_optional_int(self.env.get("ER_DOSE_CHUNK_SIZE"), field_name="ER_DOSE_CHUNK_SIZE") or 10000
-        dsn = self._get_required("ER_DOSE_DB_DSN", fallback_key="DATABASE_URL")
 
-        db = PostgresDB(dsn=dsn)
+        db = PostgresDB()
         repository = ERDoseRepository(db)
         processor = ERDoseProcessor(repository)
         processor.run(start_time=start_time, end_time=end_time, chunk_size=chunk_size, target_date=target_date)
