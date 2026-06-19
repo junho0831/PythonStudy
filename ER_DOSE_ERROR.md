@@ -1,13 +1,13 @@
 # ER Dose Error Parsing
 
-`er_dose`는 `mbeat.er_data_raw`의 Dose Error RAW 로그를 파싱해서 `mbeat.er_dose_error_parsed`에 적재하는 배치다.
+`er_dose`는 `mbeat.er_data_raw`의 Dose Error RAW 로그를 파싱해서 `prism_common.er_dose_raw_parsed`에 적재하는 배치다.
 
 ## 데이터 흐름
 
 ```text
 mbeat.er_data_raw
   -> er_dose batch
-  -> mbeat.er_dose_error_parsed
+  -> prism_common.er_dose_raw_parsed
 ```
 
 Root cause는 이 배치와 별도 흐름이다.
@@ -15,46 +15,30 @@ Root cause는 이 배치와 별도 흐름이다.
 ```text
 mbeat.er_data_raw_euv
   -> contents root cause 파싱
-  -> mbeat.er_dose_error_root_cause
+  -> prism_common.er_dose_euv_parsed
 ```
 
-`mbeat.er_dose_error_parsed`와 `mbeat.er_dose_error_root_cause`는 서로 조인하거나 매칭하지 않는다.
+`prism_common.er_dose_raw_parsed`와 `prism_common.er_dose_euv_parsed`는 서로 조인하거나 매칭하지 않는다.
 
 ## 테이블 역할
 
 - `mbeat.er_data_raw`: Dose Error 파싱 대상 RAW. `er_date`, `er_index`가 있다.
-- `mbeat.er_dose_error_parsed`: `er_data_raw` 파싱 결과. 현재 배치가 적재하는 대상이다.
+- `prism_common.er_dose_raw_parsed`: `er_data_raw` 파싱 결과. 현재 배치가 적재하는 대상이다.
 - `mbeat.er_data_raw_euv`: Root cause source description 후보 RAW. `contents`에 `dose error detected in file`, `root cause`, `exposure id`, 각종 EUV 지표가 들어온다. `er_date`, `er_index`가 없다.
-- `mbeat.er_dose_error_root_cause`: FE 조회용 root cause 결과 테이블. `er_data_raw_euv.contents`를 파싱한 구조화 컬럼과 원문을 저장하며, `er_dose_error_parsed`와 무관하다.
+- `prism_common.er_dose_euv_parsed`: FE 조회용 root cause 결과 테이블. `er_data_raw_euv.contents`를 파싱한 구조화 컬럼과 원문을 저장하며, `er_dose_raw_parsed`와 무관하다.
 
 DDL:
 
-- [Parsed 테이블 생성](er_dose/sql/create_er_dose_error_parsed.sql)
-- [Parsed 테이블 정리 및 보강](er_dose/sql/alter_er_dose_error_parsed_preserve_source_fields.sql)
-- [Root cause 테이블 생성](er_dose/sql/create_er_dose_error_root_cause.sql)
-- [Root cause 컬럼 보강](er_dose/sql/alter_er_dose_error_root_cause_add_euv_metrics.sql)
+- [Parsed 테이블 생성](er_dose/sql/create_er_dose_raw_parsed.sql)
+- [EUV Parsed 테이블 생성](er_dose/sql/create_er_dose_euv_parsed.sql)
 - [RAW EUV 테이블 생성](er_dose/sql/create_er_data_raw_euv.sql)
-
-기존 운영 `mbeat.er_dose_error_parsed`가 repo 기준과 다르게 만들어진 경우를 대비해
-`Parsed 테이블 정리 및 보강` 스크립트는 아래 원천 기본 컬럼을 맞춰준다.
-
-- `er_date`
-- `er_index`
-- `er_line`
-- `eq_name`
-- `code`
-- `code_occur_time`
-- `belong`
-- `type`
-- `title`
-- `contents`
 
 ## ERD
 
 ```mermaid
 erDiagram
-    ER_DATA_RAW ||--o{ ER_DOSE_ERROR_PARSED : "parse"
-    ER_DATA_RAW_EUV ||--o{ ER_DOSE_ERROR_ROOT_CAUSE : "source description"
+    ER_DATA_RAW ||--o{ ER_DOSE_RAW_PARSED : "parse"
+    ER_DATA_RAW_EUV ||--o{ ER_DOSE_EUV_PARSED : "source description"
 
     ER_DATA_RAW {
         int4 er_date
@@ -84,7 +68,7 @@ erDiagram
         varchar compile_script
     }
 
-    ER_DOSE_ERROR_PARSED {
+    ER_DOSE_RAW_PARSED {
         int4 er_date
         int4 er_index
         varchar er_line
@@ -103,7 +87,7 @@ erDiagram
         timestamp created_at
     }
 
-    ER_DOSE_ERROR_ROOT_CAUSE {
+    ER_DOSE_EUV_PARSED {
         varchar er_line
         varchar eq_name
         varchar er_type
@@ -160,20 +144,20 @@ erDiagram
 ```
 
 Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. 실제 `varchar` 길이와 `numeric` 정밀도는 이 repo의 DDL 기준이다. `mbeat.er_data_raw`는 기존 원천 테이블이므로 배치가 읽는 컬럼만 표시한다.
-`mbeat.er_dose_error_parsed`와 `mbeat.er_dose_error_root_cause`는 실제 DB에서는 모두 `code_occur_time` 기준 range partition을 사용한다.
+`prism_common.er_dose_raw_parsed`와 `prism_common.er_dose_euv_parsed`는 실제 DB에서는 모두 `code_occur_time` 기준 range partition을 사용한다.
 
 ## 배치 동작
 
 `ERDoseProcessor.run()`은 다음만 수행한다.
 
-1. 기간에 해당하는 `er_dose_error_parsed` 일별 파티션 생성
+1. 기간에 해당하는 `er_dose_raw_parsed` 일별 파티션 생성
 2. `mbeat.er_data_raw`에서 Dose Error 후보를 `chunk` 단위로 조회
 3. 각 `chunk`의 RAW contents 파싱
    - 파싱 중 `wafer_id`나 `wafer_seq`가 없을 경우, 동일 `eq_name`에서 이전에 파싱된 가장 최근 값을 사용한다. 이는 chunk의 경계를 넘어 유지된다.
-4. 각 `chunk`를 `mbeat.er_dose_error_parsed`에 `COPY` append insert
+4. 각 `chunk`를 `prism_common.er_dose_raw_parsed`에 `COPY` append insert
 
-배치는 `mbeat.er_data_raw_euv`와 `mbeat.er_dose_error_root_cause`를 조회하거나 적재하지 않는다.
-대용량 일별 파티션을 고려해 전체 결과를 한 번에 메모리로 올리지 않고 `read chunk -> parse -> insert` 방식으로 반복 처리한다.
+`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다.
+RAW와 EUV 모두 대용량 처리를 위해 전체 결과를 한 번에 메모리로 올리지 않고 `read chunk -> parse -> insert` 방식으로 반복 처리한다.
 
 ## Root Cause 파싱 대상
 
@@ -221,13 +205,35 @@ software version : 2.0 [nxe3400 mv 250w]
 
 ## 실행
 
-DB 접속은 `--dsn`, `ER_DOSE_DB_DSN`, `DATABASE_URL` 순서로 사용한다.
+현재 RAW 배치 parser 이름은 `ER_DOSE_RAW` 이다.
+RAW 날짜 변수는 `ER_DOSE_RAW_TARGET_DATE` 를 사용한다.
+EUV 날짜 변수는 `ER_DOSE_EUV_TARGET_DATE` 를 사용한다.
+
+DB 접속은 `--dsn`, 프로젝트 루트 `er_dose.properties`, `ER_DOSE_DB_DSN`, `DATABASE_URL` 순서로 사용한다.
 기본 `chunk` 크기는 `10000`이며 `--chunk-size`로 조정할 수 있다.
+
+```bash
+python -m er_dose.run_er_dose_batch \
+  --date 2026-04-13 \
+  --parser ER_DOSE_RAW \
+  --chunk-size 10000 \
+  --dsn 'postgresql://user:password@host:5432/dbname'
+```
+
+```bash
+python -m er_dose.run_er_dose_batch \
+  --date 2026-04-13 \
+  --parser ER_DOSE_EUV \
+  --chunk-size 10000 \
+  --dsn 'postgresql://user:password@host:5432/dbname'
+```
+
+기존 시간 범위 직접 지정 방식도 계속 지원한다.
 
 ```bash
 python -m er_dose.run_er_dose_batch \
   --start-time 2026-04-13T00:00:00 \
   --end-time 2026-04-14T00:00:00 \
   --chunk-size 10000 \
-  --limit 1000
+  --dsn 'postgresql://user:password@host:5432/dbname'
 ```

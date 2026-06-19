@@ -5,25 +5,55 @@ import os
 import re
 from contextlib import contextmanager
 from io import StringIO
+from pathlib import Path
 
 import pandas as pd
 
 
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_PROPERTIES_PATH = Path(__file__).resolve().parents[2] / "er_dose.properties"
 
 
 class PostgresDB:
     def __init__(self, dsn: str | None = None):
-        self.dsn = dsn or os.getenv("ER_DOSE_DB_DSN") or os.getenv("DATABASE_URL") or ""
+        self.properties_path = _PROPERTIES_PATH
+        self.dsn = dsn or self._load_dsn_from_properties() or os.getenv("ER_DOSE_DB_DSN") or os.getenv("DATABASE_URL") or ""
+        if not self.dsn:
+            raise ValueError("database connection is required; set er_dose.properties or ER_DOSE_DB_DSN/DATABASE_URL")
         self.__engine = self  # Support user-provided copy_insert_to_partition_table
+        self._sqlalchemy_engine = None
 
     def raw_connection(self):
-        return self._connect()
+        return self._connect_raw()
 
-    def _connect(self):
+    def _load_dsn_from_properties(self) -> str | None:
+        if not self.properties_path.exists():
+            return None
+
+        for raw_line in self.properties_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, value = line.split("=", maxsplit=1)
+            if key.strip() in {"ER_DOSE_DB_DSN", "DATABASE_URL"}:
+                resolved = value.strip()
+                if resolved:
+                    return resolved
+        return None
+
+    def _connect_raw(self):
         import psycopg2
 
         return psycopg2.connect(self.dsn)
+
+    def _connect_sqlalchemy(self):
+        if self._sqlalchemy_engine is None:
+            from sqlalchemy import create_engine
+
+            self._sqlalchemy_engine = create_engine(self.dsn)
+        return self._sqlalchemy_engine
 
     def copy_insert_to_partition_table(
         self,
@@ -31,14 +61,14 @@ class PostgresDB:
         table_name: str,
         target_date: str,
         df: pd.DataFrame,
-        is_truncate: bool = False
+        is_truncate: bool = False,
     ) -> None:
         if df is None or df.empty:
             print("insert 대상 데이터가 없습니다.")
             return
 
         partition_table = f'{schema}.{table_name}_1_prt_p{target_date.replace("-", "")}'
-        query = f'COPY {partition_table} FROM STDIN WITH CSV HEADER'
+        query = f"COPY {partition_table} FROM STDIN WITH CSV HEADER"
 
         buffer = io.StringIO()
         insert_df = df.drop_duplicates()
@@ -73,7 +103,7 @@ class PostgresDB:
 
     @contextmanager
     def transaction(self):
-        conn = self._connect()
+        conn = self._connect_raw()
         try:
             yield conn
             conn.commit()
@@ -83,26 +113,34 @@ class PostgresDB:
         finally:
             conn.close()
 
-    def fetch_df(self, query: str, params=None, connection=None):
-        own_connection = connection is None
-        conn = connection or self._connect()
-        try:
-            return pd.read_sql_query(query, conn, params=params)
-        finally:
-            if own_connection:
-                conn.close()
+    def select(self, query: str, params=None, connection=None):
+        if connection is not None:
+            return pd.read_sql_query(query, connection, params=params)
 
-    def fetch_df_in_chunks(self, query: str, params=None, chunk_size: int = 10000, connection=None):
+        chunks = list(self.select_in_chunks(query, params=params, chunk_size=100000))
+        if not chunks:
+            return pd.DataFrame()
+        return pd.concat(chunks, ignore_index=True)
+
+    def select_in_chunks(self, query: str, params=None, chunk_size: int = 10000, connection=None):
         if chunk_size <= 0:
             raise ValueError("chunk_size must be greater than 0")
 
-        own_connection = connection is None
-        conn = connection or self._connect()
-        try:
-            yield from pd.read_sql_query(query, conn, params=params, chunksize=chunk_size)
-        finally:
-            if own_connection:
-                conn.close()
+        if connection is not None:
+            yield from pd.read_sql_query(query, connection, params=params, chunksize=chunk_size)
+            return
+
+        from sqlalchemy import text
+
+        with self._connect_sqlalchemy().connect() as conn:
+            result = conn.execute(text(query), params or {})
+            columns = list(result.keys())
+
+            while True:
+                rows = result.fetchmany(chunk_size)
+                if not rows:
+                    break
+                yield pd.DataFrame(rows, columns=columns)
 
     def copy_insert_df(self, table_name: str, df, connection=None) -> int:
         if df.empty:
@@ -128,7 +166,7 @@ class PostgresDB:
         stream.seek(0)
 
         own_connection = connection is None
-        conn = connection or self._connect()
+        conn = connection or self._connect_raw()
         try:
             with conn.cursor() as cur:
                 cur.copy_expert(query, stream)
@@ -146,7 +184,7 @@ class PostgresDB:
 
     def execute(self, query: str, params=None, connection=None) -> int:
         own_connection = connection is None
-        conn = connection or self._connect()
+        conn = connection or self._connect_raw()
         try:
             with conn.cursor() as cur:
                 cur.execute(query, params)

@@ -1,92 +1,37 @@
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass
-from datetime import datetime
 from decimal import Decimal
 
-
-_DECIMAL_RE = r"([+-]?\d+(?:\.\d+)?)"
-
-
-@dataclass(frozen=True)
-class ParsedEuvRootCause:
-    source_file_name: str | None
-    source_exposure_id: int | None
-    source_code_occur_time: datetime | None
-    root_cause_code: str | None
-    root_cause_message: str | None
-    exposure_length: Decimal | None
-    duty_cycle: Decimal | None
-    min_dose_error: Decimal | None
-    max_dose_error: Decimal | None
-    dose_error: Decimal | None
-    on_drop_euv_energy: Decimal | None
-    on_drop_pp_energy: Decimal | None
-    on_drop_mp_energy: Decimal | None
-    on_drop_pp_dlgc1: Decimal | None
-    on_drop_mp_dlgc1: Decimal | None
-    bi_cell_y_3sigma: Decimal | None
-    fdsc_y_error: Decimal | None
-    fdsc_y_3sigma: Decimal | None
-    max_cross_interval: Decimal | None
-    xint_3sigma: Decimal | None
-    euv_3sigma: Decimal | None
-    pulses_euv_lt_0_6dt_tot: int | None
-    fed_pulses: int | None
-    l2dx_maxce: Decimal | None
-    l2dy_maxce: Decimal | None
-    sensitivity_at_l2dx_maxce: Decimal | None
-    sensitivity_at_l2dy_maxce: Decimal | None
-    dose_margin: Decimal | None
-    l2dx_qc_etdc_3sigma: Decimal | None
-    l2dx_qc_etdc_median: Decimal | None
-    l2dy_qc_etdc_3sigma: Decimal | None
-    l2dy_qc_etdc_median: Decimal | None
-    rbdy_peak_frequency_hf: Decimal | None
-    rbdy_peak_frequency_lf: Decimal | None
-    rbdy_peak_frequency_mf: Decimal | None
-    rbdy_peak_power_hf: Decimal | None
-    rbdy_qc_etdc_3sigma: Decimal | None
-    rbdy_total_power_lf: Decimal | None
-    rbdy_total_power_mf: Decimal | None
-    software_version: str | None
-
-
-_ROOT_CAUSE_MESSAGE_PATTERN = re.compile(r"\broot\s+cause\s*:\s*(.+)", flags=re.IGNORECASE | re.MULTILINE)
-_MIN_DOSE_ERROR_PATTERN = re.compile(r"\bmin\.\s*dose\s+error\s*:\s*" + _DECIMAL_RE, flags=re.IGNORECASE | re.MULTILINE)
-_MAX_DOSE_ERROR_PATTERN = re.compile(r"\bmax\.\s*dose\s+error\s*:\s*" + _DECIMAL_RE, flags=re.IGNORECASE | re.MULTILINE)
-_SOURCE_FILE_NAME_PATTERN = re.compile(r"\bdose\s+error\s+detected\s+in\s+file\s*:\s*(.+?)\s*\.?\s*$", flags=re.IGNORECASE | re.MULTILINE)
-_SOURCE_EXPOSURE_ID_PATTERN = re.compile(r"\bexposure\s+id\s*:\s*([+-]?\d+)", flags=re.IGNORECASE | re.MULTILINE)
-_SOFTWARE_VERSION_PATTERN = re.compile(r"\bsoftware\s+version\s*:\s*(.+)", flags=re.IGNORECASE | re.MULTILINE)
-_TIME_PATTERN = re.compile(r"\btime\s*:\s*([^\s]+)", flags=re.IGNORECASE | re.MULTILINE)
-
-_FIELD_PATTERNS: dict[tuple[str, str], re.Pattern] = {}
-
-def _get_field_pattern(label: str, value_pattern: str) -> re.Pattern:
-    key = (label, value_pattern)
-    if key not in _FIELD_PATTERNS:
-        _FIELD_PATTERNS[key] = re.compile(r"^" + re.escape(label) + r"\s*:\s*" + value_pattern, flags=re.IGNORECASE | re.MULTILINE)
-    return _FIELD_PATTERNS[key]
-
+from er_dose.euv_base import ParsedEuvRootCause
+from er_dose.parsers.regex_utils import (
+    DECIMAL_RE,
+    INT_RE,
+    extract_datetime_isoformat,
+    extract_decimal,
+    extract_int,
+    extract_text,
+    field_pattern,
+    normalize_multiline_text,
+    to_snake_code,
+)
 
 def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
     """Parse er_data_raw_euv contents for dose error root cause details."""
     if not contents:
         return None
-    normalized = _normalize(contents)
+    normalized = normalize_multiline_text(contents)
     if "dose error detected in file:" not in normalized.lower() or "root cause" not in normalized.lower():
         return None
 
-    root_cause_message = _extract_text_compiled(normalized, _ROOT_CAUSE_MESSAGE_PATTERN)
-    min_dose_error = _extract_decimal_compiled(normalized, _MIN_DOSE_ERROR_PATTERN)
-    max_dose_error = _extract_decimal_compiled(normalized, _MAX_DOSE_ERROR_PATTERN)
+    root_cause_message = extract_text(normalized, r"\broot\s+cause\s*:\s*(.+)", trim_trailing_period=True)
+    min_dose_error = extract_decimal(normalized, r"\bmin\.\s*dose\s+error\s*:\s*" + DECIMAL_RE)
+    max_dose_error = extract_decimal(normalized, r"\bmax\.\s*dose\s+error\s*:\s*" + DECIMAL_RE)
 
     return ParsedEuvRootCause(
-        source_file_name=_extract_text_compiled(normalized, _SOURCE_FILE_NAME_PATTERN),
-        source_exposure_id=_extract_int_compiled(normalized, _SOURCE_EXPOSURE_ID_PATTERN),
-        source_code_occur_time=_extract_time_compiled(normalized),
-        root_cause_code=_to_code(root_cause_message),
+        source_file_name=extract_text(normalized, r"\bdose\s+error\s+detected\s+in\s+file\s*:\s*(.+?)\s*\.?\s*$", trim_trailing_period=True),
+        source_exposure_id=extract_int(normalized, r"\bexposure\s+id\s*:\s*" + INT_RE),
+        source_code_occur_time=extract_datetime_isoformat(normalized, r"\btime\s*:\s*([^\s]+)"),
+        root_cause_code=to_snake_code(root_cause_message),
         root_cause_message=root_cause_message,
         exposure_length=_extract_decimal_field(normalized, "exposure length"),
         duty_cycle=_extract_decimal_field(normalized, "duty cycle"),
@@ -122,48 +67,20 @@ def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
         rbdy_qc_etdc_3sigma=_extract_decimal_field(normalized, "rbdy qc etdc 3sigma"),
         rbdy_total_power_lf=_extract_decimal_field(normalized, "rbdy total power lf"),
         rbdy_total_power_mf=_extract_decimal_field(normalized, "rbdy total power mf"),
-        software_version=_extract_text_compiled(normalized, _SOFTWARE_VERSION_PATTERN),
+        software_version=extract_text(normalized, r"\bsoftware\s+version\s*:\s*(.+)", trim_trailing_period=True),
     )
 
-def _normalize(contents: str) -> str:
-    return contents.replace("\\n", "\n").strip()
 
-def _extract_text_compiled(contents: str, pattern: re.Pattern) -> str | None:
-    match = pattern.search(contents)
-    if match is None:
-        return None
-    value = match.group(1).strip()
-    return value.removesuffix(".").strip() or None
-
-def _extract_int_compiled(contents: str, pattern: re.Pattern) -> int | None:
-    match = pattern.search(contents)
-    if match is None:
-        return None
-    return int(match.group(1))
-
-def _extract_decimal_compiled(contents: str, pattern: re.Pattern) -> Decimal | None:
-    match = pattern.search(contents)
-    if match is None:
-        return None
-    return Decimal(match.group(1))
 
 def _extract_decimal_field(contents: str, label: str) -> Decimal | None:
-    return _extract_decimal_compiled(contents, _get_field_pattern(label, _DECIMAL_RE))
+    return extract_decimal(contents, field_pattern(label, DECIMAL_RE))
+
+
 
 def _extract_int_field(contents: str, label: str) -> int | None:
-    return _extract_int_compiled(contents, _get_field_pattern(label, r"([+-]?\d+)"))
+    return extract_int(contents, field_pattern(label, INT_RE))
 
-def _extract_time_compiled(contents: str) -> datetime | None:
-    value = _extract_text_compiled(contents, _TIME_PATTERN)
-    if value is None:
-        return None
-    return datetime.fromisoformat(value)
 
-def _to_code(value: str | None) -> str | None:
-    if value is None:
-        return None
-    code = re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
-    return code or None
 
 def _dominant_dose_error(min_value: Decimal | None, max_value: Decimal | None) -> Decimal | None:
     values = [value for value in (min_value, max_value) if value is not None]

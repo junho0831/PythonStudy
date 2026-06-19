@@ -36,18 +36,20 @@ class FakeTransaction:
 
 
 class FakeDB:
-    def __init__(self, raw_df):
+    def __init__(self, raw_df, fetch_df_result=None):
         self.raw_df = raw_df
+        self.fetch_df_result = raw_df if fetch_df_result is None else fetch_df_result
         self.executed = []
         self.inserted = []
         self.connection = object()
+        self.partition_inserts = []
 
-    def fetch_df(self, query, params=None):
+    def select(self, query, params=None):
         self.fetch_query = query
         self.fetch_params = params
-        return self.raw_df
+        return self.fetch_df_result
 
-    def fetch_df_in_chunks(self, query, params=None, chunk_size=10000):
+    def select_in_chunks(self, query, params=None, chunk_size=10000):
         self.fetch_query = query
         self.fetch_params = params
         for start in range(0, len(self.raw_df), chunk_size):
@@ -69,6 +71,7 @@ class FakeDB:
     def copy_insert_to_partition_table(self, schema, table_name, target_date, df, is_truncate=False):
         full_table_name = f"{schema}.{table_name}"
         self.inserted.append((full_table_name, df))
+        self.partition_inserts.append((full_table_name, target_date, df.copy()))
         return len(df)
 
 
@@ -79,15 +82,15 @@ class ERDoseProcessorTest(unittest.TestCase):
         start_time = datetime(2026, 5, 1)
         end_time = datetime(2026, 5, 2)
 
-        list(repo.fetch_raw_logs_in_chunks(start_time=start_time, end_time=end_time, limit=10, chunk_size=100))
+        list(repo.fetch_raw_logs_in_chunks(start_time=start_time, end_time=end_time, chunk_size=100))
 
-        self.assertIn("from mbeat.er_data_raw r", db.fetch_query)
+        self.assertIn("from mbeat.er_data_raw_1_prt_p20260501 r", db.fetch_query)
         self.assertIn("r.er_date", db.fetch_query)
         self.assertIn("r.er_index", db.fetch_query)
         self.assertIn('r."type" as type', db.fetch_query)
         self.assertIn("r.title", db.fetch_query)
-        self.assertIn("r.code_occur_time >= %(start_time)s", db.fetch_query)
-        self.assertIn("r.code_occur_time < %(end_time)s", db.fetch_query)
+        self.assertIn("r.code_occur_time >= :start_time", db.fetch_query)
+        self.assertIn("r.code_occur_time < :end_time", db.fetch_query)
         self.assertIn("r.code in", db.fetch_query)
         self.assertIn("'DW-3411'", db.fetch_query)
         self.assertIn("'DW-3425'", db.fetch_query)
@@ -100,7 +103,32 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertIn("'KE-9104'", db.fetch_query)
         self.assertEqual(db.fetch_params["start_time"], start_time)
         self.assertEqual(db.fetch_params["end_time"], end_time)
-        self.assertEqual(db.fetch_params["limit"], 10)
+
+    def test_fetch_latest_wafer_states_returns_latest_state_per_eq_name(self):
+        history_df = pd.DataFrame(
+            [
+                {"eq_name": "EQ1", "wafer_id": 1001, "wafer_seq": 21},
+                {"eq_name": "EQ2", "wafer_id": None, "wafer_seq": 7},
+            ]
+        )
+        db = FakeDB(pd.DataFrame(), fetch_df_result=history_df)
+        repo = ERDoseRepository(db)
+        start_time = datetime(2026, 5, 2)
+
+        wafer_states = repo.fetch_latest_wafer_states(start_time)
+
+        self.assertIn("from prism_common.er_dose_raw_parsed p", db.fetch_query)
+        self.assertIn("p.code_occur_time >= :previous_day_start", db.fetch_query)
+        self.assertIn("p.code_occur_time < :start_time", db.fetch_query)
+        self.assertEqual(db.fetch_params["start_time"], start_time)
+        self.assertEqual(db.fetch_params["previous_day_start"], datetime(2026, 5, 1, 0, 0, 0))
+        self.assertEqual(
+            wafer_states,
+            {
+                "EQ1": {"wafer_id": 1001, "wafer_seq": 21},
+                "EQ2": {"wafer_id": None, "wafer_seq": 7},
+            },
+        )
 
     def test_run_inserts_rows_without_deleting_existing_history(self):
         raw_df = pd.DataFrame(
@@ -119,7 +147,7 @@ class ERDoseProcessorTest(unittest.TestCase):
 
         delete_queries = [query for query, _, _ in db.executed if query.strip().lower().startswith("delete")]
         self.assertEqual(delete_queries, [])
-        parsed_insert = self._inserted_df(db, "mbeat.er_dose_error_parsed")
+        parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
         self.assertNotIn("parser_version", parsed_insert.columns)
         self.assertNotIn("parsing_status", parsed_insert.columns)
         self.assertNotIn("parsing_error", parsed_insert.columns)
@@ -130,8 +158,51 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(parsed_insert.loc[0, "type"], "ER")
         self.assertEqual(parsed_insert.loc[0, "title"], "Dose warning")
         self.assertEqual(parsed_insert.loc[0, "contents"], SAMPLE_CONTENTS)
+        self.assertIn("wafer_seq", parsed_insert.columns)
+        self.assertTrue(pd.isna(parsed_insert.loc[0, "wafer_seq"]))
         inserted_tables = [table_name for table_name, _ in db.inserted]
-        self.assertEqual(inserted_tables, ["mbeat.er_dose_error_parsed"])
+        self.assertEqual(inserted_tables, ["prism_common.er_dose_raw_parsed"])
+
+    def test_run_uses_preloaded_wafer_state_when_chunk_starts_without_wafer_info(self):
+        raw_df = pd.DataFrame([
+            self._row(1, "lo-0061", "system info: lo-0061 normal message", eq_name="EQ1")
+        ])
+        history_df = pd.DataFrame([
+            {"eq_name": "EQ1", "wafer_id": 2111, "wafer_seq": 23}
+        ])
+        db = FakeDB(raw_df, fetch_df_result=history_df)
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+
+        with redirect_stdout(StringIO()):
+            processor.run(start_time=datetime(2026, 5, 2), end_time=datetime(2026, 5, 3))
+
+        parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
+        self.assertEqual(parsed_insert.loc[0, "wafer_id"], 2111)
+        self.assertEqual(parsed_insert.loc[0, "wafer_seq"], 23)
+
+    def test_run_skips_dw_row_when_exposure_handle_jump_reaches_threshold(self):
+        jump_contents = SAMPLE_CONTENTS.replace("exposure_handle:2631", "exposure_handle:3631")
+        next_contents = SAMPLE_CONTENTS.replace("exposure_handle:2631", "exposure_handle:3632")
+        raw_df = pd.DataFrame(
+            [
+                self._row(1, "DW-3411", SAMPLE_CONTENTS, eq_name="EQ1"),
+                self._row(2, "DW-3411", jump_contents, eq_name="EQ1"),
+                self._row(3, "DW-3411", next_contents, eq_name="EQ1"),
+            ]
+        )
+        db = FakeDB(raw_df)
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+
+        with redirect_stdout(StringIO()) as stdout:
+            processor.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
+
+        parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
+        self.assertEqual(len(parsed_insert), 2)
+        self.assertEqual(parsed_insert.loc[0, "exposure_handle"], 2631)
+        self.assertEqual(parsed_insert.loc[1, "exposure_handle"], 3632)
+        self.assertIn("skip_test_shot", stdout.getvalue())
 
     def test_run_processes_multiple_chunks(self):
         raw_df = pd.DataFrame(
@@ -156,17 +227,60 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(len(db.inserted[0][1]), 2)
         self.assertEqual(len(db.inserted[1][1]), 1)
 
-    def test_partition_creation_covers_each_day_in_range(self):
+    def test_insert_parsed_df_keeps_integer_columns_as_nullable_int(self):
         db = FakeDB(pd.DataFrame())
         repo = ERDoseRepository(db)
+        df = pd.DataFrame(
+            [
+                {
+                    "er_date": 20260615,
+                    "er_index": 1,
+                    "er_line": "L1",
+                    "eq_name": "EQ1",
+                    "code": "DW-3411",
+                    "code_occur_time": datetime(2026, 6, 15, 10, 0, 0),
+                    "belong": "SCANNER",
+                    "type": "ER",
+                    "title": "Dose warning",
+                    "contents": SAMPLE_CONTENTS,
+                    "exposure_handle": 11388,
+                    "action_handle": None,
+                    "wafer_id": None,
+                    "wafer_seq": 44,
+                    "de_err": "0.0461075",
+                    "n_slit": 44,
+                },
+                {
+                    "er_date": 20260615,
+                    "er_index": 2,
+                    "er_line": "L1",
+                    "eq_name": "EQ1",
+                    "code": "DW-3411",
+                    "code_occur_time": datetime(2026, 6, 15, 10, 1, 0),
+                    "belong": "SCANNER",
+                    "type": "ER",
+                    "title": "Dose warning",
+                    "contents": SAMPLE_CONTENTS,
+                    "exposure_handle": None,
+                    "action_handle": 2625,
+                    "wafer_id": 2111,
+                    "wafer_seq": None,
+                    "de_err": "0.0461075",
+                    "n_slit": None,
+                },
+            ]
+        )
 
-        repo.ensure_partitions(start_time=datetime(2026, 5, 31, 12), end_time=datetime(2026, 6, 2, 1))
+        repo.insert_parsed_df(df)
 
-        create_queries = [query for query, _, _ in db.executed if "partition of mbeat.er_dose_error_parsed" in query]
-        self.assertEqual(len(create_queries), 3)
-        self.assertIn("er_dose_error_parsed_1_prt_p20260531", create_queries[0])
-        self.assertIn("er_dose_error_parsed_1_prt_p20260601", create_queries[1])
-        self.assertIn("er_dose_error_parsed_1_prt_p20260602", create_queries[2])
+        inserted_df = db.partition_inserts[0][2]
+        self.assertEqual(str(inserted_df["exposure_handle"].dtype), "Int64")
+        self.assertEqual(str(inserted_df["action_handle"].dtype), "Int64")
+        self.assertEqual(str(inserted_df["wafer_id"].dtype), "Int64")
+        self.assertEqual(str(inserted_df["wafer_seq"].dtype), "Int64")
+        self.assertEqual(str(inserted_df["n_slit"].dtype), "Int64")
+        self.assertEqual(inserted_df.loc[0, "exposure_handle"], 11388)
+        self.assertTrue(pd.isna(inserted_df.loc[1, "exposure_handle"]))
 
     def _row(self, row_no, code, contents, code_occur_time=None, belong="SCANNER", eq_name="EQ1"):
         return {

@@ -1,6 +1,6 @@
-create schema if not exists mbeat;
+create schema if not exists prism_common;
 
-create table if not exists mbeat.er_dose_error_root_cause (
+create table if not exists prism_common.er_dose_euv_parsed (
     er_line                 varchar(20),
     eq_name                 varchar(20),
     er_type                 varchar(10),
@@ -57,8 +57,8 @@ create table if not exists mbeat.er_dose_error_root_cause (
 )
 partition by range (code_occur_time);
 
-create index if not exists idx_er_dose_root_cause_line_eq_time
-on mbeat.er_dose_error_root_cause (er_line, eq_name, code_occur_time);
+create index if not exists idx_er_dose_euv_parsed_line_eq_time
+on prism_common.er_dose_euv_parsed (er_line, eq_name, code_occur_time);
 
-comment on table mbeat.er_dose_error_root_cause is
-'FE-facing dose error root cause table. Independent from er_dose_error_parsed; source description candidates are read from er_data_raw_euv.';
+comment on table prism_common.er_dose_euv_parsed is
+'FE-facing dose error root cause table. Independent from er_dose_raw_parsed; source description candidates are read from er_data_raw_euv.';

@@ -32,14 +32,12 @@ class MainTest(unittest.TestCase):
 
         run_batch.assert_called_once_with(input_date="2026-05-31", parser_name="COMBINED")
 
-    def test_er_dose_target_runs_er_dose_batch(self):
+    def test_er_dose_raw_target_runs_er_dose_batch(self):
         env = {
-            "BATCH_TARGET": "ER_DOSE",
+            "BATCH_TARGET": "ER_DOSE_RAW",
             "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
             "ER_DOSE_END_TIME": "2026-06-01T00:00:00",
-            "ER_DOSE_LIMIT": "100",
             "ER_DOSE_CHUNK_SIZE": "20000",
-            "ER_DOSE_DB_DSN": "postgresql://user:pass@localhost:5432/db",
         }
         batch = Mock()
 
@@ -52,22 +50,21 @@ class MainTest(unittest.TestCase):
             result = Main(env=env).run()
 
         self.assertEqual(result, 0)
-        postgres_db.assert_called_once_with(dsn="postgresql://user:pass@localhost:5432/db")
+        postgres_db.assert_called_once_with()
         repo_cls.assert_called_once_with(postgres_db.return_value)
         processor_cls.assert_called_once_with(repo_cls.return_value)
         batch.run.assert_called_once_with(
             start_time=datetime(2026, 5, 31, 0, 0, 0),
             end_time=datetime(2026, 6, 1, 0, 0, 0),
-            limit=100,
             chunk_size=20000,
+            target_date=None,
         )
 
-    def test_er_does_alias_is_supported(self):
+    def test_er_dose_legacy_alias_is_supported(self):
         env = {
-            "BATCH_TARGET": "ER_DOES",
+            "BATCH_TARGET": "ER_DOSE",
             "START_TIME": "2026-05-31T00:00:00",
             "END_TIME": "2026-06-01T00:00:00",
-            "DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
         }
 
         with patch("batch_main.main.PostgresDB") as postgres_db, patch(
@@ -75,15 +72,19 @@ class MainTest(unittest.TestCase):
         ), patch("batch_main.main.ERDoseProcessor") as processor_cls:
             Main(env=env).run()
 
-        postgres_db.assert_called_once_with(dsn="postgresql://user:pass@localhost:5432/db")
-        processor_cls.return_value.run.assert_called_once()
+        postgres_db.assert_called_once_with()
+        processor_cls.return_value.run.assert_called_once_with(
+            start_time=datetime(2026, 5, 31, 0, 0, 0),
+            end_time=datetime(2026, 6, 1, 0, 0, 0),
+            chunk_size=10000,
+            target_date=None,
+        )
 
-    def test_er_dose_limit_defaults_to_none(self):
+    def test_er_dose_chunk_size_defaults_to_10000(self):
         env = {
-            "BATCH_TARGET": "ER_DOSE",
+            "BATCH_TARGET": "ER_DOSE_RAW",
             "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
             "ER_DOSE_END_TIME": "2026-06-01T00:00:00",
-            "DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
         }
         batch = Mock()
 
@@ -95,31 +96,64 @@ class MainTest(unittest.TestCase):
         batch.run.assert_called_once_with(
             start_time=datetime(2026, 5, 31, 0, 0, 0),
             end_time=datetime(2026, 6, 1, 0, 0, 0),
-            limit=None,
             chunk_size=10000,
+            target_date=None,
         )
 
     def test_er_dose_chunk_size_must_be_positive(self):
         env = {
-            "BATCH_TARGET": "ER_DOSE",
+            "BATCH_TARGET": "ER_DOSE_RAW",
             "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
             "ER_DOSE_END_TIME": "2026-06-01T00:00:00",
             "ER_DOSE_CHUNK_SIZE": "0",
-            "DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
         }
 
         with self.assertRaises(ValueError):
             Main(env=env).run()
 
-    def test_er_dose_requires_dsn_or_database_url(self):
+    def test_er_dose_target_date_is_supported(self):
         env = {
-            "BATCH_TARGET": "ER_DOSE",
-            "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
-            "ER_DOSE_END_TIME": "2026-06-01T00:00:00",
+            "BATCH_TARGET": "ER_DOSE_RAW",
+            "ER_DOSE_RAW_TARGET_DATE": "2026-06-16",
         }
 
-        with self.assertRaises(ValueError):
-            Main(env=env).run()
+        with patch("batch_main.main.PostgresDB") as postgres_db, patch(
+            "batch_main.main.ERDoseRepository"
+        ) as repo_cls, patch("batch_main.main.ERDoseProcessor") as processor_cls:
+            result = Main(env=env).run()
+
+        self.assertEqual(result, 0)
+        postgres_db.assert_called_once_with()
+        repo_cls.assert_called_once_with(postgres_db.return_value)
+        processor_cls.assert_called_once_with(repo_cls.return_value)
+        processor_cls.return_value.run.assert_called_once_with(
+            start_time=None,
+            end_time=None,
+            chunk_size=10000,
+            target_date=datetime(2026, 6, 16).date(),
+        )
+
+    def test_er_dose_euv_target_runs_er_dose_euv_batch(self):
+        env = {
+            "BATCH_TARGET": "ER_DOSE_EUV",
+            "ER_DOSE_EUV_TARGET_DATE": "2026-06-16",
+        }
+
+        with patch("batch_main.main.PostgresDB") as postgres_db, patch(
+            "batch_main.main.ERDoseEUVRepository"
+        ) as repo_cls, patch("batch_main.main.ERDoseEUVProcessor") as processor_cls:
+            result = Main(env=env).run()
+
+        self.assertEqual(result, 0)
+        postgres_db.assert_called_once_with()
+        repo_cls.assert_called_once_with(postgres_db.return_value)
+        processor_cls.assert_called_once_with(repo_cls.return_value)
+        processor_cls.return_value.run.assert_called_once_with(
+            start_time=None,
+            end_time=None,
+            chunk_size=10000,
+            target_date=datetime(2026, 6, 16).date(),
+        )
 
     def test_unknown_target_raises(self):
         with self.assertRaises(ValueError):

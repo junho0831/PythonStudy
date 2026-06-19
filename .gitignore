@@ -1,0 +1,6 @@
+.idea/workspace.xml
+.venv/
+.vendor/
+__pycache__/
+.pytest_cache/
+*.py[cod]
