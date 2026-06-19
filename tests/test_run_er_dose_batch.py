@@ -32,14 +32,27 @@ class RunERDoseBatchTest(unittest.TestCase):
             target_date=date(2026, 6, 16),
         )
 
-    def test_cli_er_dose_euv_is_reserved(self):
-        with self.assertRaises(NotImplementedError):
-            run_er_dose_batch.main([
+    def test_cli_er_dose_euv_maps_to_target_date(self):
+        with patch("er_dose.run_er_dose_batch.PostgresDB") as postgres_db, patch(
+            "er_dose.run_er_dose_batch.ERDoseEUVRepository"
+        ) as repo_cls, patch("er_dose.run_er_dose_batch.ERDoseEUVProcessor") as processor_cls:
+            result = run_er_dose_batch.main([
                 "--date",
                 "2026-06-16",
                 "--parser",
                 "ER_DOSE_EUV",
             ])
+
+        self.assertEqual(result, 0)
+        postgres_db.assert_called_once_with(dsn=None)
+        repo_cls.assert_called_once_with(postgres_db.return_value)
+        processor_cls.assert_called_once_with(repo_cls.return_value)
+        processor_cls.return_value.run.assert_called_once_with(
+            start_time=None,
+            end_time=None,
+            chunk_size=10000,
+            target_date=date(2026, 6, 16),
+        )
 
     def test_cli_start_end_still_supported(self):
         with patch("er_dose.run_er_dose_batch.PostgresDB"), patch(

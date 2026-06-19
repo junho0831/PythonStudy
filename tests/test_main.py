@@ -133,9 +133,27 @@ class MainTest(unittest.TestCase):
             target_date=datetime(2026, 6, 16).date(),
         )
 
-    def test_er_dose_euv_target_is_reserved(self):
-        with self.assertRaises(NotImplementedError):
-            Main(env={"BATCH_TARGET": "ER_DOSE_EUV"}).run()
+    def test_er_dose_euv_target_runs_er_dose_euv_batch(self):
+        env = {
+            "BATCH_TARGET": "ER_DOSE_EUV",
+            "ER_DOSE_EUV_TARGET_DATE": "2026-06-16",
+        }
+
+        with patch("batch_main.main.PostgresDB") as postgres_db, patch(
+            "batch_main.main.ERDoseEUVRepository"
+        ) as repo_cls, patch("batch_main.main.ERDoseEUVProcessor") as processor_cls:
+            result = Main(env=env).run()
+
+        self.assertEqual(result, 0)
+        postgres_db.assert_called_once_with()
+        repo_cls.assert_called_once_with(postgres_db.return_value)
+        processor_cls.assert_called_once_with(repo_cls.return_value)
+        processor_cls.return_value.run.assert_called_once_with(
+            start_time=None,
+            end_time=None,
+            chunk_size=10000,
+            target_date=datetime(2026, 6, 16).date(),
+        )
 
     def test_unknown_target_raises(self):
         with self.assertRaises(ValueError):

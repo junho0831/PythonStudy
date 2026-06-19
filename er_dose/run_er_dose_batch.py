@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 from datetime import date, datetime
 
+from er_dose.euv_processor import ERDoseEUVProcessor
+from er_dose.euv_repository import ERDoseEUVRepository
 from er_dose.infra.postgres_db import PostgresDB
 from er_dose.processor import ERDoseProcessor
 from er_dose.repository import ERDoseRepository
@@ -41,9 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
-
-    if args.parser_name == "ER_DOSE_EUV":
-        raise NotImplementedError("ER_DOSE_EUV is not implemented yet")
+    parser_name = args.parser_name or "ER_DOSE_RAW"
 
     if args.target_date is not None:
         target_date = args.target_date
@@ -59,8 +59,12 @@ def main(argv=None) -> int:
         end_time = args.end_time
 
     db = PostgresDB(dsn=args.dsn)
-    repository = ERDoseRepository(db)
-    processor = ERDoseProcessor(repository)
+    if parser_name == "ER_DOSE_EUV":
+        repository = ERDoseEUVRepository(db)
+        processor = ERDoseEUVProcessor(repository)
+    else:
+        repository = ERDoseRepository(db)
+        processor = ERDoseProcessor(repository)
     processor.run(
         start_time=start_time,
         end_time=end_time,
