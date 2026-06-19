@@ -37,13 +37,13 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 ## ER Dose Error 배치
 
-`ER_DOSE` 배치는 `mbeat.er_data_raw`의 dose warning 로그를 파싱해 `prism_common.er_dose_error_parsed`에 적재합니다. 원천 식별 컬럼인 `er_date`, `er_index`, `er_line`, `eq_name`, `code`, `code_occur_time`, `belong`, `type`, `title`, `contents`는 그대로 보존하고, `contents`에서 실제로 필요한 `exposure_handle`, `action_handle`, `wafer_id`, `wafer_seq`, `de_err`, `n_slit`만 별도 컬럼으로 저장합니다. 조회 대상 `code`는 `DW-3411`, `DW-3425`, `DW-343A`, `DW-343B`, `LO-0061`, `LO-8166`, `LO-8167`, `KE-9103`, `KE-9104`이며, 코드 값은 DB에 저장된 원본 형식 그대로 비교합니다.
+`ER_DOSE_RAW` 배치는 `mbeat.er_data_raw`의 dose warning 로그를 파싱해 `prism_common.er_dose_error_parsed`에 적재합니다. 원천 식별 컬럼인 `er_date`, `er_index`, `er_line`, `eq_name`, `code`, `code_occur_time`, `belong`, `type`, `title`, `contents`는 그대로 보존하고, `contents`에서 실제로 필요한 `exposure_handle`, `action_handle`, `wafer_id`, `wafer_seq`, `de_err`, `n_slit`만 별도 컬럼으로 저장합니다. 조회 대상 `code`는 `DW-3411`, `DW-3425`, `DW-343A`, `DW-343B`, `LO-0061`, `LO-8166`, `LO-8167`, `KE-9103`, `KE-9104`이며, 코드 값은 DB에 저장된 원본 형식 그대로 비교합니다.
 
 배치는 `code_occur_time` 기간 조건으로 조회한 후보를 한 번에 메모리로 올리지 않고, `chunk` 단위로 읽어서 파싱 후 바로 `COPY` 적재합니다. 기본 `chunk` 크기는 `10000`이며 실행 시 조정할 수 있습니다. 청크 단위로 처리되더라도 설비(`eq_name`)별로 이전에 파싱한 `wafer_id`와 `wafer_seq`를 기억하여, 해당 값이 없는 로그에 이전 값을 채워넣는 로직이 적용되어 있습니다.
 
 `er_dose_error_parsed`에는 배치 상태 관리용 컬럼을 두지 않습니다. 파싱 실패 여부는 실행 summary로만 집계하고, 테이블에는 상태값 없이 원천 로그와 추출 가능한 값만 적재합니다.
 
-`mbeat.er_data_raw_euv` 기반 root cause 결과는 `prism_common.er_dose_error_root_cause`에 저장하는 별도 구조입니다. 이 테이블도 원천 컬럼과 root cause `contents`에서 실제 파싱되는 값만 보관합니다.
+`ER_DOSE_EUV`는 `mbeat.er_data_raw_euv` 기반 root cause 결과용 실행입니다. 대상 결과는 `prism_common.er_dose_error_root_cause`에 저장하며, `contents`에서 `source_file_name`, `source_exposure_id`, `source_code_occur_time`, `root_cause_code`, `root_cause_message`와 각종 EUV metric 컬럼을 파싱해 적재합니다.
 
 상세 스키마와 파싱 규칙은 [ER_DOSE_ERROR.md](ER_DOSE_ERROR.md)를 기준으로 관리합니다.
 
@@ -189,32 +189,40 @@ RBI_PARSER=COMBINED \
 .venv/bin/python main.py
 ```
 
-`ER_DOSE` 실행:
+`ER_DOSE_RAW` 실행:
 
 ```bash
-BATCH_TARGET=ER_DOSE \
-ER_DOSE_START_TIME=2026-05-31T00:00:00 \
-ER_DOSE_END_TIME=2026-06-01T00:00:00 \
-ER_DOSE_CHUNK_SIZE=10000 \
 ER_DOSE_DB_DSN='postgresql://user:password@host:5432/dbname' \
-python3 main.py
+.venv/bin/python main.py --date 2026-05-31 --parser ER_DOSE_RAW
 ```
+
+또는 `er_dose.properties` 에 DB 연결을 넣고 실행할 수 있습니다.
+
+```properties
+ER_DOSE_DB_DSN=postgresql://user:password@host:5432/dbname
+```
+
+`ER_DOSE_EUV`도 `ER_DOSE_RAW`와 별도 실행으로 동작합니다.
 
 필수 환경변수:
 
-- `BATCH_TARGET`: `RBI` 또는 `ER_DOSE`
+- `BATCH_TARGET`: `RBI`, `ER_DOSE_RAW`, `ER_DOSE_EUV`
 - `RBI_INPUT_DATE`: RBI 기준 날짜, `YYYY-MM-DD`
-- `ER_DOSE_START_TIME`: ER Dose 조회 시작 시각
-- `ER_DOSE_END_TIME`: ER Dose 조회 종료 시각
 - `ER_DOSE_DB_DSN` 또는 `DATABASE_URL`: PostgreSQL DSN
+- 또는 프로젝트 루트 `er_dose.properties` 파일의 `ER_DOSE_DB_DSN`
 
 선택 환경변수:
 
 - `RBI_PARSER`: `RUBI`, `RUPI`, `COMBINED`, 기본값 `COMBINED`
+- `ER_DOSE_RAW_TARGET_DATE`: ER Dose raw 대상 날짜, `YYYY-MM-DD`
+- `ER_DOSE_EUV_TARGET_DATE`: ER Dose EUV 대상 날짜, `YYYY-MM-DD`
 - `ER_DOSE_CHUNK_SIZE`: ER Dose raw fetch chunk 크기
 - `INPUT_DATE`: `RBI_INPUT_DATE` 대체값
+- `ER_DOSE_TARGET_DATE`: raw 레거시 대상 날짜 이름
+- `TARGET_DATE`: `ER_DOSE_TARGET_DATE` 레거시 대체값
 - `START_TIME`: `ER_DOSE_START_TIME` 대체값
 - `END_TIME`: `ER_DOSE_END_TIME` 대체값
+- `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`: 기존 시간 범위 직접 지정 방식도 계속 지원
 
 로컬 패키지 설치:
 
@@ -227,10 +235,13 @@ pip3 install --target .vendor SQLAlchemy psycopg2-binary
 
 실행 규칙:
 
-- `BATCH_TARGET=RBI`이면 FTP 기반 RBI 배치를 실행합니다.
-- `BATCH_TARGET=ER_DOSE`이면 ER RAW 로그 파싱 배치를 실행합니다.
-- `BATCH_TARGET=ER_DOES`도 `ER_DOSE`와 동일하게 처리합니다.
-- 환경변수 없이 `main.py`를 실행하면 `BATCH_TARGET` 필수 오류가 발생합니다.
+- `main.py --date <YYYY-MM-DD> --parser RUBI|RUPI|COMBINED`이면 FTP 기반 RBI 배치를 실행합니다.
+- `main.py --date <YYYY-MM-DD> --parser ER_DOSE_RAW`이면 ER RAW 로그 파싱 배치를 실행합니다.
+- `main.py --date <YYYY-MM-DD> --parser ER_DOSE_EUV`이면 EUV root cause 파싱 배치를 실행합니다.
+- 내부적으로 `ER_DOSE_RAW`는 `ER_DOSE_RAW_TARGET_DATE`, `ER_DOSE_EUV`는 `ER_DOSE_EUV_TARGET_DATE`를 사용합니다.
+- raw/euv processor 모두 대상 날짜 기준으로 하루 범위를 계산합니다.
+- `BATCH_TARGET=ER_DOSE_RAW`가 현재 raw 배치의 기본 이름입니다. 레거시 `ER_DOSE`도 계속 지원합니다.
+- 인자 없이 `main.py`를 실행하면 기존과 동일하게 환경변수 기반 실행입니다.
 
 ### DB 초기화
 
@@ -273,6 +284,51 @@ pip3 install --target .vendor SQLAlchemy psycopg2-binary
   /Users/parkjunho/PycharmProjects/PythonStudy/test.py \
   --input-date 2026-04-11 \
   --parser COMBINED
+```
+
+`ER_DOSE_RAW`
+
+```bash
+ER_DOSE_DB_DSN='postgresql://user:password@host:5432/dbname' \
+/Users/parkjunho/PycharmProjects/PythonStudy/.venv/bin/python \
+  /Users/parkjunho/PycharmProjects/PythonStudy/main.py \
+  --date 2026-04-11 \
+  --parser ER_DOSE_RAW
+```
+
+`ER_DOSE_EUV`
+
+```bash
+ER_DOSE_DB_DSN='postgresql://user:password@host:5432/dbname' \
+/Users/parkjunho/PycharmProjects/PythonStudy/.venv/bin/python \
+  /Users/parkjunho/PycharmProjects/PythonStudy/main.py \
+  --date 2026-04-11 \
+  --parser ER_DOSE_EUV
+```
+
+직접 ER Dose 실행 스크립트를 사용할 수도 있습니다.
+
+```bash
+python3 -m er_dose.run_er_dose_batch \
+  --date 2026-04-11 \
+  --parser ER_DOSE_RAW \
+  --dsn 'postgresql://user:password@host:5432/dbname'
+```
+
+```bash
+python3 -m er_dose.run_er_dose_batch \
+  --date 2026-04-11 \
+  --parser ER_DOSE_EUV \
+  --dsn 'postgresql://user:password@host:5432/dbname'
+```
+
+기존 시간 범위 직접 지정 방식도 계속 지원합니다.
+
+```bash
+python3 -m er_dose.run_er_dose_batch \
+  --start-time 2026-04-11T00:00:00 \
+  --end-time 2026-04-12T00:00:00 \
+  --dsn 'postgresql://user:password@host:5432/dbname'
 ```
 
 ## Airflow
