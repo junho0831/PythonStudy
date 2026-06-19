@@ -7,6 +7,7 @@ from typing import Any
 
 import pandas as pd
 
+from er_dose.euv_base import RawErEuvLog
 from er_dose.euv_repository import ERDoseEUVRepository
 from er_dose.root_cause import parse_root_cause
 
@@ -117,30 +118,37 @@ class ERDoseEUVProcessor:
         parsed_rows: list[dict[str, Any]] = []
 
         for _, row in raw_df.iterrows():
-            contents = row.get("contents")
-            parsed = parse_root_cause(str(contents) if pd.notna(contents) else "")
+            raw = self._row_to_raw_log(row)
+            parsed = parse_root_cause(raw.contents)
             if parsed is None:
                 continue
 
             parsed_rows.append(
                 {
-                    "er_line": self._nullable_str(row.get("er_line")),
-                    "eq_name": self._nullable_str(row.get("eq_name")),
-                    "er_type": self._nullable_str(row.get("er_type")),
-                    "code": self._nullable_str(row.get("code")),
-                    "code_occur_time": self._normalize_datetime(row.get("code_occur_time")),
-                    "belong": self._nullable_str(row.get("belong")),
-                    "type": self._nullable_str(row.get("type")),
-                    "title": self._nullable_str(row.get("title")),
-                    "contents": str(contents) if pd.notna(contents) else "",
-                    "reason_code": self._nullable_str(row.get("reason_code")),
-                    "task": self._nullable_str(row.get("task")),
-                    "compile_script": self._nullable_str(row.get("compile_script")),
+                    **asdict(raw),
                     **asdict(parsed),
                 }
             )
 
         return parsed_rows
+
+    def _row_to_raw_log(self, row: Any) -> RawErEuvLog:
+        contents = row.get("contents")
+
+        return RawErEuvLog(
+            er_line=self._nullable_str(row.get("er_line")),
+            eq_name=self._nullable_str(row.get("eq_name")),
+            er_type=self._nullable_str(row.get("er_type")),
+            code=self._nullable_str(row.get("code")),
+            code_occur_time=self._normalize_datetime(row.get("code_occur_time")),
+            belong=self._nullable_str(row.get("belong")),
+            type=self._nullable_str(row.get("type")),
+            title=self._nullable_str(row.get("title")),
+            contents=str(contents) if pd.notna(contents) else "",
+            reason_code=self._nullable_str(row.get("reason_code")),
+            task=self._nullable_str(row.get("task")),
+            compile_script=self._nullable_str(row.get("compile_script")),
+        )
 
     def _nullable_str(self, value: Any) -> str | None:
         if value is None or pd.isna(value):
