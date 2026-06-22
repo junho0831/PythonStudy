@@ -3,11 +3,11 @@ from __future__ import annotations
 import argparse
 from datetime import date, datetime
 
-from er_dose.euv_processor import ERDoseEUVProcessor
-from er_dose.euv_repository import ERDoseEUVRepository
+from er_dose.euv.processor import ERDoseEUVProcessor
+from er_dose.euv.repository import ERDoseEUVRepository
 from er_dose.infra.postgres_db import PostgresDB
-from er_dose.processor import ERDoseProcessor
-from er_dose.repository import ERDoseRepository
+from er_dose.raw.processor import ERDoseProcessor
+from er_dose.raw.repository import ERDoseRepository
 
 
 def parse_datetime(value: str) -> datetime:

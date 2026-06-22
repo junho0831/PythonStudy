@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from er_dose.parsers.base import ParsedErDoseError, RawErLog
-from er_dose.parsers.regex_utils import (
+from er_dose.raw.base import ParsedErDoseError, RawErLog
+from er_dose.common.regex_utils import (
     DECIMAL_RE as DECIMAL_PATTERN,
     INT_RE as INT_PATTERN,
     extract_first_decimal,

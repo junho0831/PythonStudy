@@ -4,8 +4,8 @@ import unittest
 from datetime import datetime
 from decimal import Decimal
 
-from er_dose.parsers.base import RawErLog
-from er_dose.parsers.dose_error_parser import parse_dose_error
+from er_dose.raw.base import RawErLog
+from er_dose.raw.parser import parse_dose_error
 
 
 SAMPLE_CONTENTS = """system warning: dw-3411 skip the dose evaluation 0.0461075 [%]
