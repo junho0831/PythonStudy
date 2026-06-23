@@ -23,11 +23,14 @@ class ERDoseEUVProcessor:
         chunk_size: int = 10000,
         target_date: date | None = None,
     ) -> None:
-        start_time, end_time = self._resolve_time_range(
-            start_time=start_time,
-            end_time=end_time,
-            target_date=target_date,
-        )
+        if target_date is not None:
+            start_time = datetime.combine(target_date, datetime.min.time())
+            end_time = start_time + timedelta(days=1)
+
+        if start_time is None or end_time is None:
+            raise ValueError("start_time and end_time are required")
+        if start_time >= end_time:
+            raise ValueError("start_time must be earlier than end_time")
         if chunk_size <= 0:
             raise ValueError("chunk_size must be greater than 0")
 
@@ -159,19 +162,3 @@ class ERDoseEUVProcessor:
         if hasattr(value, "to_pydatetime"):
             return value.to_pydatetime()
         return value
-
-    def _resolve_time_range(
-        self,
-        start_time: datetime | None,
-        end_time: datetime | None,
-        target_date: date | None,
-    ) -> tuple[datetime, datetime]:
-        if target_date is not None:
-            start_time = datetime.combine(target_date, datetime.min.time())
-            end_time = start_time + timedelta(days=1)
-
-        if start_time is None or end_time is None:
-            raise ValueError("start_time and end_time are required")
-        if start_time >= end_time:
-            raise ValueError("start_time must be earlier than end_time")
-        return start_time, end_time
