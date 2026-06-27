@@ -20,6 +20,73 @@ mbeat.er_data_raw_euv
 
 `prism_common.er_dose_raw_parsed`와 `prism_common.er_dose_euv_parsed`는 서로 조인하거나 매칭하지 않는다.
 
+## 이번 작업 정리
+
+현재 코드 기준으로 이번에 정리한 범위는 ER Dose RAW 파싱과 EUV root cause 파싱을 명확히 분리하고, 실제 운영 `contents` 샘플을 파싱 가능한 형태로 맞춘 것이다.
+
+### 1. RAW/EUV 실행 경로 분리
+
+기존 ER Dose 코드를 역할별 패키지로 나눴다.
+
+- RAW dose warning 흐름: `er_dose/raw/base.py`, `er_dose/raw/parser.py`, `er_dose/raw/processor.py`, `er_dose/raw/repository.py`
+- EUV root cause 흐름: `er_dose/euv/base.py`, `er_dose/euv/parser.py`, `er_dose/euv/processor.py`, `er_dose/euv/repository.py`
+- 공통 정규식/문자열 유틸: `er_dose/common/regex_utils.py`
+
+실행 parser 이름도 분리했다.
+
+- `ER_DOSE_RAW`: `mbeat.er_data_raw`를 읽어 `prism_common.er_dose_raw_parsed`에 적재
+- `ER_DOSE_EUV`: `mbeat.er_data_raw_euv`를 읽어 `prism_common.er_dose_euv_parsed`에 적재
+
+두 흐름은 같은 ER Dose 도메인에 있지만 입력 테이블, 파싱 규칙, 결과 테이블이 다르므로 코드 레벨에서도 별도 경로로 관리한다.
+
+### 2. EUV root cause 운영 샘플 파싱 대응
+
+`prism_common.er_dose_euv_parsed.contents`에 저장할 값을 만들기 위해 `mbeat.er_data_raw_euv.contents`의 root cause 내용을 구조화한다.
+
+이번 작업에서 실제 샘플에 맞춰 아래 케이스를 지원했다.
+
+- `Root cause`뿐 아니라 실제 원천 라벨인 `Root clause`도 root cause 라벨로 인정
+- `Exposure ID`뿐 아니라 확인된 오타 라벨인 `Exposesue I D`도 exposure ID로 인정
+- DB에 `\n`이 실제 줄바꿈이 아니라 두 문자로 들어온 경우 실제 줄바꿈으로 정규화 후 파싱
+- 라벨 대소문자와 라벨 앞뒤 공백 차이는 무시
+- `[s]`, `[perc]` 같은 단위 문자열은 제외하고 숫자만 저장
+- `Pulses_EUV<0.6DT_tot`, `FED pulses`처럼 정수 컬럼에 들어갈 값이 `3.0`으로 들어오면 정수 `3`으로 변환
+- `software_version`은 숫자로 강제 변환하지 않고 라벨 뒤 문자열을 그대로 저장
+- 개별 필드 변환에 실패해도 전체 행을 버리지 않고 실패한 컬럼만 `NULL` 처리
+
+단, `\t`는 실제 운영 데이터에서 확인된 변환 대상이 아니므로 별도 정규화하지 않는다. 테스트에 사용한 탭은 사람이 보기 쉽게 맞춘 표시용 공백으로 본다.
+
+### 3. RAW 처리 보정 로직 유지
+
+RAW dose warning 처리에서는 기존 운영상 필요한 보정 로직을 유지했다.
+
+- `code_occur_time` 기간 조건으로 RAW 후보를 조회
+- `DW-3411`, `DW-3425`, `DW-343A`, `DW-343B`, `LO-0061`, `LO-8166`, `LO-8167`, `KE-9103`, `KE-9104`만 대상
+- `wafer_id`, `wafer_seq`가 없는 row는 같은 `eq_name`의 직전 상태를 이어서 사용
+- 배치 시작 시 직전 일자 파싱 결과에서 설비별 최신 wafer 상태를 미리 읽어와 chunk 첫 row 보정에도 사용
+- DW 계열에서 `exposure_handle`이 설비별 직전 값 대비 `1000` 이상 증가하면 test shot으로 보고 해당 row를 skip
+
+### 4. 배치 실행/처리 구조 정리
+
+processor 공통 동작을 단순화했다.
+
+- `target_date`가 들어오면 processor 내부에서 `00:00:00 <= code_occur_time < 다음날 00:00:00` 범위로 변환
+- `start_time`, `end_time` 직접 지정 방식도 유지
+- `chunk_size <= 0` 또는 잘못된 시간 범위는 즉시 `ValueError`
+- 전체 데이터를 한 번에 메모리에 올리지 않고 `chunk 조회 -> 파싱 -> 파티션 COPY 적재`를 반복
+- chunk별 `fetched`, `parsed`, `inserted`, elapsed time, rows/sec 로그를 출력
+- 결과 테이블은 `code_occur_time` 날짜 기준 파티션으로 나눠 `copy_insert_to_partition_table()`을 통해 적재
+
+### 5. 검증 추가
+
+테스트에는 아래 케이스를 포함했다.
+
+- EUV root cause 기본 샘플 파싱
+- root cause가 아닌 `contents` skip
+- 실제 샘플 라벨 변형: `Root clause`, `Exposesue I D`, `3.0` 정수 변환
+- EUV processor가 `mbeat.er_data_raw_euv`에서 기간 조회 후 root cause row만 insert하는지 확인
+- RAW processor의 wafer 상태 보정, target date 변환, DW exposure jump skip 확인
+
 ## 테이블 역할
 
 - `mbeat.er_data_raw`: Dose Error 파싱 대상 RAW. `er_date`, `er_index`가 있다.
