@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from time import perf_counter
 from typing import Any
 
 import pandas as pd
 
-from er_dose.parsers.base import RawErLog
-from er_dose.parsers.dose_error_parser import parse_dose_error
-from er_dose.repository import ERDoseRepository
+from er_dose.raw.base import RawErLog
+from er_dose.raw.parser import parse_dose_error
+from er_dose.raw.repository import ERDoseRepository
 
 
 DoseErrorValue = Decimal | int | bool | str | datetime | None
@@ -26,10 +26,19 @@ class ERDoseProcessor:
 
     def run(
         self,
-        start_time: datetime,
-        end_time: datetime,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         chunk_size: int = 10000,
+        target_date: date | None = None,
     ) -> None:
+        if target_date is not None:
+            start_time = datetime.combine(target_date, datetime.min.time())
+            end_time = start_time + timedelta(days=1)
+
+        if start_time is None or end_time is None:
+            raise ValueError("start_time and end_time are required")
+        if start_time >= end_time:
+            raise ValueError("start_time must be earlier than end_time")
         if chunk_size <= 0:
             raise ValueError("chunk_size must be greater than 0")
 

@@ -7,8 +7,8 @@ from io import StringIO
 
 import pandas as pd
 
-from er_dose.processor import ERDoseProcessor
-from er_dose.repository import ERDoseRepository
+from er_dose.raw.processor import ERDoseProcessor
+from er_dose.raw.repository import ERDoseRepository
 
 
 SAMPLE_CONTENTS = """system warning: dw-3411 skip the dose evaluation 0.0461075 [%]
@@ -226,6 +226,20 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(len(db.inserted), 2)
         self.assertEqual(len(db.inserted[0][1]), 2)
         self.assertEqual(len(db.inserted[1][1]), 1)
+
+    def test_run_accepts_target_date_and_builds_daily_window(self):
+        raw_df = pd.DataFrame([
+            self._row(1, "dw-3411", SAMPLE_CONTENTS)
+        ])
+        db = FakeDB(raw_df)
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+
+        with redirect_stdout(StringIO()):
+            processor.run(target_date=datetime(2026, 5, 1).date())
+
+        self.assertEqual(db.fetch_params["start_time"], datetime(2026, 5, 1, 0, 0, 0))
+        self.assertEqual(db.fetch_params["end_time"], datetime(2026, 5, 2, 0, 0, 0))
 
     def test_insert_parsed_df_keeps_integer_columns_as_nullable_int(self):
         db = FakeDB(pd.DataFrame())

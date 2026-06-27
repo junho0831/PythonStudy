@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from er_dose.euv_base import ParsedEuvRootCause
-from er_dose.parsers.regex_utils import (
+from er_dose.euv.base import ParsedEuvRootCause
+from er_dose.common.regex_utils import (
     DECIMAL_RE,
     INT_RE,
     extract_datetime_isoformat,

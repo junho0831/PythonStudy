@@ -4,11 +4,11 @@ import os
 from datetime import date, datetime
 
 from airflow_modules.ftp_batch_jobs import run_batch
-from er_dose.euv_processor import ERDoseEUVProcessor
-from er_dose.euv_repository import ERDoseEUVRepository
+from er_dose.euv.processor import ERDoseEUVProcessor
+from er_dose.euv.repository import ERDoseEUVRepository
 from er_dose.infra.postgres_db import PostgresDB
-from er_dose.processor import ERDoseProcessor
-from er_dose.repository import ERDoseRepository
+from er_dose.raw.processor import ERDoseProcessor
+from er_dose.raw.repository import ERDoseRepository
 
 
 class Main:
