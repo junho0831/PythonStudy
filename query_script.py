@@ -26,36 +26,24 @@ class QueryExecutor:
                 )
         """
 
-        # select()가 DataFrame을 반환한다고 가정
+        # 1. DB에서 원본 DataFrame 그대로 가져오기
         genome_df = self.__db_mgr.select(query)
         
-        # 결과를 담을 딕셔너리
-        # 구조: { 'eqp_id': {'corner_length': val, 'corner_width': val, 'border_width': val} }
-        result_data = {}
+        if genome_df is None or genome_df.empty:
+            return pd.DataFrame()
         
-        if genome_df is not None and not genome_df.empty:
-            for _, row in genome_df.iterrows():
-                eqp_id = row['eqp_id']
-                title = row['title']
-                value = row['value']
-                
-                # eqp_id가 처음 등장하면 딕셔너리에 초기화
-                if eqp_id not in result_data:
-                    result_data[eqp_id] = {
-                        'corner_length': None,
-                        'corner_width': None,
-                        'border_width': None
-                    }
-                
-                # 쿼리의 title 값에 따라 알맞은 키에 값 할당
-                if title == 'mcruip_ipez_exclusionzones_eipcornerlength_tag':
-                    result_data[eqp_id]['corner_length'] = value
-                elif title == 'mcruip_ipez_exclusionzones_eipcornerwidth_tag':
-                    result_data[eqp_id]['corner_width'] = value
-                elif title == 'mcruip_ipez_exclusionzones_borderwidth_tag':
-                    result_data[eqp_id]['border_width'] = value
-                    
-        return result_data
+        # 2. 순수 판다스 기능(pivot)으로 한 방에 설비당 1줄로 묶기 (딕셔너리 과정 생략!)
+        pivoted_df = genome_df.pivot(index='eqp_id', columns='title', values='value')
+        
+        # 3. 컬럼 이름을 우리가 쓰기 편한 이름으로 변경
+        pivoted_df = pivoted_df.rename(columns={
+            'mcruip_ipez_exclusionzones_eipcornerlength_tag': 'corner_length',
+            'mcruip_ipez_exclusionzones_eipcornerwidth_tag': 'corner_width',
+            'mcruip_ipez_exclusionzones_borderwidth_tag': 'border_width'
+        })
+        
+        # 피벗된 판다스 DataFrame을 그대로 리턴
+        return pivoted_df
 
 if __name__ == "__main__":
     executor = QueryExecutor()
