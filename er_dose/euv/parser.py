@@ -37,7 +37,6 @@ def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
         duty_cycle=_extract_decimal_field(normalized, "duty cycle"),
         min_dose_error=min_dose_error,
         max_dose_error=max_dose_error,
-        dose_error=_dominant_dose_error(min_dose_error, max_dose_error),
         on_drop_euv_energy=_extract_decimal_field(normalized, "on drop euv energy"),
         on_drop_pp_energy=_extract_decimal_field(normalized, "on drop pp energy"),
         on_drop_mp_energy=_extract_decimal_field(normalized, "on drop mp energy"),
@@ -49,7 +48,7 @@ def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
         max_cross_interval=_extract_decimal_field(normalized, "max. cross. interval"),
         xint_3sigma=_extract_decimal_field(normalized, "xint 3sigma"),
         euv_3sigma=_extract_decimal_field(normalized, "euv 3sigma"),
-        pulses_euv_lt_0_6dt_tot=_extract_int_field(normalized, "pulses_euv<0.6dt_tot"),
+        pulses_euv_0_6dt_tot=_extract_int_field(normalized, "pulses_euv<0.6dt_tot"),
         fed_pulses=_extract_int_field(normalized, "fed pulses"),
         l2dx_maxce=_extract_decimal_field(normalized, "l2dx maxce"),
         l2dy_maxce=_extract_decimal_field(normalized, "l2dy maxce"),
@@ -79,12 +78,3 @@ def _extract_decimal_field(contents: str, label: str) -> Decimal | None:
 
 def _extract_int_field(contents: str, label: str) -> int | None:
     return extract_int(contents, field_pattern(label, INT_RE))
-
-
-
-def _dominant_dose_error(min_value: Decimal | None, max_value: Decimal | None) -> Decimal | None:
-    values = [value for value in (min_value, max_value) if value is not None]
-    if not values:
-        return None
-    return max(values, key=lambda value: abs(value))
-

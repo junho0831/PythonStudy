@@ -100,12 +100,11 @@ erDiagram
         varchar reason_code
         varchar task
         varchar compile_script
-        bigint source_exposure_id
-        timestamp source_code_occur_time
-        numeric dose_error
-        text source_file_name
+        bigint exposure_id
+        timestamp time
+        text dose_error_detected_in_file
         text root_cause_code
-        text root_cause_message
+        text root_cause
         numeric exposure_length
         numeric duty_cycle
         numeric min_dose_error
@@ -113,15 +112,15 @@ erDiagram
         numeric on_drop_euv_energy
         numeric on_drop_pp_energy
         numeric on_drop_mp_energy
-        numeric on_drop_pp_dlgc1
-        numeric on_drop_mp_dlgc1
+        numeric on_drop_pp_dlgc_1
+        numeric on_drop_mp_dlgc_1
         numeric bi_cell_y_3sigma
         numeric fdsc_y_error
         numeric fdsc_y_3sigma
         numeric max_cross_interval
         numeric xint_3sigma
         numeric euv_3sigma
-        integer pulses_euv_lt_0_6dt_tot
+        integer pulses_euv_0_6dt_tot
         integer fed_pulses
         numeric l2dx_maxce
         numeric l2dy_maxce
@@ -174,8 +173,8 @@ max. dose error : 0.74 [perc]
 software version : 2.0 [nxe3400 mv 250w]
 ```
 
-파서는 `source_file_name`, `source_exposure_id`, `source_code_occur_time`, `root_cause_message`, `root_cause_code`를 추출한다.
-`dose_error`는 `min_dose_error`와 `max_dose_error` 중 절대값이 큰 대표값으로 저장한다. 예시에서는 `-2.02`가 저장된다.
+파서는 `dose_error_detected_in_file`, `exposure_id`, `time`, `root_cause`를 원문 라벨 기반 snake_case 컬럼으로 저장한다.
+`root_cause_code`는 `root_cause`의 snake_case 파생값으로 저장한다.
 
 측정값은 조회/필터링을 위해 `exposure_length`, `duty_cycle`, `on_drop_*`, `fdsc_*`, `l2d*`, `rbdy_*`, `software_version` 등 개별 컬럼에 저장하고, 원문은 `contents`에 보존한다.
 
