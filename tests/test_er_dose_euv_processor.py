@@ -97,9 +97,9 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         table_name, inserted_df = db.inserted[0]
         self.assertEqual(table_name, "prism_common.er_dose_euv_parsed")
         self.assertEqual(len(inserted_df), 1)
-        self.assertEqual(inserted_df.loc[0, "source_exposure_id"], 25415)
+        self.assertEqual(inserted_df.loc[0, "exposure_id"], 25415)
         self.assertEqual(inserted_df.loc[0, "root_cause_code"], "plasma_oscillations")
-        self.assertEqual(inserted_df.loc[0, "source_file_name"], "adecetdcdata_fdd_lc_eei_scanner_dose_error_event_20260504_180529_3502+0900.zip")
+        self.assertEqual(inserted_df.loc[0, "dose_error_detected_in_file"], "adecetdcdata_fdd_lc_eei_scanner_dose_error_event_20260504_180529_3502+0900.zip")
         self.assertEqual(db.partition_inserts[0][1], "2026-05-04")
 
 

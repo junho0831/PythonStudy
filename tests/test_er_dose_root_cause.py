@@ -31,9 +31,8 @@ def test_parse_euv_root_cause_contents():
     assert parsed.duty_cycle == Decimal("99.68")
     assert parsed.min_dose_error == Decimal("-2.02")
     assert parsed.max_dose_error == Decimal("0.74")
-    assert parsed.dose_error == Decimal("-2.02")
     assert parsed.on_drop_mp_dlgc1 == Decimal("420.3")
-    assert parsed.pulses_euv_lt_0_6dt_tot == 143
+    assert parsed.pulses_euv_0_6dt_tot == 143
     assert parsed.fed_pulses == 107
     assert parsed.rbdy_peak_frequency_hf == Decimal("1100.01")
     assert parsed.software_version == "2.0 [nxe3400 mv 250w]"

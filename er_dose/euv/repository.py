@@ -11,6 +11,47 @@ from er_dose.infra.postgres_db import PostgresDB
 EUV_RAW_TABLE = "mbeat.er_data_raw_euv"
 ROOT_CAUSE_TABLE = "prism_common.er_dose_euv_parsed"
 
+PARSED_TO_DB_COLUMN_MAP = {
+    "source_exposure_id": "exposure_id",
+    "source_code_occur_time": "time",
+    "source_file_name": "dose_error_detected_in_file",
+    "root_cause_message": "root_cause",
+    "exposure_length": "exposure_length",
+    "duty_cycle": "duty_cycle",
+    "min_dose_error": "min_dose_error",
+    "max_dose_error": "max_dose_error",
+    "on_drop_euv_energy": "on_drop_euv_energy",
+    "on_drop_pp_energy": "on_drop_pp_energy",
+    "on_drop_mp_energy": "on_drop_mp_energy",
+    "on_drop_pp_dlgc1": "on_drop_pp_dlgc_1",
+    "on_drop_mp_dlgc1": "on_drop_mp_dlgc_1",
+    "bi_cell_y_3sigma": "bi_cell_y_3sigma",
+    "fdsc_y_error": "fdsc_y_error",
+    "fdsc_y_3sigma": "fdsc_y_3sigma",
+    "max_cross_interval": "max_cross_interval",
+    "xint_3sigma": "xint_3sigma",
+    "euv_3sigma": "euv_3sigma",
+    "pulses_euv_0_6dt_tot": "pulses_euv_0_6dt_tot",
+    "fed_pulses": "fed_pulses",
+    "l2dx_maxce": "l2dx_maxce",
+    "l2dy_maxce": "l2dy_maxce",
+    "sensitivity_at_l2dx_maxce": "sensitivity_at_l2dx_maxce",
+    "sensitivity_at_l2dy_maxce": "sensitivity_at_l2dy_maxce",
+    "dose_margin": "dose_margin",
+    "l2dx_qc_etdc_3sigma": "l2dx_qc_etdc_3sigma",
+    "l2dx_qc_etdc_median": "l2dx_qc_etdc_median",
+    "l2dy_qc_etdc_3sigma": "l2dy_qc_etdc_3sigma",
+    "l2dy_qc_etdc_median": "l2dy_qc_etdc_median",
+    "rbdy_peak_frequency_hf": "rbdy_peak_frequency_hf",
+    "rbdy_peak_frequency_lf": "rbdy_peak_frequency_lf",
+    "rbdy_peak_frequency_mf": "rbdy_peak_frequency_mf",
+    "rbdy_peak_power_hf": "rbdy_peak_power_hf",
+    "rbdy_qc_etdc_3sigma": "rbdy_qc_etdc_3sigma",
+    "rbdy_total_power_lf": "rbdy_total_power_lf",
+    "rbdy_total_power_mf": "rbdy_total_power_mf",
+    "software_version": "software_version",
+}
+
 
 class ERDoseEUVRepository:
     def __init__(self, db: PostgresDB):
@@ -51,6 +92,8 @@ class ERDoseEUVRepository:
         if df is None or df.empty:
             return 0
 
+        df_to_insert = df.rename(columns=PARSED_TO_DB_COLUMN_MAP).copy()
+
         table_columns = [
             "er_line",
             "eq_name",
@@ -64,12 +107,11 @@ class ERDoseEUVRepository:
             "reason_code",
             "task",
             "compile_script",
-            "source_exposure_id",
-            "source_code_occur_time",
-            "dose_error",
-            "source_file_name",
+            "exposure_id",
+            "time",
+            "dose_error_detected_in_file",
             "root_cause_code",
-            "root_cause_message",
+            "root_cause",
             "exposure_length",
             "duty_cycle",
             "min_dose_error",
@@ -77,15 +119,15 @@ class ERDoseEUVRepository:
             "on_drop_euv_energy",
             "on_drop_pp_energy",
             "on_drop_mp_energy",
-            "on_drop_pp_dlgc1",
-            "on_drop_mp_dlgc1",
+            "on_drop_pp_dlgc_1",
+            "on_drop_mp_dlgc_1",
             "bi_cell_y_3sigma",
             "fdsc_y_error",
             "fdsc_y_3sigma",
             "max_cross_interval",
             "xint_3sigma",
             "euv_3sigma",
-            "pulses_euv_lt_0_6dt_tot",
+            "pulses_euv_0_6dt_tot",
             "fed_pulses",
             "l2dx_maxce",
             "l2dy_maxce",
@@ -107,13 +149,14 @@ class ERDoseEUVRepository:
             "created_at",
         ]
 
-        df_to_insert = df[[col for col in table_columns if col in df.columns]].copy()
         if "created_at" not in df_to_insert.columns:
             df_to_insert["created_at"] = datetime.now()
 
+        df_to_insert = df_to_insert[[col for col in table_columns if col in df_to_insert.columns]].copy()
+
         int_columns = [
-            "source_exposure_id",
-            "pulses_euv_lt_0_6dt_tot",
+            "exposure_id",
+            "pulses_euv_0_6dt_tot",
             "fed_pulses",
         ]
         for column in int_columns:

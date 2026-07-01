@@ -43,7 +43,7 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 `er_dose_raw_parsed`에는 배치 상태 관리용 컬럼을 두지 않습니다. 파싱 실패 여부는 실행 summary로만 집계하고, 테이블에는 상태값 없이 원천 로그와 추출 가능한 값만 적재합니다.
 
-`ER_DOSE_EUV`는 `mbeat.er_data_raw_euv` 기반 root cause 결과용 실행입니다. 대상 결과는 `prism_common.er_dose_euv_parsed`에 저장하며, `contents`에서 `source_file_name`, `source_exposure_id`, `source_code_occur_time`, `root_cause_code`, `root_cause_message`와 각종 EUV metric 컬럼을 파싱해 적재합니다.
+`ER_DOSE_EUV`는 `mbeat.er_data_raw_euv` 기반 root cause 결과용 실행입니다. 대상 결과는 `prism_common.er_dose_euv_parsed`에 저장하며, `contents`에서 `dose_error_detected_in_file`, `exposure_id`, `time`, `root_cause`와 각종 EUV metric 컬럼을 파싱해 적재합니다. 파생 컬럼은 `root_cause_code`만 저장합니다.
 
 상세 스키마와 파싱 규칙은 [ER_DOSE_ERROR.md](ER_DOSE_ERROR.md)를 기준으로 관리합니다.
 

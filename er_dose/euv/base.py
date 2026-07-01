@@ -32,7 +32,6 @@ class ParsedEuvRootCause:
     duty_cycle: Decimal | None
     min_dose_error: Decimal | None
     max_dose_error: Decimal | None
-    dose_error: Decimal | None
     on_drop_euv_energy: Decimal | None
     on_drop_pp_energy: Decimal | None
     on_drop_mp_energy: Decimal | None
@@ -44,7 +43,7 @@ class ParsedEuvRootCause:
     max_cross_interval: Decimal | None
     xint_3sigma: Decimal | None
     euv_3sigma: Decimal | None
-    pulses_euv_lt_0_6dt_tot: int | None
+    pulses_euv_0_6dt_tot: int | None
     fed_pulses: int | None
     l2dx_maxce: Decimal | None
     l2dy_maxce: Decimal | None
