@@ -7,8 +7,8 @@ from io import StringIO
 
 import pandas as pd
 
-from er_dose.euv.processor import ERDoseEUVProcessor
-from er_dose.euv.repository import ERDoseEUVRepository
+from er_dose.euv.euv_processor import ERDoseEUVProcessor
+from er_dose.euv.euv_repository import ERDoseEUVRepository
 from tests.test_er_dose_root_cause import SAMPLE_EUV_CONTENTS
 
 

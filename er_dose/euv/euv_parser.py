@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from er_dose.euv.base import ParsedEuvRootCause
+from er_dose.euv.euv_base import ParsedEuvRootCause
 from er_dose.common.regex_utils import (
     DECIMAL_RE,
     INT_RE,
