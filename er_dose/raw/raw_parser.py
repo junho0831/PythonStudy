@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from er_dose.raw.base import ParsedErDoseError, RawErLog
+from er_dose.raw.raw_base import ParsedErDoseError, RawErLog
 from er_dose.common.regex_utils import (
     DECIMAL_RE as DECIMAL_PATTERN,
     INT_RE as INT_PATTERN,
@@ -79,5 +79,4 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
         de_err=de_err,
         n_slit=n_slit,
     )
-
 

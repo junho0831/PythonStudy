@@ -7,8 +7,8 @@ from io import StringIO
 
 import pandas as pd
 
-from er_dose.raw.processor import ERDoseProcessor
-from er_dose.raw.repository import ERDoseRepository
+from er_dose.raw.raw_processor import ERDoseProcessor
+from er_dose.raw.raw_repository import ERDoseRepository
 
 
 SAMPLE_CONTENTS = """system warning: dw-3411 skip the dose evaluation 0.0461075 [%]
