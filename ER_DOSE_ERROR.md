@@ -31,6 +31,7 @@ DDL:
 
 - [Parsed 테이블 생성](er_dose/sql/create_er_dose_raw_parsed.sql)
 - [EUV Parsed 테이블 생성](er_dose/sql/create_er_dose_euv_parsed.sql)
+- [EUV Parsed 컬럼 rename 마이그레이션](er_dose/sql/rename_er_dose_euv_parsed_columns.sql)
 - [RAW EUV 테이블 생성](er_dose/sql/create_er_data_raw_euv.sql)
 
 ## ERD
@@ -175,6 +176,7 @@ software version : 2.0 [nxe3400 mv 250w]
 
 파서는 `dose_error_detected_in_file`, `exposure_id`, `time`, `root_cause`를 원문 라벨 기반 snake_case 컬럼으로 저장한다.
 `root_cause_code`는 `root_cause`의 snake_case 파생값으로 저장한다.
+컬럼명 정규화는 소문자 기준으로 공백, `.`, `-`, `<`, `=`를 모두 `_`로 치환하는 규칙을 따른다.
 
 측정값은 조회/필터링을 위해 `exposure_length`, `duty_cycle`, `on_drop_*`, `fdsc_*`, `l2d*`, `rbdy_*`, `software_version` 등 개별 컬럼에 저장하고, 원문은 `contents`에 보존한다.
 
