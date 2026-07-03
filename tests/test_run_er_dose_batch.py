@@ -28,7 +28,7 @@ class RunERDoseBatchTest(unittest.TestCase):
         processor_cls.return_value.run.assert_called_once_with(
             start_time=None,
             end_time=None,
-            chunk_size=10000,
+            chunk_size=1000,
             target_date=date(2026, 6, 16),
         )
 
@@ -69,7 +69,7 @@ class RunERDoseBatchTest(unittest.TestCase):
         processor_cls.return_value.run.assert_called_once_with(
             start_time=datetime(2026, 6, 16, 0, 0, 0),
             end_time=datetime(2026, 6, 17, 0, 0, 0),
-            chunk_size=10000,
+            chunk_size=1000,
             target_date=None,
         )
 

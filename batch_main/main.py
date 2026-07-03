@@ -48,7 +48,7 @@ class Main:
             start_time = None
             end_time = None
 
-        chunk_size = self._parse_optional_int(self.env.get("ER_DOSE_CHUNK_SIZE"), field_name="ER_DOSE_CHUNK_SIZE") or 10000
+        chunk_size = self._parse_optional_int(self.env.get("ER_DOSE_CHUNK_SIZE"), field_name="ER_DOSE_CHUNK_SIZE") or 1000
 
         db = PostgresDB()
         repository = ERDoseRepository(db)

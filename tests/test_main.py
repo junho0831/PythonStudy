@@ -76,11 +76,11 @@ class MainTest(unittest.TestCase):
         processor_cls.return_value.run.assert_called_once_with(
             start_time=datetime(2026, 5, 31, 0, 0, 0),
             end_time=datetime(2026, 6, 1, 0, 0, 0),
-            chunk_size=10000,
+            chunk_size=1000,
             target_date=None,
         )
 
-    def test_er_dose_chunk_size_defaults_to_10000(self):
+    def test_er_dose_chunk_size_defaults_to_1000(self):
         env = {
             "BATCH_TARGET": "ER_DOSE_RAW",
             "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
@@ -96,7 +96,7 @@ class MainTest(unittest.TestCase):
         batch.run.assert_called_once_with(
             start_time=datetime(2026, 5, 31, 0, 0, 0),
             end_time=datetime(2026, 6, 1, 0, 0, 0),
-            chunk_size=10000,
+            chunk_size=1000,
             target_date=None,
         )
 
@@ -129,7 +129,7 @@ class MainTest(unittest.TestCase):
         processor_cls.return_value.run.assert_called_once_with(
             start_time=None,
             end_time=None,
-            chunk_size=10000,
+            chunk_size=1000,
             target_date=datetime(2026, 6, 16).date(),
         )
 

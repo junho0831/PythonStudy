@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--start-time", type=parse_datetime, help="inclusive start time")
     parser.add_argument("--end-time", type=parse_datetime, help="exclusive end time")
-    parser.add_argument("--chunk-size", type=int, default=10000, help="raw row chunk size for streaming processing")
+    parser.add_argument("--chunk-size", type=int, default=None, help="raw row chunk size for streaming processing")
     parser.add_argument("--dsn", default=None, help="PostgreSQL DSN override. Defaults to er_dose.properties or env.")
     return parser
 
@@ -59,6 +59,8 @@ def main(argv=None) -> int:
         end_time = args.end_time
 
     db = PostgresDB(dsn=args.dsn)
+    chunk_size = args.chunk_size if args.chunk_size is not None else (10000 if parser_name == "ER_DOSE_EUV" else 1000)
+
     if parser_name == "ER_DOSE_EUV":
         repository = ERDoseEUVRepository(db)
         processor = ERDoseEUVProcessor(repository)
@@ -68,7 +70,7 @@ def main(argv=None) -> int:
     processor.run(
         start_time=start_time,
         end_time=end_time,
-        chunk_size=args.chunk_size,
+        chunk_size=chunk_size,
         target_date=target_date,
     )
     return 0
