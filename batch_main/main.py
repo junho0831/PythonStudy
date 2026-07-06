@@ -4,11 +4,11 @@ import os
 from datetime import date, datetime
 
 from airflow_modules.ftp_batch_jobs import run_batch
-from er_dose.euv.processor import ERDoseEUVProcessor
-from er_dose.euv.repository import ERDoseEUVRepository
+from er_dose.euv.euv_processor import ERDoseEUVProcessor
+from er_dose.euv.euv_repository import ERDoseEUVRepository
 from er_dose.infra.postgres_db import PostgresDB
-from er_dose.raw.processor import ERDoseProcessor
-from er_dose.raw.repository import ERDoseRepository
+from er_dose.raw.raw_processor import ERDoseProcessor
+from er_dose.raw.raw_repository import ERDoseRepository
 
 
 class Main:
@@ -48,7 +48,7 @@ class Main:
             start_time = None
             end_time = None
 
-        chunk_size = self._parse_optional_int(self.env.get("ER_DOSE_CHUNK_SIZE"), field_name="ER_DOSE_CHUNK_SIZE") or 10000
+        chunk_size = self._parse_optional_int(self.env.get("ER_DOSE_CHUNK_SIZE"), field_name="ER_DOSE_CHUNK_SIZE") or 1000
 
         db = PostgresDB()
         repository = ERDoseRepository(db)
