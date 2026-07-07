@@ -212,13 +212,13 @@ RAW 날짜 변수는 `ER_DOSE_RAW_TARGET_DATE` 를 사용한다.
 EUV 날짜 변수는 `ER_DOSE_EUV_TARGET_DATE` 를 사용한다.
 
 DB 접속은 `--dsn`, 프로젝트 루트 `er_dose.properties`, `ER_DOSE_DB_DSN`, `DATABASE_URL` 순서로 사용한다.
-기본 `chunk` 크기는 `ER_DOSE_RAW` 배치의 경우 `1000` (Airflow OOM 방지), `ER_DOSE_EUV` 배치의 경우 `10000`이며 `--chunk-size`로 조정할 수 있다.
+기본 `chunk` 크기는 `ER_DOSE_RAW` 및 `ER_DOSE_EUV` 배치 모두 `30000`이며 `--chunk-size`로 조정할 수 있다.
 
 ```bash
 python -m er_dose.run_er_dose_batch \
   --date 2026-04-13 \
   --parser ER_DOSE_RAW \
-  --chunk-size 1000 \
+  --chunk-size 30000 \
   --dsn 'postgresql://user:password@host:5432/dbname'
 ```
 
@@ -226,7 +226,7 @@ python -m er_dose.run_er_dose_batch \
 python -m er_dose.run_er_dose_batch \
   --date 2026-04-13 \
   --parser ER_DOSE_EUV \
-  --chunk-size 10000 \
+  --chunk-size 30000 \
   --dsn 'postgresql://user:password@host:5432/dbname'
 ```
 
@@ -236,6 +236,6 @@ python -m er_dose.run_er_dose_batch \
 python -m er_dose.run_er_dose_batch \
   --start-time 2026-04-13T00:00:00 \
   --end-time 2026-04-14T00:00:00 \
-  --chunk-size 1000 \
+  --chunk-size 30000 \
   --dsn 'postgresql://user:password@host:5432/dbname'
 ```
