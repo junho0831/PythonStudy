@@ -43,6 +43,7 @@ class FakeDB:
         self.inserted = []
         self.connection = object()
         self.partition_inserts = []
+        self.queries_called = []
 
     def select(self, query, params=None):
         self.fetch_query = query
@@ -52,6 +53,7 @@ class FakeDB:
     def select_in_chunks(self, query, params=None, chunk_size=10000):
         self.fetch_query = query
         self.fetch_params = params
+        self.queries_called.append((query, params))
         for start in range(0, len(self.raw_df), chunk_size):
             yield self.raw_df.iloc[start : start + chunk_size].copy()
 
@@ -103,6 +105,33 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertIn("'KE-9104'", db.fetch_query)
         self.assertEqual(db.fetch_params["start_time"], start_time)
         self.assertEqual(db.fetch_params["end_time"], end_time)
+
+    def test_fetch_raw_logs_across_multiple_days(self):
+        db = FakeDB(pd.DataFrame())
+        repo = ERDoseRepository(db)
+        start_time = datetime(2026, 5, 1, 12, 0, 0)
+        end_time = datetime(2026, 5, 3, 14, 0, 0)
+
+        list(repo.fetch_raw_logs_in_chunks(start_time=start_time, end_time=end_time, chunk_size=100))
+
+        # Should make 3 queries (Day 1: 5/1 12:00 to 5/2 0:00, Day 2: 5/2 0:00 to 5/3 0:00, Day 3: 5/3 0:00 to 5/3 14:00)
+        self.assertEqual(len(db.queries_called), 3)
+
+        q1, p1 = db.queries_called[0]
+        q2, p2 = db.queries_called[1]
+        q3, p3 = db.queries_called[2]
+
+        self.assertIn("from mbeat.er_data_raw_1_prt_p20260501 r", q1)
+        self.assertEqual(p1["start_time"], datetime(2026, 5, 1, 12, 0, 0))
+        self.assertEqual(p1["end_time"], datetime(2026, 5, 2, 0, 0, 0))
+
+        self.assertIn("from mbeat.er_data_raw_1_prt_p20260502 r", q2)
+        self.assertEqual(p2["start_time"], datetime(2026, 5, 2, 0, 0, 0))
+        self.assertEqual(p2["end_time"], datetime(2026, 5, 3, 0, 0, 0))
+
+        self.assertIn("from mbeat.er_data_raw_1_prt_p20260503 r", q3)
+        self.assertEqual(p3["start_time"], datetime(2026, 5, 3, 0, 0, 0))
+        self.assertEqual(p3["end_time"], datetime(2026, 5, 3, 14, 0, 0))
 
     def test_fetch_latest_wafer_states_returns_latest_state_per_eq_name(self):
         history_df = pd.DataFrame(

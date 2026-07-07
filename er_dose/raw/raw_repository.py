@@ -33,8 +33,15 @@ class ERDoseRepository:
         end_time: datetime,
         chunk_size: int = 10000,
     ) -> Iterator[pd.DataFrame]:
-        query, params = self._build_fetch_raw_logs_query(start_time=start_time, end_time=end_time)
-        return self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)
+        current_start = start_time
+        while current_start < end_time:
+            next_day_start = datetime.combine(current_start.date() + timedelta(days=1), datetime.min.time())
+            current_end = min(next_day_start, end_time)
+
+            query, params = self._build_fetch_raw_logs_query(start_time=current_start, end_time=current_end)
+            yield from self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)
+
+            current_start = current_end
 
     def fetch_latest_wafer_states(self, start_time: datetime) -> dict[str, dict[str, int | None]]:
         previous_day_start = datetime.combine((start_time - timedelta(days=1)).date(), datetime.min.time())
