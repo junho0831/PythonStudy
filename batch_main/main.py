@@ -39,11 +39,20 @@ class Main:
         )
         target_date = self._parse_date(target_date_value) if target_date_value else None
 
-        if target_date is None:
-            start_time = self._parse_datetime(self._get_required("ER_DOSE_START_TIME", fallback_key="START_TIME"))
-            end_time = self._parse_datetime(self._get_required("ER_DOSE_END_TIME", fallback_key="END_TIME"))
+        explicit_start_time = self.env.get("ER_DOSE_START_TIME") or self.env.get("START_TIME")
+        explicit_end_time = self.env.get("ER_DOSE_END_TIME") or self.env.get("END_TIME")
+
+        if target_date is None and ((explicit_start_time and not explicit_end_time) or (explicit_end_time and not explicit_start_time)):
+            raise ValueError("ER_DOSE_START_TIME and ER_DOSE_END_TIME must be provided together")
+
+        if target_date is None and explicit_start_time and explicit_end_time:
+            start_time = self._parse_datetime(explicit_start_time)
+            end_time = self._parse_datetime(explicit_end_time)
             if start_time >= end_time:
                 raise ValueError("ER_DOSE_START_TIME must be earlier than ER_DOSE_END_TIME")
+        elif target_date is not None:
+            start_time = None
+            end_time = None
         else:
             start_time = None
             end_time = None
@@ -53,7 +62,18 @@ class Main:
         db = PostgresDB()
         repository = ERDoseRepository(db)
         processor = ERDoseProcessor(repository)
-        processor.run(start_time=start_time, end_time=end_time, chunk_size=chunk_size, target_date=target_date)
+        if target_date is not None or start_time is not None:
+            processor.run(start_time=start_time, end_time=end_time, chunk_size=chunk_size, target_date=target_date)
+        else:
+            lookback_days = self._parse_optional_int(
+                self.env.get("ER_DOSE_LOOKBACK_DAYS"),
+                field_name="ER_DOSE_LOOKBACK_DAYS",
+            ) or 4
+            processor.run_recent_days(
+                lookback_days=lookback_days,
+                reference_date=self._today(),
+                chunk_size=chunk_size,
+            )
         return 0
 
     def run_er_dose_euv(self) -> int:
@@ -112,6 +132,9 @@ class Main:
         if parsed <= 0:
             raise ValueError(f"{field_name} must be greater than 0")
         return parsed
+
+    def _today(self) -> date:
+        return date.today()
 
 
 def main() -> int:

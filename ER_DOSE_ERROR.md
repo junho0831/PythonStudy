@@ -148,17 +148,27 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 
 ## 배치 동작
 
-`ERDoseProcessor.run()`은 다음만 수행한다.
+`ERDoseProcessor.run()`은 명시적으로 날짜 또는 시간 범위를 받은 경우에 다음을 수행한다.
 
-1. 기간에 해당하는 `er_dose_raw_parsed` 일별 파티션 생성
+1. 기간에 해당하는 `er_dose_raw_parsed` 일별 파티션을 대상으로 처리
 2. `mbeat.er_data_raw`에서 Dose Error 후보를 `chunk` 단위로 조회
 3. 각 `chunk`의 RAW contents 파싱
    - 파싱 중 `wafer_id`나 `wafer_seq`가 없을 경우, 동일 `eq_name`에서 이전에 파싱된 가장 최근 값을 사용한다. 이는 chunk의 경계를 넘어 유지된다.
 4. 각 `chunk`를 `prism_common.er_dose_raw_parsed`에 `COPY` append insert
 
+환경변수 기반 기본 실행에서 `ER_DOSE_RAW_TARGET_DATE`, `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`가 모두 없으면 raw 배치는 최근 4일 lookback 모드로 동작한다.
+
+1. 실행일 기준 `오늘 포함 최근 4일`을 날짜 오름차순으로 순회
+2. 각 날짜에 대해 원천 `mbeat.er_data_raw` 건수와 타겟 `prism_common.er_dose_raw_parsed` 건수를 비교
+3. 건수가 같으면 해당 날짜는 스킵
+4. 건수가 다르면 해당 날짜 파티션만 `TRUNCATE`
+5. 그 날짜의 raw를 다시 조회해 파싱 후 적재
+
+재적재 시 `TRUNCATE`와 `COPY` 적재는 같은 DB transaction connection을 사용한다.
+
 `ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다.
 RAW와 EUV 모두 대용량 처리를 위해 전체 결과를 한 번에 메모리로 올리지 않고 `read chunk -> parse -> insert` 방식으로 반복 처리한다.
-또한, 데이터베이스 드라이버 단의 메모리 팽창을 방지하기 위해 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`)를 활성화하여 스트리밍 조회를 수행한다.
+또한, 데이터베이스 드라이버 단의 메모리 팽창을 방지하기 위해 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`)를 활성화하여 스트리밍 조회를 수행한다. 다만 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받기 때문에 운영 환경에서 조정이 필요할 수 있다.
 
 ## Root Cause 파싱 대상
 
@@ -213,6 +223,7 @@ EUV 날짜 변수는 `ER_DOSE_EUV_TARGET_DATE` 를 사용한다.
 
 DB 접속은 `--dsn`, 프로젝트 루트 `er_dose.properties`, `ER_DOSE_DB_DSN`, `DATABASE_URL` 순서로 사용한다.
 기본 `chunk` 크기는 `ER_DOSE_RAW` 및 `ER_DOSE_EUV` 배치 모두 `30000`이며 `--chunk-size`로 조정할 수 있다.
+환경변수 기반 raw 기본 실행은 최근 4일 lookback 모드이며, `ER_DOSE_LOOKBACK_DAYS`로 일수를 바꿀 수 있다.
 
 ```bash
 python -m er_dose.run_er_dose_batch \

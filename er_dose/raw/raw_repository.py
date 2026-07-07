@@ -72,6 +72,41 @@ class ERDoseRepository:
             }
         return wafer_states
 
+    def fetch_source_count(self, target_date: date) -> int:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+        target_codes_sql = ", ".join(f"'{code}'" for code in TARGET_CODES)
+        query = f"""
+            select count(*) as row_count
+            from {MAIN_RAW_TABLE} r
+            where r.code_occur_time >= :start_time
+              and r.code_occur_time < :end_time
+              and r.code in ({target_codes_sql})
+        """
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
+        if df is None or df.empty:
+            return 0
+        return int(df.iloc[0]["row_count"])
+
+    def fetch_target_count(self, target_date: date) -> int:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+        query = f"""
+            select count(*) as row_count
+            from {PARSED_TABLE} p
+            where p.code_occur_time >= :start_time
+              and p.code_occur_time < :end_time
+        """
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
+        if df is None or df.empty:
+            return 0
+        return int(df.iloc[0]["row_count"])
+
+    def truncate_target_partition(self, target_date: date, connection=None) -> int:
+        parsed_table = self._partition_table_name(PARSED_TABLE, target_date)
+        query = f"TRUNCATE TABLE {parsed_table}"
+        return self.db.execute(query, connection=connection)
+
     def _build_fetch_raw_logs_query(
         self,
         start_time: datetime,
@@ -172,6 +207,7 @@ class ERDoseRepository:
                 table_name=table_name,
                 target_date=target_date,
                 df=group_df_clean,
+                connection=connection,
             )
             inserted_count += len(group_df_clean)
 
@@ -179,4 +215,3 @@ class ERDoseRepository:
 
     def transaction(self):
         return self.db.transaction()
-

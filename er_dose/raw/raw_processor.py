@@ -42,6 +42,77 @@ class ERDoseProcessor:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be greater than 0")
 
+        self._run_window(start_time=start_time, end_time=end_time, chunk_size=chunk_size)
+
+    def run_recent_days(
+        self,
+        lookback_days: int = 4,
+        reference_date: date | None = None,
+        chunk_size: int = 10000,
+    ) -> None:
+        if lookback_days <= 0:
+            raise ValueError("lookback_days must be greater than 0")
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be greater than 0")
+
+        end_date = reference_date or date.today()
+        start_date = end_date - timedelta(days=lookback_days - 1)
+
+        print(
+            "[ER_DOSE] "
+            f"lookback_start_date={start_date.isoformat()} "
+            f"lookback_end_date={end_date.isoformat()} "
+            f"lookback_days={lookback_days} "
+            f"chunk_size={chunk_size}"
+        )
+
+        current_date = start_date
+        while current_date <= end_date:
+            source_count = self.repository.fetch_source_count(current_date)
+            target_count = self.repository.fetch_target_count(current_date)
+            print(
+                "[ER_DOSE] "
+                f"target_date={current_date.isoformat()} "
+                f"source_count={source_count} "
+                f"target_count={target_count}"
+            )
+
+            if source_count == target_count:
+                print(
+                    "[ER_DOSE] "
+                    f"target_date={current_date.isoformat()} "
+                    "action=skip"
+                )
+                current_date += timedelta(days=1)
+                continue
+
+            print(
+                "[ER_DOSE] "
+                f"target_date={current_date.isoformat()} "
+                "action=reload"
+            )
+            self._reload_target_date(target_date=current_date, chunk_size=chunk_size)
+            current_date += timedelta(days=1)
+
+    def _reload_target_date(self, target_date: date, chunk_size: int) -> None:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+        with self.repository.transaction() as connection:
+            self.repository.truncate_target_partition(target_date=target_date, connection=connection)
+            self._run_window(
+                start_time=start_time,
+                end_time=end_time,
+                chunk_size=chunk_size,
+                connection=connection,
+            )
+
+    def _run_window(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        chunk_size: int,
+        connection=None,
+    ) -> None:
         self.wafer_states = self.repository.fetch_latest_wafer_states(start_time)
         self.exposure_handles = {}
 
@@ -106,7 +177,7 @@ class ERDoseProcessor:
 
             insert_started_at = perf_counter()
             parsed_df = pd.DataFrame(parsed_rows)
-            chunk_inserted = self.repository.insert_parsed_df(parsed_df)
+            chunk_inserted = self.repository.insert_parsed_df(parsed_df, connection=connection)
             inserted_at = perf_counter()
             insert_sec = inserted_at - insert_started_at
             insert_count += chunk_inserted

@@ -111,6 +111,56 @@ class MainTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             Main(env=env).run()
 
+    def test_er_dose_requires_start_and_end_together(self):
+        env = {
+            "BATCH_TARGET": "ER_DOSE_RAW",
+            "ER_DOSE_START_TIME": "2026-05-31T00:00:00",
+        }
+
+        with self.assertRaises(ValueError):
+            Main(env=env).run()
+
+    def test_er_dose_raw_defaults_to_recent_days_lookback(self):
+        env = {
+            "BATCH_TARGET": "ER_DOSE_RAW",
+        }
+        batch = Mock()
+
+        with patch("batch_main.main.PostgresDB"), patch(
+            "batch_main.main.ERDoseRepository"
+        ), patch("batch_main.main.ERDoseProcessor", return_value=batch), patch(
+            "batch_main.main.Main._today",
+            return_value=datetime(2026, 6, 16).date(),
+        ):
+            Main(env=env).run()
+
+        batch.run_recent_days.assert_called_once_with(
+            lookback_days=4,
+            reference_date=datetime(2026, 6, 16).date(),
+            chunk_size=30000,
+        )
+
+    def test_er_dose_raw_uses_custom_lookback_days(self):
+        env = {
+            "BATCH_TARGET": "ER_DOSE_RAW",
+            "ER_DOSE_LOOKBACK_DAYS": "7",
+        }
+        batch = Mock()
+
+        with patch("batch_main.main.PostgresDB"), patch(
+            "batch_main.main.ERDoseRepository"
+        ), patch("batch_main.main.ERDoseProcessor", return_value=batch), patch(
+            "batch_main.main.Main._today",
+            return_value=datetime(2026, 6, 16).date(),
+        ):
+            Main(env=env).run()
+
+        batch.run_recent_days.assert_called_once_with(
+            lookback_days=7,
+            reference_date=datetime(2026, 6, 16).date(),
+            chunk_size=30000,
+        )
+
     def test_er_dose_target_date_is_supported(self):
         env = {
             "BATCH_TARGET": "ER_DOSE_RAW",

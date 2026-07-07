@@ -36,9 +36,11 @@ class FakeTransaction:
 
 
 class FakeDB:
-    def __init__(self, raw_df, fetch_df_result=None):
+    def __init__(self, raw_df, fetch_df_result=None, source_counts=None, target_counts=None):
         self.raw_df = raw_df
         self.fetch_df_result = raw_df if fetch_df_result is None else fetch_df_result
+        self.source_counts = source_counts or {}
+        self.target_counts = target_counts or {}
         self.executed = []
         self.inserted = []
         self.connection = object()
@@ -48,6 +50,14 @@ class FakeDB:
     def select(self, query, params=None):
         self.fetch_query = query
         self.fetch_params = params
+        lowered = query.lower()
+        if "count(*) as row_count" in lowered:
+            if "from mbeat.er_data_raw r" in lowered:
+                target_date = params["start_time"].date()
+                return pd.DataFrame([{"row_count": self.source_counts.get(target_date, 0)}])
+            if "from prism_common.er_dose_raw_parsed p" in lowered:
+                target_date = params["start_time"].date()
+                return pd.DataFrame([{"row_count": self.target_counts.get(target_date, 0)}])
         return self.fetch_df_result
 
     def select_in_chunks(self, query, params=None, chunk_size=10000):
@@ -70,7 +80,7 @@ class FakeDB:
         self.insert_connection = connection
         return len(df)
 
-    def copy_insert_to_partition_table(self, schema, table_name, target_date, df, is_truncate=False):
+    def copy_insert_to_partition_table(self, schema, table_name, target_date, df, is_truncate=False, connection=None):
         full_table_name = f"{schema}.{table_name}"
         self.inserted.append((full_table_name, df))
         self.partition_inserts.append((full_table_name, target_date, df.copy()))
@@ -269,6 +279,36 @@ class ERDoseProcessorTest(unittest.TestCase):
 
         self.assertEqual(db.fetch_params["start_time"], datetime(2026, 5, 1, 0, 0, 0))
         self.assertEqual(db.fetch_params["end_time"], datetime(2026, 5, 2, 0, 0, 0))
+
+    def test_run_recent_days_skips_equal_counts_and_reloads_mismatched_day(self):
+        raw_df = pd.DataFrame([
+            self._row(1, "dw-3411", SAMPLE_CONTENTS, code_occur_time=datetime(2026, 5, 2, 10, 0, 0))
+        ])
+        db = FakeDB(
+            raw_df,
+            source_counts={
+                datetime(2026, 5, 1).date(): 1,
+                datetime(2026, 5, 2).date(): 2,
+            },
+            target_counts={
+                datetime(2026, 5, 1).date(): 1,
+                datetime(2026, 5, 2).date(): 1,
+            },
+        )
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+
+        with redirect_stdout(StringIO()) as stdout:
+            processor.run_recent_days(
+                lookback_days=2,
+                reference_date=datetime(2026, 5, 2).date(),
+                chunk_size=100,
+            )
+
+        self.assertTrue(any("TRUNCATE TABLE prism_common.er_dose_raw_parsed_1_prt_p20260502" in query for query, _, _ in db.executed))
+        self.assertEqual(len(db.partition_inserts), 1)
+        self.assertIn("target_date=2026-05-01 action=skip", stdout.getvalue())
+        self.assertIn("target_date=2026-05-02 action=reload", stdout.getvalue())
 
     def test_insert_parsed_df_keeps_integer_columns_as_nullable_int(self):
         db = FakeDB(pd.DataFrame())
