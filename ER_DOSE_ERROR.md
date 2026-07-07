@@ -158,6 +158,7 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 
 `ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다.
 RAW와 EUV 모두 대용량 처리를 위해 전체 결과를 한 번에 메모리로 올리지 않고 `read chunk -> parse -> insert` 방식으로 반복 처리한다.
+또한, 데이터베이스 드라이버 단의 메모리 팽창을 방지하기 위해 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`)를 활성화하여 스트리밍 조회를 수행한다.
 
 ## Root Cause 파싱 대상
 
@@ -211,13 +212,13 @@ RAW 날짜 변수는 `ER_DOSE_RAW_TARGET_DATE` 를 사용한다.
 EUV 날짜 변수는 `ER_DOSE_EUV_TARGET_DATE` 를 사용한다.
 
 DB 접속은 `--dsn`, 프로젝트 루트 `er_dose.properties`, `ER_DOSE_DB_DSN`, `DATABASE_URL` 순서로 사용한다.
-기본 `chunk` 크기는 `10000`이며 `--chunk-size`로 조정할 수 있다.
+기본 `chunk` 크기는 `ER_DOSE_RAW` 배치의 경우 `1000` (Airflow OOM 방지), `ER_DOSE_EUV` 배치의 경우 `10000`이며 `--chunk-size`로 조정할 수 있다.
 
 ```bash
 python -m er_dose.run_er_dose_batch \
   --date 2026-04-13 \
   --parser ER_DOSE_RAW \
-  --chunk-size 10000 \
+  --chunk-size 1000 \
   --dsn 'postgresql://user:password@host:5432/dbname'
 ```
 
@@ -235,6 +236,6 @@ python -m er_dose.run_er_dose_batch \
 python -m er_dose.run_er_dose_batch \
   --start-time 2026-04-13T00:00:00 \
   --end-time 2026-04-14T00:00:00 \
-  --chunk-size 10000 \
+  --chunk-size 1000 \
   --dsn 'postgresql://user:password@host:5432/dbname'
 ```
