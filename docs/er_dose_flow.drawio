@@ -7,7 +7,7 @@
         <mxCell id="title" value="ER Dose Error 적재 구조" style="text;html=1;strokeColor=none;fillColor=none;fontSize=24;fontStyle=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
           <mxGeometry x="60" y="40" width="520" height="40" as="geometry" />
         </mxCell>
-        <mxCell id="note" value="현재 기준: RAW는 수정하지 않는다. ER Dose 배치는 mbeat.er_data_raw에서 대상 code만 조회해 prism_common.er_dose_raw_parsed로 적재한다. 조회는 SQLAlchemy execute + fetchmany 기반 chunk streaming 이고, 각 chunk를 파싱한 뒤 code_occur_time 날짜별 파티션으로 COPY append insert 한다. er_dose_euv_parsed는 parsed와 무관한 별도 FE 조회용 구조이며, prism_common.er_dose_euv_parsed를 사용한다." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+        <mxCell id="note" value="현재 기준: RAW는 수정하지 않는다. ER Dose RAW 기본 실행은 최근 4일을 날짜별로 돌며, NOT EXISTS로 원천 누락 row를 확인한다. 원천에는 있지만 parsed에는 없는 row만 추가 파싱해 insert하고, 누락 row가 없으면 skip한다. 명시 날짜/시간 범위 실행은 해당 범위를 chunk streaming 조회하고 code_occur_time 날짜별 파티션으로 COPY 적재한다. er_dose_euv_parsed는 parsed와 무관한 별도 FE 조회용 구조이며, prism_common.er_dose_euv_parsed를 사용한다." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
           <mxGeometry x="60" y="95" width="840" height="60" as="geometry" />
         </mxCell>
         <mxCell id="raw" value="mbeat.er_data_raw" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
@@ -61,7 +61,7 @@
         <mxCell id="status" value="chunk 진행 로그&#10;&#10;- start_time / end_time / chunk_size 출력&#10;- chunk별 fetched / parsed / inserted 출력&#10;- partition_date별 row 수 출력&#10;- 최종 fetched / inserted summary 출력" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="1170" y="240" width="300" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="append" value="적재 정책&#10;&#10;- parsed 테이블 컬럼만 선별&#10;- created_at 없으면 현재 시각 채움&#10;- code_occur_time 날짜별 groupby&#10;- 대상 파티션에 COPY append insert&#10;- parsed append only&#10;- RAW update/delete 없음" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+        <mxCell id="append" value="적재 정책&#10;&#10;- 기본 실행: 최근 4일 확인&#10;- NOT EXISTS로 누락 row 확인&#10;- 누락 row만 추가 insert&#10;- 누락 row 없으면 skip&#10;- 명시 범위 실행은 COPY append insert&#10;- RAW update/delete 없음" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="450" y="610" width="300" height="170" as="geometry" />
         </mxCell>
         <mxCell id="parsed" value="prism_common.er_dose_raw_parsed" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
