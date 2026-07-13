@@ -62,6 +62,7 @@ class PostgresDB:
         target_date: str,
         df: pd.DataFrame,
         is_truncate: bool = False,
+        connection=None,
     ) -> None:
         if df is None or df.empty:
             print("insert 대상 데이터가 없습니다.")
@@ -75,7 +76,8 @@ class PostgresDB:
         insert_df.to_csv(buffer, index=False)
         buffer.seek(0)
 
-        conn = self.__engine.raw_connection()
+        own_connection = connection is None
+        conn = connection or self.__engine.raw_connection()
         cursor = conn.cursor()
 
         try:
@@ -88,18 +90,21 @@ class PostgresDB:
             print(f"{len(insert_df)} rows were saved.")
 
             cursor.execute(f"ANALYZE {partition_table}")
-            conn.commit()
+            if own_connection:
+                conn.commit()
 
             print(f"data inserted into table {partition_table} successfully.")
 
         except Exception as e:
-            conn.rollback()
+            if own_connection:
+                conn.rollback()
             print(f"[ERROR] copy insert failed: {e}")
             raise
 
         finally:
             cursor.close()
-            conn.close()
+            if own_connection:
+                conn.close()
 
     @contextmanager
     def transaction(self):

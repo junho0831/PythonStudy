@@ -33,8 +33,15 @@ class ERDoseRepository:
         end_time: datetime,
         chunk_size: int = 10000,
     ) -> Iterator[pd.DataFrame]:
-        query, params = self._build_fetch_raw_logs_query(start_time=start_time, end_time=end_time)
-        return self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)
+        current_start = start_time
+        while current_start < end_time:
+            next_day_start = datetime.combine(current_start.date() + timedelta(days=1), datetime.min.time())
+            current_end = min(next_day_start, end_time)
+
+            query, params = self._build_fetch_raw_logs_query(start_time=current_start, end_time=current_end)
+            yield from self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)
+
+            current_start = current_end
 
     def fetch_latest_wafer_states(self, start_time: datetime) -> dict[str, dict[str, int | None]]:
         previous_day_start = datetime.combine((start_time - timedelta(days=1)).date(), datetime.min.time())
@@ -64,6 +71,62 @@ class ERDoseRepository:
                 "wafer_seq": None if pd.isna(row.get("wafer_seq")) else int(row["wafer_seq"]),
             }
         return wafer_states
+
+    def fetch_missing_source_count(self, target_date: date) -> int:
+        raw_table = self._partition_table_name(MAIN_RAW_TABLE, target_date)
+        parsed_table = self._partition_table_name(PARSED_TABLE, target_date)
+        target_codes_sql = ", ".join(f"'{code}'" for code in TARGET_CODES)
+        query = f"""
+            select count(*) as row_count
+            from {raw_table} a
+            where a.code in ({target_codes_sql})
+              and not exists (
+                  select 1
+                  from {parsed_table} b
+                  where b.er_line is not distinct from a.er_line
+                    and b.eq_name is not distinct from a.eq_name
+                    and b.code is not distinct from a.code
+                    and b.code_occur_time = a.code_occur_time
+              )
+        """
+        df = self.db.select(query)
+        if df is None or df.empty:
+            return 0
+        return int(df.iloc[0]["row_count"])
+
+    def fetch_missing_source_logs_in_chunks(
+        self,
+        target_date: date,
+        chunk_size: int = 10000,
+    ) -> Iterator[pd.DataFrame]:
+        raw_table = self._partition_table_name(MAIN_RAW_TABLE, target_date)
+        parsed_table = self._partition_table_name(PARSED_TABLE, target_date)
+        target_codes_sql = ", ".join(f"'{code}'" for code in TARGET_CODES)
+        query = f"""
+            select
+                a.er_date,
+                a.er_index,
+                a.er_line,
+                a.eq_name,
+                a.code,
+                a.code_occur_time,
+                a.belong,
+                a."type" as type,
+                a.title,
+                a.contents
+            from {raw_table} a
+            where a.code in ({target_codes_sql})
+              and not exists (
+                  select 1
+                  from {parsed_table} b
+                  where b.er_line is not distinct from a.er_line
+                    and b.eq_name is not distinct from a.eq_name
+                    and b.code is not distinct from a.code
+                    and b.code_occur_time = a.code_occur_time
+              )
+            order by a.code_occur_time, a.eq_name, a.er_date, a.er_index
+        """
+        yield from self.db.select_in_chunks(query, chunk_size=chunk_size)
 
     def _build_fetch_raw_logs_query(
         self,
@@ -165,6 +228,7 @@ class ERDoseRepository:
                 table_name=table_name,
                 target_date=target_date,
                 df=group_df_clean,
+                connection=connection,
             )
             inserted_count += len(group_df_clean)
 
@@ -172,4 +236,3 @@ class ERDoseRepository:
 
     def transaction(self):
         return self.db.transaction()
-

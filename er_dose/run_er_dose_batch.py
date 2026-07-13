@@ -59,7 +59,7 @@ def main(argv=None) -> int:
         end_time = args.end_time
 
     db = PostgresDB(dsn=args.dsn)
-    chunk_size = args.chunk_size if args.chunk_size is not None else (10000 if parser_name == "ER_DOSE_EUV" else 1000)
+    chunk_size = args.chunk_size if args.chunk_size is not None else 30000
 
     if parser_name == "ER_DOSE_EUV":
         repository = ERDoseEUVRepository(db)

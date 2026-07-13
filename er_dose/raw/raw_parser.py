@@ -14,27 +14,22 @@ from er_dose.common.regex_utils import (
 _DECIMAL_RE = DECIMAL_PATTERN
 _INT_RE = INT_PATTERN
 
-# wafer_id 는 lot(2111), lot id 2111, wafer_id=2111 같은 표기를 모두 허용한다.
+# wafer_id 는 현재 확인된 lot(2111), lot id 2111, wafer_id=2111 표기만 허용한다.
 _WAFER_ID_PATTERNS = [
     rf"lot\(\s*{_INT_RE}\s*\)",
     rf"lot id\s+{_INT_RE}",
-    rf"wafer_id\s*[:=]\s*{_INT_RE}",
-    rf"wafer id\s*[:=]\s*{_INT_RE}",
+    rf"wafer_id\s*=\s*{_INT_RE}",
 ]
 
-# wafer_seq 는 wafer(23), wafer_seq=23, slot_seq=23 같은 표기를 모두 wafer_seq 로 본다.
+# wafer_seq 는 현재 확인된 wafer(23) 표기만 허용한다.
 _WAFER_SEQ_PATTERNS = [
     rf"wafer\(\s*{_INT_RE}\s*\)",
-    rf"wafer_seq\s*[:=]\s*{_INT_RE}",
-    rf"wafer seq\s*[:=]\s*{_INT_RE}",
-    rf"slot_seq\s*[:=]\s*{_INT_RE}",
-    rf"slot seq\s*[:=]\s*{_INT_RE}",
 ]
 
 # dose error 값은 de_err=... 또는 min_de_error=... 에서 추출한다.
 _DE_ERR_PATTERNS = [
-    rf"de_err\s*[:=]\s*{_DECIMAL_RE}",
-    rf"min_de_error\s*[:=]\s*{_DECIMAL_RE}",
+    rf"de_err\s*=\s*{_DECIMAL_RE}",
+    rf"min_de_error\s*=\s*{_DECIMAL_RE}",
 ]
 
 
@@ -51,12 +46,12 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
     n_slit = None
 
     if code_norm.startswith("DW-"):
-        exposure_handle = extract_int(contents, rf"exposure_handle\s*[:=]\s*{_INT_RE}")
-        action_handle = extract_int(contents, rf"action_handle\s*[:=]\s*{_INT_RE}")
+        exposure_handle = extract_int(contents, rf"exposure_handle\s*:\s*{_INT_RE}")
+        action_handle = extract_int(contents, rf"action_handle\s*=\s*{_INT_RE}")
         wafer_id = extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
         wafer_seq = extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
         de_err = extract_first_decimal(contents, _DE_ERR_PATTERNS)
-        n_slit = extract_int(contents, rf"n_slit\s*[:=]\s*{_INT_RE}")
+        n_slit = extract_int(contents, rf"n_slit\s*=\s*{_INT_RE}")
     elif code_norm.startswith("LO-"):
         wafer_id = extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
         wafer_seq = extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
@@ -79,4 +74,3 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
         de_err=de_err,
         n_slit=n_slit,
     )
-

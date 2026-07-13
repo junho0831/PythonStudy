@@ -1,57 +1,43 @@
 import pandas as pd
 from query_script import QueryExecutor
 
-def process_equipment_data(target_eqp: str):
+def attach_values_to_origin(existing_tuple: tuple, join_column: str = 'eqp_id') -> tuple:
     """
-    (이전 예시) 특정 설비(target_eqp)의 값만 추출하여 변수로 사용하는 함수.
+    (DataFrame, ) 형태로 튜플 안에 들어있는 기존 오리진 데이터를 받아서,
+    DB에서 조회한 설비별 3가지 값을 각 eqp_id에 맞게 매핑(Merge)한 뒤
+    다시 튜플 형태로 반환하는 함수입니다.
     """
-    # 1. 쿼리 실행 (이제 DataFrame이 반환됨)
-    executor = QueryExecutor()
-    equipment_df = executor.execute_query()
-
-    # 2. DataFrame에서 원하는 설비의 값만 추출
-    if target_eqp in equipment_df.index:
-        corner_length_valn = equipment_df.loc[target_eqp, 'corner_length']
-        corner_width_valn  = equipment_df.loc[target_eqp, 'corner_width']
-        border_width_valn  = equipment_df.loc[target_eqp, 'border_width']
-        
-        return corner_length_valn, corner_width_valn, border_width_valn
-    else:
-        return None, None, None
-
-def merge_equipment_data_to_df(original_df: pd.DataFrame, join_column: str = 'eqp_id') -> pd.DataFrame:
-    """
-    기존에 가지고 있던 DataFrame을 인자로 받아서, 
-    DB에서 쿼리한 결과를 새로운 컬럼으로 병합(Merge)하여 반환하는 함수입니다.
-    """
-    # 1. 쿼리 실행 (이제 딕셔너리가 아니라 이미 피벗이 완료된 깔끔한 DataFrame이 나옵니다!)
+    # 1. 튜플에서 기존 오리진 DataFrame을 꺼냅니다.
+    original_df = existing_tuple[0]
+    
+    # 2. DB에서 쿼리 실행 (설비별로 한 줄씩 정리된 피벗 DataFrame 반환됨)
     executor = QueryExecutor()
     new_values_df = executor.execute_query()
     
-    # 2. 기존 DataFrame(original_df)과 새 DataFrame(new_values_df) 병합하기
-    # new_values_df의 인덱스는 'eqp_id'로 되어 있으므로 right_index=True를 씁니다.
+    # 3. 기존 오리진 DataFrame에 새로 조회한 값들을 옆에 착! 붙여줍니다.
+    # original_df의 eqp_id 컬럼과 new_values_df의 인덱스(eqp_id)를 매칭시킵니다.
     final_df = original_df.merge(new_values_df, left_on=join_column, right_index=True, how='left')
     
-    return final_df
+    # 4. 기존 형태 그대로 다시 튜플에 담아서 돌려줍니다.
+    return (final_df, )
 
 if __name__ == "__main__":
-    # --- [사용 예시 1] 변수만 뽑아 쓰기 ---
-    print("--- [사용 예시 1] 단일 설비 변수 추출 ---")
-    length, width, border = process_equipment_data('EQP_001')
-    print(f"EQP_001 값: {length}, {width}, {border}\n")
+    # --- [사용 예시] ---
+    print("--- 튜플 안의 오리진 DataFrame에 매핑(Merge) 테스트 ---")
     
-    # --- [사용 예시 2] 기존 DataFrame에 붙여넣기 ---
-    print("--- [사용 예시 2] 기존 DataFrame에 병합(Merge) ---")
-    # (가정) 원래 다른 곳에서 쓰던 기존 DataFrame 만들기
+    # (가정) 기존에 받아오던 튜플 형태의 데이터
     my_old_df = pd.DataFrame({
         'eqp_id': ['EQP_001', 'EQP_002', 'EQP_003'],
         'status': ['RUN', 'STOP', 'IDLE']
     })
-    print("병합 전 원본 df:")
-    print(my_old_df)
+    my_existing_tuple = (my_old_df, )
+    
+    print("병합 전 원본 튜플 안의 df:")
+    print(my_existing_tuple[0])
     print("-" * 30)
     
-    # 함수에 기존 df를 넣어서 병합된 새 df를 반환받습니다.
-    my_new_df = merge_equipment_data_to_df(my_old_df, join_column='eqp_id')
-    print("병합 후 최종 df:")
-    print(my_new_df)
+    # 함수에 튜플을 통째로 넣어서 결과 튜플을 반환받습니다.
+    my_new_tuple = attach_values_to_origin(my_existing_tuple, join_column='eqp_id')
+    
+    print("병합 후 결과 튜플 안의 최종 df:")
+    print(my_new_tuple[0])

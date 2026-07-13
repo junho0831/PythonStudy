@@ -39,7 +39,9 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 `ER_DOSE_RAW` 배치는 `mbeat.er_data_raw`의 dose warning 로그를 파싱해 `prism_common.er_dose_raw_parsed`에 적재합니다. 원천 식별 컬럼인 `er_date`, `er_index`, `er_line`, `eq_name`, `code`, `code_occur_time`, `belong`, `type`, `title`, `contents`는 그대로 보존하고, `contents`에서 실제로 필요한 `exposure_handle`, `action_handle`, `wafer_id`, `wafer_seq`, `de_err`, `n_slit`만 별도 컬럼으로 저장합니다. 조회 대상 `code`는 `DW-3411`, `DW-3425`, `DW-343A`, `DW-343B`, `LO-0061`, `LO-8166`, `LO-8167`, `KE-9103`, `KE-9104`이며, 코드 값은 DB에 저장된 원본 형식 그대로 비교합니다.
 
-배치는 `code_occur_time` 기간 조건으로 조회한 후보를 한 번에 메모리로 올리지 않고, `chunk` 단위로 읽어서 파싱 후 바로 `COPY` 적재합니다. 기본 `chunk` 크기는 `10000`이며 실행 시 조정할 수 있습니다. 청크 단위로 처리되더라도 설비(`eq_name`)별로 이전에 파싱한 `wafer_id`와 `wafer_seq`를 기억하여, 해당 값이 없는 로그에 이전 값을 채워넣는 로직이 적용되어 있습니다.
+배치는 `code_occur_time` 기간 조건으로 조회한 후보를 한 번에 메모리로 올리지 않고, `chunk` 단위로 읽어서 파싱 후 바로 `COPY` 적재합니다. 현재 기본 `chunk` 크기는 `ER_DOSE_RAW` 및 `ER_DOSE_EUV` 배치 모두 `30000`이며 실행 시 조정할 수 있습니다. 조회는 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`) 기반 스트리밍으로 수행되지만, 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받으므로 운영 환경에 맞게 조정해야 합니다. 청크 단위로 처리되더라도 설비(`eq_name`)별로 이전에 파싱한 `wafer_id`와 `wafer_seq`를 기억하여, 해당 값이 없는 로그에 이전 값을 채워넣는 로직이 적용되어 있습니다.
+
+`ER_DOSE_RAW`의 환경변수 기반 기본 실행은 최근 4일 lookback 모드입니다. 실행일 기준 `오늘 포함 최근 4일`을 날짜별로 검사하고, `NOT EXISTS`로 원천에는 있지만 parsed에는 없는 row를 확인합니다. 누락 row가 있으면 그 row만 추가 파싱해 insert하고, 누락 row가 없으면 해당 날짜는 스킵합니다. 반면 `ER_DOSE_RAW_TARGET_DATE` 또는 `ER_DOSE_START_TIME`/`ER_DOSE_END_TIME`를 명시하면 lookback 대신 지정한 날짜 또는 범위만 처리합니다. `ER_DOSE_EUV`는 이 lookback 누락 조회 전략을 사용하지 않고, 지정한 날짜 또는 시간 범위를 그대로 처리합니다.
 
 `er_dose_raw_parsed`에는 배치 상태 관리용 컬럼을 두지 않습니다. 파싱 실패 여부는 실행 summary로만 집계하고, 테이블에는 상태값 없이 원천 로그와 추출 가능한 값만 적재합니다.
 
@@ -216,13 +218,14 @@ ER_DOSE_DB_DSN=postgresql://user:password@host:5432/dbname
 - `RBI_PARSER`: `RUBI`, `RUPI`, `COMBINED`, 기본값 `COMBINED`
 - `ER_DOSE_RAW_TARGET_DATE`: ER Dose raw 대상 날짜, `YYYY-MM-DD`
 - `ER_DOSE_EUV_TARGET_DATE`: ER Dose EUV 대상 날짜, `YYYY-MM-DD`
-- `ER_DOSE_CHUNK_SIZE`: ER Dose raw fetch chunk 크기
+- `ER_DOSE_CHUNK_SIZE`: ER Dose raw/euv fetch chunk 크기
+- `ER_DOSE_LOOKBACK_DAYS`: `ER_DOSE_RAW` 기본 lookback 일수, 기본값 `4`
 - `INPUT_DATE`: `RBI_INPUT_DATE` 대체값
 - `ER_DOSE_TARGET_DATE`: raw 레거시 대상 날짜 이름
 - `TARGET_DATE`: `ER_DOSE_TARGET_DATE` 레거시 대체값
 - `START_TIME`: `ER_DOSE_START_TIME` 대체값
 - `END_TIME`: `ER_DOSE_END_TIME` 대체값
-- `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`: 기존 시간 범위 직접 지정 방식도 계속 지원
+- `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`: 기존 시간 범위 직접 지정 방식도 계속 지원. 두 값은 반드시 함께 지정해야 함
 
 로컬 패키지 설치:
 
@@ -236,11 +239,12 @@ pip3 install --target .vendor SQLAlchemy psycopg2-binary
 실행 규칙:
 
 - `main.py --date <YYYY-MM-DD> --parser RUBI|RUPI|COMBINED`이면 FTP 기반 RBI 배치를 실행합니다.
-- `main.py --date <YYYY-MM-DD> --parser ER_DOSE_RAW`이면 ER RAW 로그 파싱 배치를 실행합니다.
+- `main.py --date <YYYY-MM-DD> --parser ER_DOSE_RAW`이면 해당 하루의 ER RAW 로그 파싱 배치를 실행합니다.
 - `main.py --date <YYYY-MM-DD> --parser ER_DOSE_EUV`이면 EUV root cause 파싱 배치를 실행합니다.
 - 내부적으로 `ER_DOSE_RAW`는 `ER_DOSE_RAW_TARGET_DATE`, `ER_DOSE_EUV`는 `ER_DOSE_EUV_TARGET_DATE`를 사용합니다.
 - raw/euv processor 모두 대상 날짜 기준으로 하루 범위를 계산합니다.
 - `BATCH_TARGET=ER_DOSE_RAW`가 현재 raw 배치의 기본 이름입니다. 레거시 `ER_DOSE`도 계속 지원합니다.
+- `BATCH_TARGET=ER_DOSE_RAW`를 환경변수만으로 실행하고 날짜 인자를 주지 않으면 최근 4일 lookback + 날짜별 `NOT EXISTS` 누락 row 조회 기반 추가 적재 전략이 적용됩니다.
 - 인자 없이 `main.py`를 실행하면 기존과 동일하게 환경변수 기반 실행입니다.
 
 ### DB 초기화
@@ -307,6 +311,14 @@ ER_DOSE_DB_DSN='postgresql://user:password@host:5432/dbname' \
 ```
 
 직접 ER Dose 실행 스크립트를 사용할 수도 있습니다.
+
+`ER_DOSE_RAW`를 날짜 없이 실행하면 최근 4일 lookback 모드로 동작합니다.
+
+```bash
+python3 -m er_dose.run_er_dose_batch \
+  --parser ER_DOSE_RAW \
+  --dsn 'postgresql://user:password@host:5432/dbname'
+```
 
 ```bash
 python3 -m er_dose.run_er_dose_batch \
