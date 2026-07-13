@@ -137,9 +137,11 @@ class PostgresDB:
 
         from sqlalchemy import text
 
-        with self._connect_sqlalchemy().connect() as conn:
-            stmt = text(query).execution_options(stream_results=True, max_row_buffer=chunk_size)
-            result = conn.execute(stmt, params or {})
+        with self._connect_sqlalchemy().connect().execution_options(
+            stream_results=True,
+            max_row_buffer=chunk_size,
+        ) as conn:
+            result = conn.execute(text(query), params or {})
             columns = list(result.keys())
 
             while True:

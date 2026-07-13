@@ -96,8 +96,8 @@ class ERDoseEUVProcessor:
     def _parse_chunk(self, raw_df) -> list[dict[str, Any]]:
         parsed_rows: list[dict[str, Any]] = []
 
-        for _, row in raw_df.iterrows():
-            raw = self._row_to_raw_log(row)
+        for row in raw_df.itertuples(index=False):
+            raw = self._row_to_raw_log(row._asdict())
             parsed = parse_root_cause(raw.contents)
             if parsed is None:
                 continue
