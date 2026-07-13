@@ -36,9 +36,10 @@ class FakeTransaction:
 
 
 class FakeDB:
-    def __init__(self, raw_df, fetch_df_result=None):
+    def __init__(self, raw_df, fetch_df_result=None, missing_source_counts=None):
         self.raw_df = raw_df
         self.fetch_df_result = raw_df if fetch_df_result is None else fetch_df_result
+        self.missing_source_counts = missing_source_counts or {}
         self.executed = []
         self.inserted = []
         self.connection = object()
@@ -48,6 +49,12 @@ class FakeDB:
     def select(self, query, params=None):
         self.fetch_query = query
         self.fetch_params = params
+        lowered = query.lower()
+        if "count(*) as row_count" in lowered:
+            if "not exists" in lowered and "from mbeat.er_data_raw_1_prt_p" in lowered:
+                suffix = lowered.split("from mbeat.er_data_raw_1_prt_p", maxsplit=1)[1].split()[0]
+                target_date = datetime.strptime(suffix, "%Y%m%d").date()
+                return pd.DataFrame([{"row_count": self.missing_source_counts.get(target_date, 0)}])
         return self.fetch_df_result
 
     def select_in_chunks(self, query, params=None, chunk_size=10000):
@@ -70,7 +77,7 @@ class FakeDB:
         self.insert_connection = connection
         return len(df)
 
-    def copy_insert_to_partition_table(self, schema, table_name, target_date, df, is_truncate=False):
+    def copy_insert_to_partition_table(self, schema, table_name, target_date, df, is_truncate=False, connection=None):
         full_table_name = f"{schema}.{table_name}"
         self.inserted.append((full_table_name, df))
         self.partition_inserts.append((full_table_name, target_date, df.copy()))
@@ -269,6 +276,108 @@ class ERDoseProcessorTest(unittest.TestCase):
 
         self.assertEqual(db.fetch_params["start_time"], datetime(2026, 5, 1, 0, 0, 0))
         self.assertEqual(db.fetch_params["end_time"], datetime(2026, 5, 2, 0, 0, 0))
+
+    def test_run_without_window_uses_recent_days_lookback(self):
+        raw_df = pd.DataFrame([
+            self._row(1, "dw-3411", SAMPLE_CONTENTS, code_occur_time=datetime(2026, 5, 2, 10, 0, 0))
+        ])
+        db = FakeDB(
+            raw_df,
+            missing_source_counts={
+                datetime(2026, 5, 1).date(): 0,
+                datetime(2026, 5, 2).date(): 0,
+            },
+        )
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+
+        with redirect_stdout(StringIO()) as stdout:
+            processor.run(
+                lookback_days=2,
+                reference_date=datetime(2026, 5, 2).date(),
+                chunk_size=100,
+            )
+
+        self.assertEqual(db.executed, [])
+        self.assertEqual(len(db.partition_inserts), 0)
+        self.assertIn("lookback_done start_date=2026-05-01 end_date=2026-05-02", stdout.getvalue())
+        self.assertIn("checked_dates=2 missing_dates=0 missing_rows=0 inserted=0", stdout.getvalue())
+
+    def test_run_recent_days_skips_when_no_missing_source_rows(self):
+        raw_df = pd.DataFrame([
+            self._row(1, "dw-3411", SAMPLE_CONTENTS, code_occur_time=datetime(2026, 5, 2, 10, 0, 0))
+        ])
+        db = FakeDB(
+            raw_df,
+            missing_source_counts={
+                datetime(2026, 5, 1).date(): 0,
+                datetime(2026, 5, 2).date(): 0,
+            },
+        )
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+
+        with redirect_stdout(StringIO()) as stdout:
+            processor.run_recent_days(
+                lookback_days=2,
+                reference_date=datetime(2026, 5, 2).date(),
+                chunk_size=100,
+            )
+
+        self.assertEqual(db.executed, [])
+        self.assertEqual(len(db.partition_inserts), 0)
+        self.assertIn("lookback_done start_date=2026-05-01 end_date=2026-05-02", stdout.getvalue())
+        self.assertIn("checked_dates=2 missing_dates=0 missing_rows=0 inserted=0", stdout.getvalue())
+
+    def test_run_recent_days_inserts_missing_rows_without_truncate_for_late_arrivals(self):
+        target_date = datetime(2026, 5, 1).date()
+        raw_df = pd.DataFrame([
+            self._row(1, "dw-3411", SAMPLE_CONTENTS)
+        ])
+        db = FakeDB(
+            raw_df,
+            missing_source_counts={target_date: 1},
+        )
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+
+        with redirect_stdout(StringIO()) as stdout:
+            processor.run_recent_days(
+                lookback_days=1,
+                reference_date=target_date,
+                chunk_size=100,
+            )
+
+        truncate_queries = [query for query, _, _ in db.executed if query.strip().upper().startswith("TRUNCATE")]
+        self.assertEqual(truncate_queries, [])
+        self.assertEqual(len(db.partition_inserts), 1)
+        self.assertIn("lookback_done start_date=2026-05-01 end_date=2026-05-01", stdout.getvalue())
+        self.assertIn("checked_dates=1 missing_dates=1 missing_rows=1 inserted=1", stdout.getvalue())
+
+    def test_run_recent_days_inserts_missing_rows_when_counts_match_but_source_row_is_missing(self):
+        target_date = datetime(2026, 5, 1).date()
+        raw_df = pd.DataFrame([
+            self._row(1, "dw-3411", SAMPLE_CONTENTS)
+        ])
+        db = FakeDB(
+            raw_df,
+            missing_source_counts={target_date: 1},
+        )
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+
+        with redirect_stdout(StringIO()) as stdout:
+            processor.run_recent_days(
+                lookback_days=1,
+                reference_date=target_date,
+                chunk_size=100,
+            )
+
+        truncate_queries = [query for query, _, _ in db.executed if query.strip().upper().startswith("TRUNCATE")]
+        self.assertEqual(truncate_queries, [])
+        self.assertEqual(len(db.partition_inserts), 1)
+        self.assertIn("lookback_done start_date=2026-05-01 end_date=2026-05-01", stdout.getvalue())
+        self.assertIn("checked_dates=1 missing_dates=1 missing_rows=1 inserted=1", stdout.getvalue())
 
     def test_insert_parsed_df_keeps_integer_columns_as_nullable_int(self):
         db = FakeDB(pd.DataFrame())

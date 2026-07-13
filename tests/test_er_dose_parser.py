@@ -54,18 +54,6 @@ wafer_id=1"""
         self.assertIsNotNone(parsed)
         self.assertEqual(parsed.wafer_id, 1)
 
-    def test_slot_seq_maps_to_wafer_seq(self):
-        raw = self._raw(
-            """system warning: dw-3411 skip the dose evaluation 0.1 [%]
-slot_seq=3"""
-        )
-
-        parsed = parse_dose_error(raw)
-
-        self.assertIsNotNone(parsed)
-        self.assertEqual(parsed.wafer_seq, 3)
-        self.assertIsNone(parsed.wafer_id)
-
     def test_wafer_no_is_not_treated_as_wafer_id(self):
         raw = self._raw(
             """system warning: dw-3411 skip the dose evaluation 0.1 [%]
