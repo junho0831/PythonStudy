@@ -237,9 +237,8 @@ class ERDoseProcessorTest(unittest.TestCase):
             processor.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
 
         parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
-        self.assertEqual(len(parsed_insert), 2)
+        self.assertEqual(len(parsed_insert), 1)
         self.assertEqual(parsed_insert.loc[0, "exposure_handle"], 2631)
-        self.assertEqual(parsed_insert.loc[1, "exposure_handle"], 3632)
         self.assertIn("skip_test_shot", stdout.getvalue())
 
     def test_run_processes_multiple_chunks(self):

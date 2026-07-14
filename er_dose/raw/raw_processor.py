@@ -228,7 +228,6 @@ class ERDoseProcessor:
                             f"exposure_handle={exposure_handle} "
                             f"diff={exposure_handle_diff}"
                         )
-                        self.exposure_handles[eq_name] = exposure_handle
                         continue
                 self.exposure_handles[eq_name] = exposure_handle
 
