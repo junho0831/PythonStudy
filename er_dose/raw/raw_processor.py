@@ -81,8 +81,7 @@ class ERDoseProcessor:
 
             missing_dates += 1
             missing_rows += missing_source_count
-            _, inserted_count = self._insert_missing_source_rows(target_date=current_date, chunk_size=chunk_size)
-            inserted_rows += inserted_count
+            inserted_rows += self._insert_missing_source_rows(target_date=current_date, chunk_size=chunk_size)
             current_date += timedelta(days=1)
 
         print(
@@ -95,8 +94,7 @@ class ERDoseProcessor:
             f"inserted={inserted_rows}"
         )
 
-    def _insert_missing_source_rows(self, target_date: date, chunk_size: int) -> tuple[int, int]:
-        fetched_count = 0
+    def _insert_missing_source_rows(self, target_date: date, chunk_size: int) -> int:
         insert_count = 0
         state_loaded = False
 
@@ -113,9 +111,6 @@ class ERDoseProcessor:
                 self.exposure_handles = {}
                 state_loaded = True
 
-            chunk_fetched = int(len(raw_df))
-            fetched_count += chunk_fetched
-
             parsed_rows = self._parse_chunk(raw_df)
 
             if not parsed_rows:
@@ -125,7 +120,7 @@ class ERDoseProcessor:
             chunk_inserted = self.repository.insert_parsed_df(parsed_df)
             insert_count += chunk_inserted
 
-        return fetched_count, insert_count
+        return insert_count
 
     def _run_window(
         self,
