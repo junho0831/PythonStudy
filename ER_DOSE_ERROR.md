@@ -160,9 +160,9 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 
 1. 실행일 기준 `오늘 포함 최근 4일`을 날짜 오름차순으로 순회
 2. 각 날짜에 대해 원천 `mbeat.er_data_raw` 건수와 타겟 `prism_common.er_dose_raw_parsed` 건수를 비교
-3. `NOT EXISTS`로 원천에는 있지만 타겟에는 없는 row가 있는지 확인
-4. 누락 row가 있으면 그 row만 추가 파싱해 insert
-5. 누락 row가 없으면 해당 날짜는 스킵
+3. 건수가 같으면 해당 날짜는 스킵
+4. 건수가 다르면 해당 날짜의 parsed 파티션을 `TRUNCATE`
+5. 원천 raw를 해당 날짜 처음부터 다시 조회해 chunk 단위로 파싱 후 insert
 
 `ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다.
 RAW와 EUV 모두 대용량 처리를 위해 전체 결과를 한 번에 메모리로 올리지 않고 `read chunk -> parse -> insert` 방식으로 반복 처리한다.
