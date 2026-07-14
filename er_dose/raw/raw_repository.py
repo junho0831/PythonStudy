@@ -72,61 +72,41 @@ class ERDoseRepository:
             }
         return wafer_states
 
-    def fetch_missing_source_count(self, target_date: date) -> int:
-        raw_table = self._partition_table_name(MAIN_RAW_TABLE, target_date)
-        parsed_table = self._partition_table_name(PARSED_TABLE, target_date)
+    def fetch_source_count(self, target_date: date) -> int:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
         target_codes_sql = ", ".join(f"'{code}'" for code in TARGET_CODES)
         query = f"""
             select count(*) as row_count
-            from {raw_table} a
-            where a.code in ({target_codes_sql})
-              and not exists (
-                  select 1
-                  from {parsed_table} b
-                  where b.er_line is not distinct from a.er_line
-                    and b.eq_name is not distinct from a.eq_name
-                    and b.code is not distinct from a.code
-                    and b.code_occur_time = a.code_occur_time
-              )
+            from {MAIN_RAW_TABLE} r
+            where r.code_occur_time >= :start_time
+              and r.code_occur_time < :end_time
+              and r.code in ({target_codes_sql})
         """
-        df = self.db.select(query)
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
         if df is None or df.empty:
             return 0
         return int(df.iloc[0]["row_count"])
 
-    def fetch_missing_source_logs_in_chunks(
-        self,
-        target_date: date,
-        chunk_size: int = 10000,
-    ) -> Iterator[pd.DataFrame]:
-        raw_table = self._partition_table_name(MAIN_RAW_TABLE, target_date)
-        parsed_table = self._partition_table_name(PARSED_TABLE, target_date)
+    def fetch_target_count(self, target_date: date) -> int:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
         target_codes_sql = ", ".join(f"'{code}'" for code in TARGET_CODES)
         query = f"""
-            select
-                a.er_date,
-                a.er_index,
-                a.er_line,
-                a.eq_name,
-                a.code,
-                a.code_occur_time,
-                a.belong,
-                a."type" as type,
-                a.title,
-                a.contents
-            from {raw_table} a
-            where a.code in ({target_codes_sql})
-              and not exists (
-                  select 1
-                  from {parsed_table} b
-                  where b.er_line is not distinct from a.er_line
-                    and b.eq_name is not distinct from a.eq_name
-                    and b.code is not distinct from a.code
-                    and b.code_occur_time = a.code_occur_time
-              )
-            order by a.code_occur_time, a.eq_name, a.er_date, a.er_index
+            select count(*) as row_count
+            from {PARSED_TABLE} p
+            where p.code_occur_time >= :start_time
+              and p.code_occur_time < :end_time
+              and p.code in ({target_codes_sql})
         """
-        yield from self.db.select_in_chunks(query, chunk_size=chunk_size)
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
+        if df is None or df.empty:
+            return 0
+        return int(df.iloc[0]["row_count"])
+
+    def truncate_target_partition(self, target_date: date, connection=None) -> int:
+        parsed_table = self._partition_table_name(PARSED_TABLE, target_date)
+        return self.db.execute(f"truncate table {parsed_table}", connection=connection)
 
     def _build_fetch_raw_logs_query(
         self,

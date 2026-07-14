@@ -67,21 +67,22 @@ class ERDoseProcessor:
         start_date = end_date - timedelta(days=lookback_days - 1)
 
         checked_dates = 0
-        missing_dates = 0
-        missing_rows = 0
+        reloaded_dates = 0
+        source_rows = 0
         inserted_rows = 0
         current_date = start_date
         while current_date <= end_date:
             checked_dates += 1
-            missing_source_count = self.repository.fetch_missing_source_count(current_date)
+            source_count = self.repository.fetch_source_count(current_date)
+            target_count = self.repository.fetch_target_count(current_date)
 
-            if missing_source_count == 0:
+            if source_count == target_count:
                 current_date += timedelta(days=1)
                 continue
 
-            missing_dates += 1
-            missing_rows += missing_source_count
-            inserted_rows += self._insert_missing_source_rows(target_date=current_date, chunk_size=chunk_size)
+            reloaded_dates += 1
+            source_rows += source_count
+            inserted_rows += self._reload_target_date(target_date=current_date, chunk_size=chunk_size)
             current_date += timedelta(days=1)
 
         print(
@@ -89,38 +90,22 @@ class ERDoseProcessor:
             f"lookback_done start_date={start_date.isoformat()} "
             f"end_date={end_date.isoformat()} "
             f"checked_dates={checked_dates} "
-            f"missing_dates={missing_dates} "
-            f"missing_rows={missing_rows} "
+            f"reloaded_dates={reloaded_dates} "
+            f"source_rows={source_rows} "
             f"inserted={inserted_rows}"
         )
 
-    def _insert_missing_source_rows(self, target_date: date, chunk_size: int) -> int:
-        insert_count = 0
-        state_loaded = False
-
-        for chunk_index, raw_df in enumerate(
-            self.repository.fetch_missing_source_logs_in_chunks(
-                target_date=target_date,
+    def _reload_target_date(self, target_date: date, chunk_size: int) -> int:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+        with self.repository.transaction() as connection:
+            self.repository.truncate_target_partition(target_date, connection=connection)
+            return self._run_window(
+                start_time=start_time,
+                end_time=end_time,
                 chunk_size=chunk_size,
-            ),
-            start=1,
-        ):
-            if not state_loaded:
-                first_occur_time = self._first_code_occur_time(raw_df, target_date)
-                self.wafer_states = self.repository.fetch_latest_wafer_states(first_occur_time)
-                self.exposure_handles = {}
-                state_loaded = True
-
-            parsed_rows = self._parse_chunk(raw_df)
-
-            if not parsed_rows:
-                continue
-
-            parsed_df = pd.DataFrame(parsed_rows)
-            chunk_inserted = self.repository.insert_parsed_df(parsed_df)
-            insert_count += chunk_inserted
-
-        return insert_count
+                connection=connection,
+            )
 
     def _run_window(
         self,
@@ -128,7 +113,7 @@ class ERDoseProcessor:
         end_time: datetime,
         chunk_size: int,
         connection=None,
-    ) -> None:
+    ) -> int:
         self.wafer_states = self.repository.fetch_latest_wafer_states(start_time)
         self.exposure_handles = {}
 
@@ -192,6 +177,7 @@ class ERDoseProcessor:
             f"done fetched={fetched_count} "
             f"inserted={insert_count}"
         )
+        return insert_count
 
     def _row_to_raw_log(self, row: Any) -> RawErLog:
         code_occur_time = self._normalize_datetime(row.get("code_occur_time"))
@@ -262,14 +248,6 @@ class ERDoseProcessor:
             parsed_rows.append(parsed_dict)
 
         return parsed_rows
-
-    def _first_code_occur_time(self, raw_df, target_date: date) -> datetime:
-        if raw_df is not None and not raw_df.empty and "code_occur_time" in raw_df.columns:
-            first_value = raw_df["code_occur_time"].min()
-            normalized = self._normalize_datetime(first_value)
-            if normalized is not None:
-                return normalized
-        return datetime.combine(target_date, datetime.min.time())
 
     def _normalize_datetime(self, value: Any) -> datetime | None:
         if hasattr(value, "to_pydatetime"):
