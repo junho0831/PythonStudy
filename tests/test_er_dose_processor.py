@@ -93,7 +93,13 @@ class ERDoseProcessorTest(unittest.TestCase):
         start_time = datetime(2026, 5, 1)
         end_time = datetime(2026, 5, 2)
 
-        list(repo.fetch_raw_logs_in_chunks(start_time=start_time, end_time=end_time, chunk_size=100))
+        list(
+            repo.fetch_raw_logs_in_chunks(
+                start_time=start_time,
+                end_time=end_time,
+                chunk_size=100,
+            )
+        )
 
         self.assertIn("from mbeat.er_data_raw_1_prt_p20260501 r", db.fetch_query)
         self.assertNotIn("r.er_line", db.fetch_query)
@@ -116,13 +122,72 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(db.fetch_params["start_time"], start_time)
         self.assertEqual(db.fetch_params["end_time"], end_time)
 
+    def test_fetch_raw_logs_filters_active_nxe_eq_names(self):
+        db = FakeDB(pd.DataFrame())
+        repo = ERDoseRepository(db)
+        start_time = datetime(2026, 5, 1)
+        end_time = datetime(2026, 5, 2)
+
+        list(
+            repo.fetch_raw_logs_in_chunks(
+                start_time=start_time,
+                end_time=end_time,
+                chunk_size=100,
+            )
+        )
+
+        self.assertIn("r.eq_name in", db.fetch_query)
+        self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
+        self.assertIn("eqp.use_yn = 'Y'", db.fetch_query)
+        self.assertIn("eqp.eqp_model_name like 'NXE%'", db.fetch_query)
+
+    def test_fetch_counts_filter_active_nxe_eq_names(self):
+        target_date = datetime(2026, 5, 1).date()
+        db = FakeDB(
+            pd.DataFrame(),
+            source_counts={target_date: 1},
+            target_counts={target_date: 1},
+        )
+        repo = ERDoseRepository(db)
+
+        repo.fetch_source_count(target_date)
+        self.assertIn("r.eq_name in", db.fetch_query)
+        self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
+
+        repo.fetch_target_count(target_date)
+        self.assertIn("p.eq_name in", db.fetch_query)
+        self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
+
+    def test_fetch_latest_lot_states_filters_active_nxe_eq_names(self):
+        db = FakeDB(
+            pd.DataFrame(),
+            fetch_df_result=pd.DataFrame(
+                [{"eq_name": "EQ1", "lot_seq": 1, "wafer_seq": 2}]
+            ),
+        )
+        repo = ERDoseRepository(db)
+
+        states = repo.fetch_latest_lot_states(
+            datetime(2026, 5, 2),
+        )
+
+        self.assertEqual(states["EQ1"], {"lot_seq": 1, "wafer_seq": 2})
+        self.assertIn("p.eq_name in", db.fetch_query)
+        self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
+
     def test_fetch_raw_logs_across_multiple_days(self):
         db = FakeDB(pd.DataFrame())
         repo = ERDoseRepository(db)
         start_time = datetime(2026, 5, 1, 12, 0, 0)
         end_time = datetime(2026, 5, 3, 14, 0, 0)
 
-        list(repo.fetch_raw_logs_in_chunks(start_time=start_time, end_time=end_time, chunk_size=100))
+        list(
+            repo.fetch_raw_logs_in_chunks(
+                start_time=start_time,
+                end_time=end_time,
+                chunk_size=100,
+            )
+        )
 
         # Should make 3 queries (Day 1: 5/1 12:00 to 5/2 0:00, Day 2: 5/2 0:00 to 5/3 0:00, Day 3: 5/3 0:00 to 5/3 14:00)
         self.assertEqual(len(db.queries_called), 3)

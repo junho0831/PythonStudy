@@ -63,6 +63,10 @@ class ERDoseEUVRepository:
         end_time: datetime,
         chunk_size: int = 10000,
     ) -> Iterator[pd.DataFrame]:
+        params = {
+            "start_time": start_time,
+            "end_time": end_time,
+        }
         query = f"""
             select
                 r.eq_name,
@@ -77,12 +81,14 @@ class ERDoseEUVRepository:
             from {EUV_RAW_TABLE} r
             where r.code_occur_time >= :start_time
               and r.code_occur_time < :end_time
+              and r.eq_name in (
+                  select eqp.eqp_id
+                  from prism_dev.photo_eqp_info eqp
+                  where eqp.use_yn = 'Y'
+                    and eqp.eqp_model_name like 'NXE%'
+              )
             order by r.code_occur_time, r.eq_name, r.er_line
         """
-        params = {
-            "start_time": start_time,
-            "end_time": end_time,
-        }
         return self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)
 
     def insert_root_causes_df(self, df: pd.DataFrame) -> int:

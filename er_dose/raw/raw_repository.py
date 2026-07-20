@@ -39,7 +39,10 @@ class ERDoseRepository:
             next_day_start = datetime.combine(current_start.date() + timedelta(days=1), datetime.min.time())
             current_end = min(next_day_start, end_time)
 
-            query, params = self._build_fetch_raw_logs_query(start_time=current_start, end_time=current_end)
+            query, params = self._build_fetch_raw_logs_query(
+                start_time=current_start,
+                end_time=current_end,
+            )
             yield from self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)
 
             current_start = current_end
@@ -56,6 +59,12 @@ class ERDoseRepository:
               and p.code_occur_time < :start_time
               and p.eq_name is not null
               and (p.lot_seq is not null or p.wafer_seq is not null)
+              and p.eq_name in (
+                  select eqp.eqp_id
+                  from prism_dev.photo_eqp_info eqp
+                  where eqp.use_yn = 'Y'
+                    and eqp.eqp_model_name like 'NXE%'
+              )
             order by p.eq_name, p.code_occur_time desc
         """
         df = self.db.select(query, params={"previous_day_start": previous_day_start, "start_time": start_time})
@@ -83,6 +92,12 @@ class ERDoseRepository:
             where r.code_occur_time >= :start_time
               and r.code_occur_time < :end_time
               and r.code in ({target_codes_sql})
+              and r.eq_name in (
+                  select eqp.eqp_id
+                  from prism_dev.photo_eqp_info eqp
+                  where eqp.use_yn = 'Y'
+                    and eqp.eqp_model_name like 'NXE%'
+              )
         """
         df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
         if df is None or df.empty:
@@ -99,6 +114,12 @@ class ERDoseRepository:
             where p.code_occur_time >= :start_time
               and p.code_occur_time < :end_time
               and p.code in ({target_codes_sql})
+              and p.eq_name in (
+                  select eqp.eqp_id
+                  from prism_dev.photo_eqp_info eqp
+                  where eqp.use_yn = 'Y'
+                    and eqp.eqp_model_name like 'NXE%'
+              )
         """
         df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
         if df is None or df.empty:
@@ -134,6 +155,12 @@ class ERDoseRepository:
             where r.code_occur_time >= :start_time
               and r.code_occur_time < :end_time
               and r.code in ({target_codes_sql})
+              and r.eq_name in (
+                  select eqp.eqp_id
+                  from prism_dev.photo_eqp_info eqp
+                  where eqp.use_yn = 'Y'
+                    and eqp.eqp_model_name like 'NXE%'
+              )
             order by r.code_occur_time, r.eq_name, r.er_date, r.er_index
         """
         return query, params

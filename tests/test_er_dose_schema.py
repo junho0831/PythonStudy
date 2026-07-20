@@ -104,6 +104,8 @@ def test_raw_euv_table_matches_source_schema():
     assert "er_type          varchar(10) not null" in ddl
     assert '"type"           varchar(8)' in ddl
     assert "idx_er_data_raw_euv_occur_time" in ddl
+    assert "idx_er_data_raw_euv_eq_time" in ddl
+    assert "(eq_name, code_occur_time)" in ddl
 
 
 def test_root_cause_table_is_fe_facing_matching_table():

@@ -40,7 +40,13 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         start_time = datetime(2026, 5, 1)
         end_time = datetime(2026, 5, 2)
 
-        list(repo.fetch_raw_logs_in_chunks(start_time=start_time, end_time=end_time, chunk_size=100))
+        list(
+            repo.fetch_raw_logs_in_chunks(
+                start_time=start_time,
+                end_time=end_time,
+                chunk_size=100,
+            )
+        )
 
         self.assertIn("from mbeat.er_data_raw_euv r", db.fetch_query)
         self.assertNotIn("r.er_line,", db.fetch_query)
@@ -53,6 +59,25 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         self.assertIn("r.code_occur_time < :end_time", db.fetch_query)
         self.assertEqual(db.fetch_params["start_time"], start_time)
         self.assertEqual(db.fetch_params["end_time"], end_time)
+
+    def test_fetch_raw_logs_filters_active_nxe_eq_names(self):
+        db = FakeDB(pd.DataFrame())
+        repo = ERDoseEUVRepository(db)
+        start_time = datetime(2026, 5, 1)
+        end_time = datetime(2026, 5, 2)
+
+        list(
+            repo.fetch_raw_logs_in_chunks(
+                start_time=start_time,
+                end_time=end_time,
+                chunk_size=100,
+            )
+        )
+
+        self.assertIn("r.eq_name in", db.fetch_query)
+        self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
+        self.assertIn("eqp.use_yn = 'Y'", db.fetch_query)
+        self.assertIn("eqp.eqp_model_name like 'NXE%'", db.fetch_query)
 
     def test_run_inserts_parsed_root_cause_rows(self):
         raw_df = pd.DataFrame(
