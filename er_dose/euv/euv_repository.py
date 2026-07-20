@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Iterator
 
 import pandas as pd
@@ -57,6 +57,52 @@ class ERDoseEUVRepository:
     def __init__(self, db: PostgresDB):
         self.db = db
 
+    def fetch_source_count(self, target_date: date) -> int:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+        query = f"""
+            select count(*) as row_count
+            from {EUV_RAW_TABLE} r
+            where r.code_occur_time >= :start_time
+              and r.code_occur_time < :end_time
+              and lower(r.contents) like '%dose error detected in file:%'
+              and lower(r.contents) like '%root cause%'
+              and r.eq_name in (
+                  select eqp.eqp_id
+                  from prism_dev.photo_eqp_info eqp
+                  where eqp.use_yn = 'Y'
+                    and eqp.eqp_model_name like 'NXE%'
+              )
+        """
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
+        if df is None or df.empty:
+            return 0
+        return int(df.iloc[0]["row_count"])
+
+    def fetch_target_count(self, target_date: date) -> int:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+        query = f"""
+            select count(*) as row_count
+            from {ROOT_CAUSE_TABLE} p
+            where p.code_occur_time >= :start_time
+              and p.code_occur_time < :end_time
+              and p.eq_name in (
+                  select eqp.eqp_id
+                  from prism_dev.photo_eqp_info eqp
+                  where eqp.use_yn = 'Y'
+                    and eqp.eqp_model_name like 'NXE%'
+              )
+        """
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
+        if df is None or df.empty:
+            return 0
+        return int(df.iloc[0]["row_count"])
+
+    def truncate_target_partition(self, target_date: date, connection=None) -> int:
+        parsed_table = self._partition_table_name(ROOT_CAUSE_TABLE, target_date)
+        return self.db.execute(f"truncate table {parsed_table}", connection=connection)
+
     def fetch_raw_logs_in_chunks(
         self,
         start_time: datetime,
@@ -91,7 +137,7 @@ class ERDoseEUVRepository:
         """
         return self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)
 
-    def insert_root_causes_df(self, df: pd.DataFrame) -> int:
+    def insert_root_causes_df(self, df: pd.DataFrame, connection=None) -> int:
         if df is None or df.empty:
             return 0
 
@@ -180,7 +226,14 @@ class ERDoseEUVRepository:
                 table_name=table_name,
                 target_date=target_date,
                 df=group_df_clean,
+                connection=connection,
             )
             inserted_count += len(group_df_clean)
 
         return inserted_count
+
+    def transaction(self):
+        return self.db.transaction()
+
+    def _partition_table_name(self, table_name: str, target_date: date) -> str:
+        return f'{table_name}_1_prt_p{target_date.strftime("%Y%m%d")}'

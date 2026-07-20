@@ -20,12 +20,25 @@ class ERDoseEUVProcessor:
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         chunk_size: int = 10000,
+        lookback_days: int = 4,
+        reference_date: date | None = None,
         target_date: date | None = None,
     ) -> None:
         if target_date is not None:
-            start_time = datetime.combine(target_date, datetime.min.time())
-            end_time = start_time + timedelta(days=1)
+            self.run_recent_days(
+                lookback_days=1,
+                reference_date=target_date,
+                chunk_size=chunk_size,
+            )
+            return
 
+        if start_time is None and end_time is None:
+            self.run_recent_days(
+                lookback_days=lookback_days,
+                reference_date=reference_date,
+                chunk_size=chunk_size,
+            )
+            return
         if start_time is None or end_time is None:
             raise ValueError("start_time and end_time are required")
         if start_time >= end_time:
@@ -33,6 +46,70 @@ class ERDoseEUVProcessor:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be greater than 0")
 
+        self._run_window(start_time=start_time, end_time=end_time, chunk_size=chunk_size)
+
+    def run_recent_days(
+        self,
+        lookback_days: int = 4,
+        reference_date: date | None = None,
+        chunk_size: int = 10000,
+    ) -> None:
+        if lookback_days <= 0:
+            raise ValueError("lookback_days must be greater than 0")
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be greater than 0")
+
+        end_date = reference_date or date.today()
+        start_date = end_date - timedelta(days=lookback_days - 1)
+
+        checked_dates = 0
+        reloaded_dates = 0
+        source_rows = 0
+        inserted_rows = 0
+        current_date = start_date
+        while current_date <= end_date:
+            checked_dates += 1
+            source_count = self.repository.fetch_source_count(current_date)
+            target_count = self.repository.fetch_target_count(current_date)
+
+            if source_count == target_count:
+                current_date += timedelta(days=1)
+                continue
+
+            reloaded_dates += 1
+            source_rows += source_count
+            inserted_rows += self._reload_target_date(target_date=current_date, chunk_size=chunk_size)
+            current_date += timedelta(days=1)
+
+        print(
+            "[ER_DOSE_EUV] "
+            f"lookback_done start_date={start_date.isoformat()} "
+            f"end_date={end_date.isoformat()} "
+            f"checked_dates={checked_dates} "
+            f"reloaded_dates={reloaded_dates} "
+            f"source_rows={source_rows} "
+            f"inserted={inserted_rows}"
+        )
+
+    def _reload_target_date(self, target_date: date, chunk_size: int) -> int:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+        with self.repository.transaction() as connection:
+            self.repository.truncate_target_partition(target_date, connection=connection)
+            return self._run_window(
+                start_time=start_time,
+                end_time=end_time,
+                chunk_size=chunk_size,
+                connection=connection,
+            )
+
+    def _run_window(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        chunk_size: int,
+        connection=None,
+    ) -> int:
         fetched_count = 0
         insert_count = 0
 
@@ -78,7 +155,7 @@ class ERDoseEUVProcessor:
                 continue
 
             parsed_df = pd.DataFrame(parsed_rows)
-            chunk_inserted = self.repository.insert_root_causes_df(parsed_df)
+            chunk_inserted = self.repository.insert_root_causes_df(parsed_df, connection=connection)
             insert_count += chunk_inserted
             print(
                 "[ER_DOSE_EUV] "
@@ -92,6 +169,7 @@ class ERDoseEUVProcessor:
             f"done fetched={fetched_count} "
             f"inserted={insert_count}"
         )
+        return insert_count
 
     def _parse_chunk(self, raw_df) -> list[dict[str, Any]]:
         parsed_rows: list[dict[str, Any]] = []

@@ -12,13 +12,40 @@ from er_dose.euv.euv_repository import ERDoseEUVRepository
 from tests.test_er_dose_root_cause import SAMPLE_EUV_CONTENTS
 
 
+class FakeTransaction:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def __enter__(self):
+        return self.connection
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
+
+
 class FakeDB:
-    def __init__(self, raw_df):
+    def __init__(self, raw_df, source_counts=None, target_counts=None):
         self.raw_df = raw_df
+        self.source_counts = source_counts or {}
+        self.target_counts = target_counts or {}
         self.fetch_query = None
         self.fetch_params = None
+        self.executed = []
         self.inserted = []
+        self.connection = object()
         self.partition_inserts = []
+
+    def select(self, query, params=None):
+        self.fetch_query = query
+        self.fetch_params = params
+        lowered = query.lower()
+        if "count(*) as row_count" in lowered:
+            target_date = params["start_time"].date()
+            if "from mbeat.er_data_raw_euv r" in lowered:
+                return pd.DataFrame([{"row_count": self.source_counts.get(target_date, 0)}])
+            if "from prism_common.er_dose_euv_parsed p" in lowered:
+                return pd.DataFrame([{"row_count": self.target_counts.get(target_date, 0)}])
+        return pd.DataFrame()
 
     def select_in_chunks(self, query, params=None, chunk_size=10000):
         self.fetch_query = query
@@ -26,7 +53,22 @@ class FakeDB:
         for start in range(0, len(self.raw_df), chunk_size):
             yield self.raw_df.iloc[start : start + chunk_size].copy()
 
-    def copy_insert_to_partition_table(self, schema, table_name, target_date, df, is_truncate=False):
+    def transaction(self):
+        return FakeTransaction(self.connection)
+
+    def execute(self, query, params=None, connection=None):
+        self.executed.append((query, params, connection))
+        return 0
+
+    def copy_insert_to_partition_table(
+        self,
+        schema,
+        table_name,
+        target_date,
+        df,
+        is_truncate=False,
+        connection=None,
+    ):
         full_table_name = f"{schema}.{table_name}"
         self.inserted.append((full_table_name, df.copy()))
         self.partition_inserts.append((full_table_name, target_date, df.copy()))
@@ -112,7 +154,11 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
                 },
             ]
         )
-        db = FakeDB(raw_df)
+        db = FakeDB(
+            raw_df,
+            source_counts={date(2026, 5, 4): 1},
+            target_counts={date(2026, 5, 4): 0},
+        )
         repo = ERDoseEUVRepository(db)
         processor = ERDoseEUVProcessor(repo)
 
@@ -133,6 +179,101 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         self.assertEqual(inserted_df.loc[0, "root_cause_code"], "plasma_oscillations")
         self.assertEqual(inserted_df.loc[0, "dose_error_detected_in_file"], "adecetdcdata_fdd_lc_eei_scanner_dose_error_event_20260504_180529_3502+0900.zip")
         self.assertEqual(db.partition_inserts[0][1], "2026-05-04")
+
+    def test_fetch_counts_filter_active_nxe_eq_names_and_root_cause_source(self):
+        target_date = date(2026, 5, 4)
+        db = FakeDB(
+            pd.DataFrame(),
+            source_counts={target_date: 1},
+            target_counts={target_date: 1},
+        )
+        repo = ERDoseEUVRepository(db)
+
+        self.assertEqual(repo.fetch_source_count(target_date), 1)
+        self.assertIn("from mbeat.er_data_raw_euv r", db.fetch_query)
+        self.assertIn("lower(r.contents) like '%dose error detected in file:%'", db.fetch_query)
+        self.assertIn("lower(r.contents) like '%root cause%'", db.fetch_query)
+        self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
+
+        self.assertEqual(repo.fetch_target_count(target_date), 1)
+        self.assertIn("from prism_common.er_dose_euv_parsed p", db.fetch_query)
+        self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
+
+    def test_run_recent_days_skips_when_counts_match(self):
+        target_date = date(2026, 5, 4)
+        raw_df = pd.DataFrame(
+            [
+                {
+                    "eq_name": "EQ1",
+                    "er_type": "EUV",
+                    "code": "CODE1",
+                    "code_occur_time": datetime(2026, 5, 4, 18, 5, 29),
+                    "title": "Dose Error Root Cause",
+                    "contents": SAMPLE_EUV_CONTENTS,
+                    "reason_code": "R1",
+                    "task": "TASK1",
+                    "compile_script": "SCRIPT1",
+                },
+            ]
+        )
+        db = FakeDB(
+            raw_df,
+            source_counts={target_date: 1},
+            target_counts={target_date: 1},
+        )
+        repo = ERDoseEUVRepository(db)
+        processor = ERDoseEUVProcessor(repo)
+
+        with redirect_stdout(StringIO()) as stdout:
+            processor.run_recent_days(
+                lookback_days=1,
+                reference_date=target_date,
+                chunk_size=100,
+            )
+
+        self.assertEqual(db.executed, [])
+        self.assertEqual(len(db.partition_inserts), 0)
+        self.assertIn("lookback_done start_date=2026-05-04 end_date=2026-05-04", stdout.getvalue())
+        self.assertIn("checked_dates=1 reloaded_dates=0 source_rows=0 inserted=0", stdout.getvalue())
+
+    def test_run_recent_days_truncates_and_reloads_when_counts_differ(self):
+        target_date = date(2026, 5, 4)
+        raw_df = pd.DataFrame(
+            [
+                {
+                    "eq_name": "EQ1",
+                    "er_type": "EUV",
+                    "code": "CODE1",
+                    "code_occur_time": datetime(2026, 5, 4, 18, 5, 29),
+                    "title": "Dose Error Root Cause",
+                    "contents": SAMPLE_EUV_CONTENTS,
+                    "reason_code": "R1",
+                    "task": "TASK1",
+                    "compile_script": "SCRIPT1",
+                },
+            ]
+        )
+        db = FakeDB(
+            raw_df,
+            source_counts={target_date: 1},
+            target_counts={target_date: 0},
+        )
+        repo = ERDoseEUVRepository(db)
+        processor = ERDoseEUVProcessor(repo)
+
+        with redirect_stdout(StringIO()) as stdout:
+            processor.run_recent_days(
+                lookback_days=1,
+                reference_date=target_date,
+                chunk_size=100,
+            )
+
+        truncate_queries = [query for query, _, _ in db.executed if query.strip().upper().startswith("TRUNCATE")]
+        self.assertEqual(truncate_queries, ["truncate table prism_common.er_dose_euv_parsed_1_prt_p20260504"])
+        self.assertEqual(len(db.partition_inserts), 1)
+        self.assertIs(db.executed[0][2], db.connection)
+        self.assertIn("lookback_done start_date=2026-05-04 end_date=2026-05-04", stdout.getvalue())
+        self.assertIn("checked_dates=1 reloaded_dates=1 source_rows=1 inserted=1", stdout.getvalue())
 
 
 if __name__ == "__main__":
