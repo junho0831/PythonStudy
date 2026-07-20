@@ -15,6 +15,7 @@ TARGET_CODES = (
     "DW-3425",
     "DW-343A",
     "DW-343B",
+    "LO-0050",
     "LO-0061",
     "LO-8166",
     "LO-8167",
@@ -43,34 +44,34 @@ class ERDoseRepository:
 
             current_start = current_end
 
-    def fetch_latest_wafer_states(self, start_time: datetime) -> dict[str, dict[str, int | None]]:
+    def fetch_latest_lot_states(self, start_time: datetime) -> dict[str, dict[str, int | None]]:
         previous_day_start = datetime.combine((start_time - timedelta(days=1)).date(), datetime.min.time())
         query = f"""
             select distinct on (p.eq_name)
                 p.eq_name,
-                p.wafer_id,
+                p.lot_seq,
                 p.wafer_seq
             from {PARSED_TABLE} p
             where p.code_occur_time >= :previous_day_start
               and p.code_occur_time < :start_time
               and p.eq_name is not null
-              and (p.wafer_id is not null or p.wafer_seq is not null)
+              and (p.lot_seq is not null or p.wafer_seq is not null)
             order by p.eq_name, p.code_occur_time desc
         """
         df = self.db.select(query, params={"previous_day_start": previous_day_start, "start_time": start_time})
         if df is None or df.empty:
             return {}
 
-        wafer_states: dict[str, dict[str, int | None]] = {}
+        lot_states: dict[str, dict[str, int | None]] = {}
         for _, row in df.iterrows():
             eq_name = row["eq_name"]
             if pd.isna(eq_name):
                 continue
-            wafer_states[str(eq_name)] = {
-                "wafer_id": None if pd.isna(row.get("wafer_id")) else int(row["wafer_id"]),
+            lot_states[str(eq_name)] = {
+                "lot_seq": None if pd.isna(row.get("lot_seq")) else int(row["lot_seq"]),
                 "wafer_seq": None if pd.isna(row.get("wafer_seq")) else int(row["wafer_seq"]),
             }
-        return wafer_states
+        return lot_states
 
     def fetch_source_count(self, target_date: date) -> int:
         start_time = datetime.combine(target_date, datetime.min.time())
@@ -124,14 +125,9 @@ class ERDoseRepository:
 
         query = f"""
             select
-                r.er_date,
-                r.er_index,
-                r.er_line,
                 r.eq_name,
                 r.code,
                 r.code_occur_time,
-                r.belong,
-                r."type" as type,
                 r.title,
                 r.contents
             from {raw_table} r
@@ -151,19 +147,16 @@ class ERDoseRepository:
 
         # prism_common.er_dose_raw_parsed 에 존재하는 컬럼만 적재한다.
         table_columns = [
-            "er_date",
-            "er_index",
-            "er_line",
             "eq_name",
             "code",
             "code_occur_time",
-            "belong",
-            "type",
             "title",
             "contents",
             "exposure_handle",
             "action_handle",
-            "wafer_id",
+            "lot_id",
+            "lot_name",
+            "lot_seq",
             "wafer_seq",
             "de_err",
             "n_slit",
@@ -176,11 +169,9 @@ class ERDoseRepository:
             df_to_insert["created_at"] = datetime.now()
 
         int_columns = [
-            "er_date",
-            "er_index",
             "exposure_handle",
             "action_handle",
-            "wafer_id",
+            "lot_seq",
             "wafer_seq",
             "n_slit",
         ]

@@ -7,6 +7,7 @@ from er_dose.common.regex_utils import (
     extract_first_decimal,
     extract_first_int,
     extract_int,
+    extract_text,
 )
 
 
@@ -14,8 +15,8 @@ from er_dose.common.regex_utils import (
 _DECIMAL_RE = DECIMAL_PATTERN
 _INT_RE = INT_PATTERN
 
-# wafer_id 는 현재 확인된 lot(2111), lot id 2111, wafer_id=2111 표기만 허용한다.
-_WAFER_ID_PATTERNS = [
+# lot_seq 는 현재 확인된 lot(2111), lot id 2111, wafer_id=2111 표기만 허용한다.
+_LOT_SEQ_PATTERNS = [
     rf"lot\(\s*{_INT_RE}\s*\)",
     rf"lot id\s+{_INT_RE}",
     rf"wafer_id\s*=\s*{_INT_RE}",
@@ -40,7 +41,9 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
 
     exposure_handle = None
     action_handle = None
-    wafer_id = None
+    lot_id = None
+    lot_name = None
+    lot_seq = None
     wafer_seq = None
     de_err = None
     n_slit = None
@@ -48,28 +51,28 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
     if code_norm.startswith("DW-"):
         exposure_handle = extract_int(contents, rf"exposure_handle\s*:\s*{_INT_RE}")
         action_handle = extract_int(contents, rf"action_handle\s*=\s*{_INT_RE}")
-        wafer_id = extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
+        lot_seq = extract_first_int(contents, _LOT_SEQ_PATTERNS, minimum=1)
         wafer_seq = extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
         de_err = extract_first_decimal(contents, _DE_ERR_PATTERNS)
         n_slit = extract_int(contents, rf"n_slit\s*=\s*{_INT_RE}")
     elif code_norm.startswith("LO-"):
-        wafer_id = extract_first_int(contents, _WAFER_ID_PATTERNS, minimum=1)
+        if code_norm == "LO-0050":
+            lot_id = extract_text(contents, r"lot\s+'([^']+)'")
+            lot_name = lot_id.split(".", maxsplit=1)[0] if lot_id is not None else None
+        lot_seq = extract_first_int(contents, _LOT_SEQ_PATTERNS, minimum=1)
         wafer_seq = extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
 
     return ParsedErDoseError(
-        er_date=raw.er_date,
-        er_index=raw.er_index,
-        er_line=raw.er_line,
         eq_name=raw.eq_name,
         code=raw.code,
         code_occur_time=raw.code_occur_time,
-        belong=raw.belong,
-        type=raw.type,
         title=raw.title,
         contents=raw.contents,
         exposure_handle=exposure_handle,
         action_handle=action_handle,
-        wafer_id=wafer_id,
+        lot_id=lot_id,
+        lot_name=lot_name,
+        lot_seq=lot_seq,
         wafer_seq=wafer_seq,
         de_err=de_err,
         n_slit=n_slit,

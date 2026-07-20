@@ -96,9 +96,9 @@ class ERDoseProcessorTest(unittest.TestCase):
         list(repo.fetch_raw_logs_in_chunks(start_time=start_time, end_time=end_time, chunk_size=100))
 
         self.assertIn("from mbeat.er_data_raw_1_prt_p20260501 r", db.fetch_query)
-        self.assertIn("r.er_date", db.fetch_query)
-        self.assertIn("r.er_index", db.fetch_query)
-        self.assertIn('r."type" as type', db.fetch_query)
+        self.assertNotIn("r.er_line", db.fetch_query)
+        self.assertNotIn('r."type" as type', db.fetch_query)
+        self.assertNotIn("r.belong", db.fetch_query)
         self.assertIn("r.title", db.fetch_query)
         self.assertIn("r.code_occur_time >= :start_time", db.fetch_query)
         self.assertIn("r.code_occur_time < :end_time", db.fetch_query)
@@ -107,6 +107,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertIn("'DW-3425'", db.fetch_query)
         self.assertIn("'DW-343A'", db.fetch_query)
         self.assertIn("'DW-343B'", db.fetch_query)
+        self.assertIn("'LO-0050'", db.fetch_query)
         self.assertIn("'LO-0061'", db.fetch_query)
         self.assertIn("'LO-8166'", db.fetch_query)
         self.assertIn("'LO-8167'", db.fetch_query)
@@ -142,29 +143,31 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(p3["start_time"], datetime(2026, 5, 3, 0, 0, 0))
         self.assertEqual(p3["end_time"], datetime(2026, 5, 3, 14, 0, 0))
 
-    def test_fetch_latest_wafer_states_returns_latest_state_per_eq_name(self):
+    def test_fetch_latest_lot_states_returns_latest_state_per_eq_name(self):
         history_df = pd.DataFrame(
             [
-                {"eq_name": "EQ1", "wafer_id": 1001, "wafer_seq": 21},
-                {"eq_name": "EQ2", "wafer_id": None, "wafer_seq": 7},
+                {"eq_name": "EQ1", "lot_seq": 1001, "wafer_seq": 21},
+                {"eq_name": "EQ2", "lot_seq": None, "wafer_seq": 7},
             ]
         )
         db = FakeDB(pd.DataFrame(), fetch_df_result=history_df)
         repo = ERDoseRepository(db)
         start_time = datetime(2026, 5, 2)
 
-        wafer_states = repo.fetch_latest_wafer_states(start_time)
+        lot_states = repo.fetch_latest_lot_states(start_time)
 
         self.assertIn("from prism_common.er_dose_raw_parsed p", db.fetch_query)
+        self.assertIn("p.lot_seq", db.fetch_query)
+        self.assertNotIn("p.wafer_id", db.fetch_query)
         self.assertIn("p.code_occur_time >= :previous_day_start", db.fetch_query)
         self.assertIn("p.code_occur_time < :start_time", db.fetch_query)
         self.assertEqual(db.fetch_params["start_time"], start_time)
         self.assertEqual(db.fetch_params["previous_day_start"], datetime(2026, 5, 1, 0, 0, 0))
         self.assertEqual(
-            wafer_states,
+            lot_states,
             {
-                "EQ1": {"wafer_id": 1001, "wafer_seq": 21},
-                "EQ2": {"wafer_id": None, "wafer_seq": 7},
+                "EQ1": {"lot_seq": 1001, "wafer_seq": 21},
+                "EQ2": {"lot_seq": None, "wafer_seq": 7},
             },
         )
 
@@ -189,24 +192,31 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertNotIn("parser_version", parsed_insert.columns)
         self.assertNotIn("parsing_status", parsed_insert.columns)
         self.assertNotIn("parsing_error", parsed_insert.columns)
+        self.assertNotIn("er_date", parsed_insert.columns)
+        self.assertNotIn("er_index", parsed_insert.columns)
+        self.assertNotIn("er_line", parsed_insert.columns)
+        self.assertNotIn("belong", parsed_insert.columns)
+        self.assertNotIn("type", parsed_insert.columns)
         self.assertEqual(parsed_insert.loc[0, "code_occur_time"], datetime(2026, 5, 1, 10, 0, 0, 123456))
-        self.assertEqual(parsed_insert.loc[0, "er_date"], 20260501)
-        self.assertEqual(parsed_insert.loc[0, "er_index"], 1)
-        self.assertEqual(parsed_insert.loc[0, "belong"], "SCANNER")
-        self.assertEqual(parsed_insert.loc[0, "type"], "ER")
         self.assertEqual(parsed_insert.loc[0, "title"], "Dose warning")
         self.assertEqual(parsed_insert.loc[0, "contents"], SAMPLE_CONTENTS)
+        self.assertIn("lot_id", parsed_insert.columns)
+        self.assertIn("lot_name", parsed_insert.columns)
+        self.assertTrue(pd.isna(parsed_insert.loc[0, "lot_id"]))
+        self.assertTrue(pd.isna(parsed_insert.loc[0, "lot_name"]))
+        self.assertIn("lot_seq", parsed_insert.columns)
+        self.assertTrue(pd.isna(parsed_insert.loc[0, "lot_seq"]))
         self.assertIn("wafer_seq", parsed_insert.columns)
         self.assertTrue(pd.isna(parsed_insert.loc[0, "wafer_seq"]))
         inserted_tables = [table_name for table_name, _ in db.inserted]
         self.assertEqual(inserted_tables, ["prism_common.er_dose_raw_parsed"])
 
-    def test_run_uses_preloaded_wafer_state_when_chunk_starts_without_wafer_info(self):
+    def test_run_uses_preloaded_lot_state_when_chunk_starts_without_lot_info(self):
         raw_df = pd.DataFrame([
             self._row(1, "lo-0061", "system info: lo-0061 normal message", eq_name="EQ1")
         ])
         history_df = pd.DataFrame([
-            {"eq_name": "EQ1", "wafer_id": 2111, "wafer_seq": 23}
+            {"eq_name": "EQ1", "lot_seq": 2111, "wafer_seq": 23}
         ])
         db = FakeDB(raw_df, fetch_df_result=history_df)
         repo = ERDoseRepository(db)
@@ -216,7 +226,7 @@ class ERDoseProcessorTest(unittest.TestCase):
             processor.run(start_time=datetime(2026, 5, 2), end_time=datetime(2026, 5, 3))
 
         parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
-        self.assertEqual(parsed_insert.loc[0, "wafer_id"], 2111)
+        self.assertEqual(parsed_insert.loc[0, "lot_seq"], 2111)
         self.assertEqual(parsed_insert.loc[0, "wafer_seq"], 23)
 
     def test_run_skips_dw_row_when_exposure_handle_jump_reaches_threshold(self):
@@ -409,7 +419,9 @@ class ERDoseProcessorTest(unittest.TestCase):
                     "contents": SAMPLE_CONTENTS,
                     "exposure_handle": 11388,
                     "action_handle": None,
-                    "wafer_id": None,
+                    "lot_id": "HJO449.1_1747_0_MP232325",
+                    "lot_name": "HJO449",
+                    "lot_seq": None,
                     "wafer_seq": 44,
                     "de_err": "0.0461075",
                     "n_slit": 44,
@@ -427,7 +439,7 @@ class ERDoseProcessorTest(unittest.TestCase):
                     "contents": SAMPLE_CONTENTS,
                     "exposure_handle": None,
                     "action_handle": 2625,
-                    "wafer_id": 2111,
+                    "lot_seq": 2111,
                     "wafer_seq": None,
                     "de_err": "0.0461075",
                     "n_slit": None,
@@ -440,23 +452,25 @@ class ERDoseProcessorTest(unittest.TestCase):
         inserted_df = db.partition_inserts[0][2]
         self.assertEqual(str(inserted_df["exposure_handle"].dtype), "Int64")
         self.assertEqual(str(inserted_df["action_handle"].dtype), "Int64")
-        self.assertEqual(str(inserted_df["wafer_id"].dtype), "Int64")
+        self.assertEqual(str(inserted_df["lot_seq"].dtype), "Int64")
         self.assertEqual(str(inserted_df["wafer_seq"].dtype), "Int64")
         self.assertEqual(str(inserted_df["n_slit"].dtype), "Int64")
+        self.assertEqual(inserted_df.loc[0, "lot_id"], "HJO449.1_1747_0_MP232325")
+        self.assertEqual(inserted_df.loc[0, "lot_name"], "HJO449")
+        self.assertNotIn("er_date", inserted_df.columns)
+        self.assertNotIn("er_index", inserted_df.columns)
+        self.assertNotIn("er_line", inserted_df.columns)
+        self.assertNotIn("belong", inserted_df.columns)
+        self.assertNotIn("type", inserted_df.columns)
         self.assertEqual(inserted_df.loc[0, "exposure_handle"], 11388)
         self.assertTrue(pd.isna(inserted_df.loc[1, "exposure_handle"]))
 
-    def _row(self, row_no, code, contents, code_occur_time=None, belong="SCANNER", eq_name="EQ1"):
+    def _row(self, row_no, code, contents, code_occur_time=None, eq_name="EQ1"):
         return {
-            "er_date": 20260501,
-            "er_index": row_no,
-            "er_line": "L1",
             "eq_name": eq_name,
             "er_type": "EUV",
             "code": code,
             "code_occur_time": code_occur_time or datetime(2026, 5, 1, 10, 0, 0, 123456),
-            "belong": belong,
-            "type": "ER",
             "title": "Dose warning",
             "contents": contents,
         }

@@ -19,8 +19,8 @@ EXPOSURE_HANDLE_JUMP_THRESHOLD = 1000
 class ERDoseProcessor:
     def __init__(self, repository: ERDoseRepository):
         self.repository = repository
-        # 설비별 가장 최근의 wafer_id, wafer_seq를 기억 (청크가 나뉘어도 유지)
-        self.wafer_states: dict[str, dict[str, int | None]] = {}
+        # 설비별 가장 최근의 lot_seq, wafer_seq를 기억 (청크가 나뉘어도 유지)
+        self.lot_states: dict[str, dict[str, int | None]] = {}
         self.exposure_handles: dict[str, int] = {}
 
     def run(
@@ -114,7 +114,7 @@ class ERDoseProcessor:
         chunk_size: int,
         connection=None,
     ) -> int:
-        self.wafer_states = self.repository.fetch_latest_wafer_states(start_time)
+        self.lot_states = self.repository.fetch_latest_lot_states(start_time)
         self.exposure_handles = {}
 
         fetched_count = 0
@@ -125,7 +125,7 @@ class ERDoseProcessor:
             f"start_time={start_time.isoformat()} "
             f"end_time={end_time.isoformat()} "
             f"chunk_size={chunk_size} "
-            f"preloaded_eq={len(self.wafer_states)}"
+            f"preloaded_eq={len(self.lot_states)}"
         )
 
         for chunk_index, raw_df in enumerate(
@@ -184,14 +184,9 @@ class ERDoseProcessor:
         contents = row.get("contents")
 
         return RawErLog(
-            er_date=self._nullable_int(row.get("er_date")),
-            er_index=self._nullable_int(row.get("er_index")),
-            er_line=self._nullable_str(row.get("er_line")),
             eq_name=self._nullable_str(row.get("eq_name")),
             code=self._nullable_str(row.get("code")),
             code_occur_time=code_occur_time,
-            belong=self._nullable_str(row.get("belong")),
-            type=self._nullable_str(row.get("type")),
             title=self._nullable_str(row.get("title")),
             contents=str(contents) if pd.notna(contents) else "",
         )
@@ -200,11 +195,6 @@ class ERDoseProcessor:
         if value is None or pd.isna(value):
             return None
         return str(value)
-
-    def _nullable_int(self, value: Any) -> int | None:
-        if value is None or pd.isna(value):
-            return None
-        return int(value)
 
     def _parse_chunk(self, raw_df) -> list[dict[str, DoseErrorValue]]:
         parsed_rows: list[dict[str, DoseErrorValue]] = []
@@ -232,12 +222,12 @@ class ERDoseProcessor:
                 self.exposure_handles[eq_name] = exposure_handle
 
             if eq_name is not None:
-                state = self.wafer_states.setdefault(eq_name, {"wafer_id": None, "wafer_seq": None})
+                state = self.lot_states.setdefault(eq_name, {"lot_seq": None, "wafer_seq": None})
 
-                if parsed_dict.get("wafer_id") is not None:
-                    state["wafer_id"] = parsed_dict["wafer_id"]
+                if parsed_dict.get("lot_seq") is not None:
+                    state["lot_seq"] = parsed_dict["lot_seq"]
                 else:
-                    parsed_dict["wafer_id"] = state["wafer_id"]
+                    parsed_dict["lot_seq"] = state["lot_seq"]
 
                 if parsed_dict.get("wafer_seq") is not None:
                     state["wafer_seq"] = parsed_dict["wafer_seq"]

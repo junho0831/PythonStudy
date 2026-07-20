@@ -43,7 +43,10 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         list(repo.fetch_raw_logs_in_chunks(start_time=start_time, end_time=end_time, chunk_size=100))
 
         self.assertIn("from mbeat.er_data_raw_euv r", db.fetch_query)
+        self.assertNotIn("r.er_line,", db.fetch_query)
         self.assertIn("r.er_type", db.fetch_query)
+        self.assertNotIn("r.belong", db.fetch_query)
+        self.assertNotIn('r."type" as type', db.fetch_query)
         self.assertIn("r.reason_code", db.fetch_query)
         self.assertIn("r.compile_script", db.fetch_query)
         self.assertIn("r.code_occur_time >= :start_time", db.fetch_query)
@@ -97,6 +100,10 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         table_name, inserted_df = db.inserted[0]
         self.assertEqual(table_name, "prism_common.er_dose_euv_parsed")
         self.assertEqual(len(inserted_df), 1)
+        self.assertNotIn("er_line", inserted_df.columns)
+        self.assertNotIn("belong", inserted_df.columns)
+        self.assertNotIn("type", inserted_df.columns)
+        self.assertEqual(inserted_df.loc[0, "er_type"], "EUV")
         self.assertEqual(inserted_df.loc[0, "exposure_id"], 25415)
         self.assertEqual(inserted_df.loc[0, "root_cause_code"], "plasma_oscillations")
         self.assertEqual(inserted_df.loc[0, "dose_error_detected_in_file"], "adecetdcdata_fdd_lc_eei_scanner_dose_error_event_20260504_180529_3502+0900.zip")

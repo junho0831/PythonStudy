@@ -1,13 +1,10 @@
 create schema if not exists prism_common;
 
 create table if not exists prism_common.er_dose_euv_parsed (
-    er_line                 varchar(20),
     eq_name                 varchar(20),
     er_type                 varchar(10),
     code                    varchar(20),
     code_occur_time         timestamp(6) not null,
-    belong                  varchar(12),
-    "type"                  varchar(8),
     title                   varchar,
     contents                varchar,
     reason_code             varchar(20),
@@ -56,8 +53,8 @@ create table if not exists prism_common.er_dose_euv_parsed (
 )
 partition by range (code_occur_time);
 
-create index if not exists idx_er_dose_euv_parsed_line_eq_time
-on prism_common.er_dose_euv_parsed (er_line, eq_name, code_occur_time);
+create index if not exists idx_er_dose_euv_parsed_eq_time
+on prism_common.er_dose_euv_parsed (eq_name, code_occur_time);
 
 comment on table prism_common.er_dose_euv_parsed is
 'FE-facing dose error root cause table. Independent from er_dose_raw_parsed; source description candidates are read from er_data_raw_euv.';

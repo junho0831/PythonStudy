@@ -30,7 +30,9 @@ mbeat.er_data_raw_euv
 DDL:
 
 - [Parsed 테이블 생성](er_dose/sql/create_er_dose_raw_parsed.sql)
+- [RAW Parsed 스키마 마이그레이션](er_dose/sql/migrate_er_dose_raw_parsed_schema.sql)
 - [EUV Parsed 테이블 생성](er_dose/sql/create_er_dose_euv_parsed.sql)
+- [EUV Parsed 스키마 마이그레이션](er_dose/sql/migrate_er_dose_euv_parsed_schema.sql)
 - [EUV Parsed 컬럼 rename 마이그레이션](er_dose/sql/rename_er_dose_euv_parsed_columns.sql)
 - [RAW EUV 테이블 생성](er_dose/sql/create_er_data_raw_euv.sql)
 
@@ -70,32 +72,27 @@ erDiagram
     }
 
     ER_DOSE_RAW_PARSED {
-        int4 er_date
-        int4 er_index
-        varchar er_line
         varchar eq_name
         varchar code
         timestamp code_occur_time PK
-        varchar belong
-        varchar type
         varchar title
         varchar contents
         bigint exposure_handle
         bigint action_handle
-        integer wafer_id
+        varchar lot_id
+        varchar lot_name
+        integer lot_seq
+        integer wafer_seq
         numeric de_err
         integer n_slit
         timestamp created_at
     }
 
     ER_DOSE_EUV_PARSED {
-        varchar er_line
         varchar eq_name
         varchar er_type
         varchar code
         timestamp code_occur_time PK
-        varchar belong
-        varchar type
         varchar title
         varchar contents
         varchar reason_code
@@ -153,7 +150,7 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 1. 기간에 해당하는 `er_dose_raw_parsed` 일별 파티션을 대상으로 처리
 2. `mbeat.er_data_raw`에서 Dose Error 후보를 `chunk` 단위로 조회
 3. 각 `chunk`의 RAW contents 파싱
-   - 파싱 중 `wafer_id`나 `wafer_seq`가 없을 경우, 동일 `eq_name`에서 이전에 파싱된 가장 최근 값을 사용한다. 이는 chunk의 경계를 넘어 유지된다.
+   - 파싱 중 `lot_seq`나 `wafer_seq`가 없을 경우, 동일 `eq_name`에서 이전에 파싱된 가장 최근 값을 사용한다. 이는 chunk의 경계를 넘어 유지된다.
 4. 각 `chunk`를 `prism_common.er_dose_raw_parsed`에 `COPY` append insert
 
 환경변수 기반 기본 실행에서 `ER_DOSE_RAW_TARGET_DATE`, `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`가 모두 없으면 raw 배치는 최근 4일 lookback 모드로 동작한다.
@@ -164,7 +161,7 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 4. 건수가 다르면 해당 날짜의 parsed 파티션을 `TRUNCATE`
 5. 원천 raw를 해당 날짜 처음부터 다시 조회해 chunk 단위로 파싱 후 insert
 
-`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다.
+`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다. EUV parsed 결과에는 `eq_name`, `er_type`, `code`, `code_occur_time`, `title`, `contents`, `reason_code`, `task`, `compile_script`와 root cause 파싱 컬럼만 저장한다.
 RAW와 EUV 모두 대용량 처리를 위해 전체 결과를 한 번에 메모리로 올리지 않고 `read chunk -> parse -> insert` 방식으로 반복 처리한다.
 또한, 데이터베이스 드라이버 단의 메모리 팽창을 방지하기 위해 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`)를 활성화하여 스트리밍 조회를 수행한다. 다만 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받기 때문에 운영 환경에서 조정이 필요할 수 있다.
 
@@ -198,6 +195,7 @@ software version : 2.0 [nxe3400 mv 250w]
   - `DW-3425`
   - `DW-343A`
   - `DW-343B`
+  - `LO-0050`
   - `LO-0061`
   - `LO-8166`
   - `LO-8167`
@@ -206,10 +204,10 @@ software version : 2.0 [nxe3400 mv 250w]
 
 즉 `code`는 하이픈 제거, 대소문자 변환 같은 정규화 없이 DB 원본 값 그대로 비교한다.
 
-주요 파싱 필드:
+RAW parsed 저장 필드:
 
-- 원천 보존: `er_date`, `er_index`, `er_line`, `eq_name`, `code`, `code_occur_time`, `belong`, `type`, `title`, `contents`
-- 추가 컬럼: `exposure_handle`, `action_handle`, `wafer_id`, `wafer_seq`, `de_err`, `n_slit`
+- 원천 기반 컬럼: `eq_name`, `code`, `code_occur_time`, `title`, `contents`
+- 파싱 컬럼: `exposure_handle`, `action_handle`, `lot_id`, `lot_name`, `lot_seq`, `wafer_seq`, `de_err`, `n_slit`
 
 필드가 없으면 nullable 컬럼은 `NULL`로 저장한다.
 

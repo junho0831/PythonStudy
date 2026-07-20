@@ -65,13 +65,10 @@ class ERDoseEUVRepository:
     ) -> Iterator[pd.DataFrame]:
         query = f"""
             select
-                r.er_line,
                 r.eq_name,
                 r.er_type,
                 r.code,
                 r.code_occur_time,
-                r.belong,
-                r."type" as type,
                 r.title,
                 r.contents,
                 r.reason_code,
@@ -95,13 +92,10 @@ class ERDoseEUVRepository:
         df_to_insert = df.rename(columns=PARSED_TO_DB_COLUMN_MAP).copy()
 
         table_columns = [
-            "er_line",
             "eq_name",
             "er_type",
             "code",
             "code_occur_time",
-            "belong",
-            "type",
             "title",
             "contents",
             "reason_code",

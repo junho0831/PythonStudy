@@ -55,7 +55,7 @@
         <mxCell id="fetch" value="RAW 로그 조회&#10;&#10;- mbeat.er_data_raw 사용&#10;- code_occur_time 범위 조건&#10;- TARGET_CODES exact match 필터&#10;- code_occur_time, eq_name, er_date, er_index 정렬&#10;- SQLAlchemy execute + fetchmany&#10;- chunk 단위 streaming fetch" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="450" y="240" width="300" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="parser" value="ERDoseProcessor + DoseErrorParser&#10;&#10;- chunk 내부 row별 RawErLog 생성&#10;- code_occur_time은 Python datetime으로 정규화&#10;- belong/type/title/contents는 원천 그대로 보존&#10;- DW/LO/KE code 기준 파싱&#10;- exposure_handle, action_handle, wafer_id, wafer_seq, de_err, n_slit 추출&#10;- wafer state는 eq_name 기준 chunk 간 유지" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+        <mxCell id="parser" value="ERDoseProcessor + DoseErrorParser&#10;&#10;- chunk 내부 row별 RawErLog 생성&#10;- code_occur_time은 Python datetime으로 정규화&#10;- title/contents는 원천 그대로 보존&#10;- DW/LO/KE code 기준 파싱&#10;- exposure_handle, action_handle, lot_id, lot_name, lot_seq, wafer_seq, de_err, n_slit 추출&#10;- lot state는 eq_name 기준 chunk 간 유지" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="810" y="240" width="300" height="170" as="geometry" />
         </mxCell>
         <mxCell id="status" value="chunk 진행 로그&#10;&#10;- start_time / end_time / chunk_size 출력&#10;- chunk별 fetched / parsed / inserted 출력&#10;- partition_date별 row 수 출력&#10;- 최종 fetched / inserted summary 출력" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
@@ -65,60 +65,51 @@
           <mxGeometry x="450" y="610" width="300" height="170" as="geometry" />
         </mxCell>
         <mxCell id="parsed" value="prism_common.er_dose_raw_parsed" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
-          <mxGeometry x="810" y="470" width="380" height="930" as="geometry" />
+          <mxGeometry x="810" y="470" width="380" height="426" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-1" value="er_date : int4" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-1" value="eq_name : varchar(20)" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="34" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-2" value="er_index : int4" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-2" value="code : varchar(20)" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="62" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-3" value="er_line : varchar(20)" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-3" value="PK code_occur_time : timestamp(6)" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="90" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-4" value="eq_name : varchar(20)" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-4" value="title : varchar" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="118" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-5" value="code : varchar(20)" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-5" value="contents : varchar" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="146" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-6" value="PK code_occur_time : timestamp(6)" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-6" value="exposure_handle : bigint" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="174" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-6b" value="belong : varchar(12)" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-6b" value="action_handle : bigint" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="202" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-7" value="type : varchar(8)" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-7" value="lot_id : varchar" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="230" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-8" value="title : varchar" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-8" value="lot_name : varchar" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="258" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-9" value="contents : varchar" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-9" value="lot_seq : int4" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="286" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-10" value="exposure_handle : bigint" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-10" value="wafer_seq : int4" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="314" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-11" value="action_handle : bigint" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+        <mxCell id="parsed-row-11" value="de_err : numeric" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
           <mxGeometry x="0" y="342" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-14" value="wafer_id : int4" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
-          <mxGeometry x="0" y="426" width="380" height="28" as="geometry" />
+        <mxCell id="parsed-row-12" value="n_slit : int4" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+          <mxGeometry x="0" y="370" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-14b" value="wafer_seq : int4" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
-          <mxGeometry x="0" y="454" width="380" height="28" as="geometry" />
+        <mxCell id="parsed-row-13" value="created_at : timestamp" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
+          <mxGeometry x="0" y="398" width="380" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="parsed-row-15" value="de_err : numeric" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
-          <mxGeometry x="0" y="482" width="380" height="28" as="geometry" />
-        </mxCell>
-        <mxCell id="parsed-row-16" value="n_slit : int4" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
-          <mxGeometry x="0" y="510" width="380" height="28" as="geometry" />
-        </mxCell>
-        <mxCell id="parsed-row-31" value="created_at : timestamp" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="parsed">
-          <mxGeometry x="0" y="538" width="380" height="28" as="geometry" />
-        </mxCell>
-        <mxCell id="index" value="키 / 파티션 / 인덱스&#10;&#10;PK: code_occur_time&#10;파티션: code_occur_time 일별 범위&#10;인덱스: er_line + eq_name + code_occur_time&#10;추가 파싱 컬럼은 exposure_handle, action_handle, wafer_id, wafer_seq, de_err, n_slit만 저장" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+        <mxCell id="index" value="키 / 파티션 / 인덱스&#10;&#10;PK: code_occur_time&#10;파티션: code_occur_time 일별 범위&#10;인덱스: eq_name + code_occur_time&#10;저장 컬럼은 eq_name, code, code_occur_time, title, contents + exposure_handle, action_handle, lot_id, lot_name, lot_seq, wafer_seq, de_err, n_slit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
           <mxGeometry x="60" y="630" width="330" height="190" as="geometry" />
         </mxCell>
         <mxCell id="source" value="Root cause contents 구조&#10;&#10;- mbeat.er_data_raw_euv 사용&#10;- contents에 dose error detected/root cause 포함&#10;- exposure_id/time/dose_error_detected_in_file 추출&#10;- 원문은 contents에 보존&#10;- 현재 ER Dose 배치 실행 경로와는 분리" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
@@ -157,10 +148,10 @@
         <mxCell id="rootcause" value="prism_common.er_dose_euv_parsed" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
           <mxGeometry x="1230" y="470" width="430" height="1490" as="geometry" />
         </mxCell>
-        <mxCell id="rootcause-row-1" value="er_line : varchar" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="rootcause">
+        <mxCell id="rootcause-row-1" value="eq_name : varchar" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="rootcause">
           <mxGeometry x="0" y="34" width="430" height="28" as="geometry" />
         </mxCell>
-        <mxCell id="rootcause-row-2" value="eq_name : varchar" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="rootcause">
+        <mxCell id="rootcause-row-2" value="er_type : varchar" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="rootcause">
           <mxGeometry x="0" y="62" width="430" height="28" as="geometry" />
         </mxCell>
         <mxCell id="rootcause-row-3" value="code : varchar" style="shape=tableRow;html=1;horizontal=1;startSize=0;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=12;align=left;verticalAlign=middle;spacingLeft=8;" vertex="1" parent="rootcause">
