@@ -5,6 +5,7 @@ from typing import Iterator
 
 import pandas as pd
 
+from er_dose.common.sql_filters import active_nxe_eq_filter
 from er_dose.infra.postgres_db import PostgresDB
 
 
@@ -59,12 +60,7 @@ class ERDoseRepository:
               and p.code_occur_time < :start_time
               and p.eq_name is not null
               and (p.lot_seq is not null or p.wafer_seq is not null)
-              and p.eq_name in (
-                  select eqp.eqp_id
-                  from prism_dev.photo_eqp_info eqp
-                  where eqp.use_yn = 'Y'
-                    and eqp.eqp_model_name like 'NXE%'
-              )
+              and {active_nxe_eq_filter("p.eq_name")}
             order by p.eq_name, p.code_occur_time desc
         """
         df = self.db.select(query, params={"previous_day_start": previous_day_start, "start_time": start_time})
@@ -92,12 +88,7 @@ class ERDoseRepository:
             where r.code_occur_time >= :start_time
               and r.code_occur_time < :end_time
               and r.code in ({target_codes_sql})
-              and r.eq_name in (
-                  select eqp.eqp_id
-                  from prism_dev.photo_eqp_info eqp
-                  where eqp.use_yn = 'Y'
-                    and eqp.eqp_model_name like 'NXE%'
-              )
+              and {active_nxe_eq_filter("r.eq_name")}
         """
         df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
         if df is None or df.empty:
@@ -114,12 +105,7 @@ class ERDoseRepository:
             where p.code_occur_time >= :start_time
               and p.code_occur_time < :end_time
               and p.code in ({target_codes_sql})
-              and p.eq_name in (
-                  select eqp.eqp_id
-                  from prism_dev.photo_eqp_info eqp
-                  where eqp.use_yn = 'Y'
-                    and eqp.eqp_model_name like 'NXE%'
-              )
+              and {active_nxe_eq_filter("p.eq_name")}
         """
         df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
         if df is None or df.empty:
@@ -155,12 +141,7 @@ class ERDoseRepository:
             where r.code_occur_time >= :start_time
               and r.code_occur_time < :end_time
               and r.code in ({target_codes_sql})
-              and r.eq_name in (
-                  select eqp.eqp_id
-                  from prism_dev.photo_eqp_info eqp
-                  where eqp.use_yn = 'Y'
-                    and eqp.eqp_model_name like 'NXE%'
-              )
+              and {active_nxe_eq_filter("r.eq_name")}
             order by r.code_occur_time, r.eq_name, r.er_date, r.er_index
         """
         return query, params

@@ -5,6 +5,7 @@ from typing import Iterator
 
 import pandas as pd
 
+from er_dose.common.sql_filters import active_nxe_eq_filter
 from er_dose.infra.postgres_db import PostgresDB
 
 
@@ -67,12 +68,7 @@ class ERDoseEUVRepository:
               and r.code_occur_time < :end_time
               and lower(r.contents) like '%dose error detected in file:%'
               and lower(r.contents) like '%root cause%'
-              and r.eq_name in (
-                  select eqp.eqp_id
-                  from prism_dev.photo_eqp_info eqp
-                  where eqp.use_yn = 'Y'
-                    and eqp.eqp_model_name like 'NXE%'
-              )
+              and {active_nxe_eq_filter("r.eq_name")}
         """
         df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
         if df is None or df.empty:
@@ -87,12 +83,7 @@ class ERDoseEUVRepository:
             from {ROOT_CAUSE_TABLE} p
             where p.code_occur_time >= :start_time
               and p.code_occur_time < :end_time
-              and p.eq_name in (
-                  select eqp.eqp_id
-                  from prism_dev.photo_eqp_info eqp
-                  where eqp.use_yn = 'Y'
-                    and eqp.eqp_model_name like 'NXE%'
-              )
+              and {active_nxe_eq_filter("p.eq_name")}
         """
         df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
         if df is None or df.empty:
@@ -127,12 +118,7 @@ class ERDoseEUVRepository:
             from {EUV_RAW_TABLE} r
             where r.code_occur_time >= :start_time
               and r.code_occur_time < :end_time
-              and r.eq_name in (
-                  select eqp.eqp_id
-                  from prism_dev.photo_eqp_info eqp
-                  where eqp.use_yn = 'Y'
-                    and eqp.eqp_model_name like 'NXE%'
-              )
+              and {active_nxe_eq_filter("r.eq_name")}
             order by r.code_occur_time, r.eq_name, r.er_line
         """
         return self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)
