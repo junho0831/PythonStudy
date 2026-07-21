@@ -1,10 +1,35 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from typing import Protocol
+
+
+class CountReloadRepository(Protocol):
+    def fetch_source_count(self, target_date: date) -> int:
+        ...
+
+    def fetch_target_count(self, target_date: date) -> int:
+        ...
+
+    def truncate_target_partition(self, target_date: date, connection=None) -> int:
+        ...
+
+    def transaction(self):
+        ...
 
 
 class CountReloadProcessor:
     log_prefix = "[ER_DOSE]"
+    repository: CountReloadRepository
+
+    def _run_window(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        chunk_size: int,
+        connection=None,
+    ) -> int:
+        raise NotImplementedError
 
     def run_recent_days(
         self,
