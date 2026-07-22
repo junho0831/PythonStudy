@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
 
+from er_dose.common.reload_processor import CountReloadProcessor
 from er_dose.euv.euv_base import RawErEuvLog
 from er_dose.euv.euv_repository import ERDoseEUVRepository
 from er_dose.euv.euv_parser import parse_root_cause
 
 
-class ERDoseEUVProcessor:
+class ERDoseEUVProcessor(CountReloadProcessor):
+    log_prefix = "[ER_DOSE_EUV]"
+
     def __init__(self, repository: ERDoseEUVRepository):
         self.repository = repository
 
@@ -20,12 +23,25 @@ class ERDoseEUVProcessor:
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         chunk_size: int = 10000,
+        lookback_days: int = 4,
+        reference_date: date | None = None,
         target_date: date | None = None,
     ) -> None:
         if target_date is not None:
-            start_time = datetime.combine(target_date, datetime.min.time())
-            end_time = start_time + timedelta(days=1)
+            self.run_recent_days(
+                lookback_days=1,
+                reference_date=target_date,
+                chunk_size=chunk_size,
+            )
+            return
 
+        if start_time is None and end_time is None:
+            self.run_recent_days(
+                lookback_days=lookback_days,
+                reference_date=reference_date,
+                chunk_size=chunk_size,
+            )
+            return
         if start_time is None or end_time is None:
             raise ValueError("start_time and end_time are required")
         if start_time >= end_time:
@@ -33,8 +49,18 @@ class ERDoseEUVProcessor:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be greater than 0")
 
+        self._run_window(start_time=start_time, end_time=end_time, chunk_size=chunk_size)
+
+    def _run_window(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        chunk_size: int,
+        connection=None,
+    ) -> int:
         fetched_count = 0
         insert_count = 0
+        inserted_target_dates: set[str] = set()
 
         print(
             "[ER_DOSE_EUV] "
@@ -78,7 +104,10 @@ class ERDoseEUVProcessor:
                 continue
 
             parsed_df = pd.DataFrame(parsed_rows)
-            chunk_inserted = self.repository.insert_root_causes_df(parsed_df)
+            inserted_target_dates.update(
+                pd.to_datetime(parsed_df["code_occur_time"]).dt.strftime("%Y-%m-%d").dropna().unique()
+            )
+            chunk_inserted = self.repository.insert_root_causes_df(parsed_df, connection=connection, analyze=False)
             insert_count += chunk_inserted
             print(
                 "[ER_DOSE_EUV] "
@@ -87,11 +116,19 @@ class ERDoseEUVProcessor:
                 f"inserted_total={insert_count}"
             )
 
+        for target_date in sorted(inserted_target_dates):
+            self.repository.analyze_target_partition(target_date, connection=connection)
+            print(
+                "[ER_DOSE_EUV] "
+                f"analyze partition_date={target_date}"
+            )
+
         print(
             "[ER_DOSE_EUV] "
             f"done fetched={fetched_count} "
             f"inserted={insert_count}"
         )
+        return insert_count
 
     def _parse_chunk(self, raw_df) -> list[dict[str, Any]]:
         parsed_rows: list[dict[str, Any]] = []
@@ -115,13 +152,10 @@ class ERDoseEUVProcessor:
         contents = row.get("contents")
 
         return RawErEuvLog(
-            er_line=self._nullable_str(row.get("er_line")),
             eq_name=self._nullable_str(row.get("eq_name")),
             er_type=self._nullable_str(row.get("er_type")),
             code=self._nullable_str(row.get("code")),
             code_occur_time=self._normalize_datetime(row.get("code_occur_time")),
-            belong=self._nullable_str(row.get("belong")),
-            type=self._nullable_str(row.get("type")),
             title=self._nullable_str(row.get("title")),
             contents=str(contents) if pd.notna(contents) else "",
             reason_code=self._nullable_str(row.get("reason_code")),

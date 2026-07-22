@@ -7,13 +7,10 @@ from decimal import Decimal
 
 @dataclass(frozen=True)
 class RawErEuvLog:
-    er_line: str | None
     eq_name: str | None
     er_type: str | None
     code: str | None
     code_occur_time: datetime | None
-    belong: str | None
-    type: str | None
     title: str | None
     contents: str
     reason_code: str | None

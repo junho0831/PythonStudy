@@ -4,13 +4,19 @@ from pathlib import Path
 
 
 DDL_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "create_er_dose_raw_parsed.sql"
+RAW_PARSED_MIGRATION_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "migrate_er_dose_raw_parsed_schema.sql"
 RAW_EUV_DDL_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "create_er_data_raw_euv.sql"
 ROOT_CAUSE_DDL_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "create_er_dose_euv_parsed.sql"
 ROOT_CAUSE_RENAME_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "rename_er_dose_euv_parsed_columns.sql"
+ROOT_CAUSE_MIGRATION_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "migrate_er_dose_euv_parsed_schema.sql"
 
 
 def _ddl() -> str:
     return DDL_PATH.read_text(encoding="utf-8").lower()
+
+
+def _raw_parsed_migration_sql() -> str:
+    return RAW_PARSED_MIGRATION_PATH.read_text(encoding="utf-8").lower()
 
 
 def _raw_euv_ddl() -> str:
@@ -25,6 +31,10 @@ def _root_cause_rename_sql() -> str:
     return ROOT_CAUSE_RENAME_PATH.read_text(encoding="utf-8").lower()
 
 
+def _root_cause_migration_sql() -> str:
+    return ROOT_CAUSE_MIGRATION_PATH.read_text(encoding="utf-8").lower()
+
+
 def test_parsed_table_primary_key_matches_documented_partition_key():
     ddl = _ddl()
 
@@ -33,16 +43,18 @@ def test_parsed_table_primary_key_matches_documented_partition_key():
     assert "id                  bigserial" not in ddl
 
 
-def test_parsed_table_has_line_eq_time_index():
+def test_parsed_table_has_eq_time_index_and_clean_columns():
     ddl = _ddl()
 
-    assert "idx_er_dose_raw_parsed_line_eq_time" in ddl
-    assert "(er_line, eq_name, code_occur_time)" in ddl
+    assert "idx_er_dose_raw_parsed_eq_time" in ddl
+    assert "(eq_name, code_occur_time)" in ddl
+    assert "idx_er_dose_raw_parsed_line_eq_time" not in ddl
     assert "log_source" not in ddl
-    assert "er_date             int4" in ddl
-    assert "er_index            int4" in ddl
-    assert "belong              varchar(12)" in ddl
-    assert '"type"              varchar(8)' in ddl
+    assert "er_date             int4" not in ddl
+    assert "er_index            int4" not in ddl
+    assert "er_line             varchar(20)" not in ddl
+    assert "belong              varchar(12)" not in ddl
+    assert '"type"              varchar(8)' not in ddl
     assert "title               varchar" in ddl
     assert "contents            varchar" in ddl
     assert "parser_version" not in ddl
@@ -50,18 +62,41 @@ def test_parsed_table_has_line_eq_time_index():
     assert "parsing_error" not in ddl
     assert "idx_er_dose_error_line_eq_exposure_time" not in ddl
     assert "source_exposure_id" not in ddl
-    assert "wafer_id            integer" in ddl
+    assert "wafer_id            integer" not in ddl
+    assert "lot_id              varchar" in ddl
+    assert "lot_name            varchar" in ddl
+    assert "lot_seq             integer" in ddl
     assert "wafer_seq           integer" in ddl
     assert "de_err              numeric(12,7)" in ddl
     assert "n_slit              integer" in ddl
+    assert "use_yn              varchar(1) default 'y' not null" in ddl
 
 
 def test_parsed_table_documents_retained_parsed_columns():
     ddl = _ddl()
 
-    assert "comment on column prism_common.er_dose_raw_parsed.wafer_id" in ddl
+    assert "comment on column prism_common.er_dose_raw_parsed.lot_seq" in ddl
+    assert "comment on column prism_common.er_dose_raw_parsed.use_yn" in ddl
     assert "matches lot_report.slot_seq" in ddl
     assert "parsed from de_err" in ddl
+
+
+def test_raw_parsed_migration_sql_updates_existing_table():
+    sql = _raw_parsed_migration_sql()
+
+    assert "rename column wafer_id to lot_seq" in sql
+    assert "drop column er_date" in sql
+    assert "drop column er_index" in sql
+    assert "drop column er_line" in sql
+    assert "drop column belong" in sql
+    assert 'drop column "type"' in sql
+    assert "add column lot_id varchar" in sql
+    assert "add column lot_name varchar" in sql
+    assert "add column use_yn varchar(1) default 'y'" in sql
+    assert "alter column use_yn set default 'y'" in sql
+    assert "drop index if exists prism_common.idx_er_dose_raw_parsed_line_eq_time" in sql
+    assert "create index if not exists idx_er_dose_raw_parsed_eq_time" in sql
+    assert "(eq_name, code_occur_time)" in sql
 
 
 def test_raw_euv_table_matches_source_schema():
@@ -73,6 +108,8 @@ def test_raw_euv_table_matches_source_schema():
     assert "er_type          varchar(10) not null" in ddl
     assert '"type"           varchar(8)' in ddl
     assert "idx_er_data_raw_euv_occur_time" in ddl
+    assert "idx_er_data_raw_euv_eq_time" in ddl
+    assert "(eq_name, code_occur_time)" in ddl
 
 
 def test_root_cause_table_is_fe_facing_matching_table():
@@ -81,9 +118,10 @@ def test_root_cause_table_is_fe_facing_matching_table():
     assert "create table if not exists prism_common.er_dose_euv_parsed" in ddl
     assert "partition by range (code_occur_time)" in ddl
     assert "scanner_exposure_handle bigint" not in ddl
+    assert "er_line                 varchar(20)" not in ddl
     assert "er_type                 varchar(10)" in ddl
-    assert "belong                  varchar(12)" in ddl
-    assert '"type"                  varchar(8)' in ddl
+    assert "belong                  varchar(12)" not in ddl
+    assert '"type"                  varchar(8)' not in ddl
     assert "title                   varchar" in ddl
     assert "contents                varchar" in ddl
     assert "reason_code             varchar(20)" in ddl
@@ -103,12 +141,24 @@ def test_root_cause_table_is_fe_facing_matching_table():
     assert "software_version        text" in ddl
     assert "parser_version" not in ddl
     assert "raw_description" not in ddl
-    assert "idx_er_dose_euv_parsed_line_eq_time" in ddl
-    assert "(er_line, eq_name, code_occur_time)" in ddl
+    assert "idx_er_dose_euv_parsed_line_eq_time" not in ddl
+    assert "idx_er_dose_euv_parsed_eq_time" in ddl
+    assert "(eq_name, code_occur_time)" in ddl
     assert "idx_er_dose_root_cause_scanner_exposure" not in ddl
     assert "idx_er_dose_root_cause_source_exposure" not in ddl
     assert "independent from er_dose_raw_parsed" in ddl
     assert "er_data_raw_euv" in ddl
+
+
+def test_root_cause_migration_sql_updates_existing_table():
+    sql = _root_cause_migration_sql()
+
+    assert "drop column er_line" in sql
+    assert "drop column belong" in sql
+    assert 'drop column "type"' in sql
+    assert "drop index if exists prism_common.idx_er_dose_euv_parsed_line_eq_time" in sql
+    assert "create index if not exists idx_er_dose_euv_parsed_eq_time" in sql
+    assert "(eq_name, code_occur_time)" in sql
 
 
 def test_root_cause_rename_sql_renames_existing_columns():

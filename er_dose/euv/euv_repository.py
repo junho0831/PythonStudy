@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Iterator
 
 import pandas as pd
 
+from er_dose.common.sql_filters import active_nxe_eq_filter
 from er_dose.infra.postgres_db import PostgresDB
 
 
@@ -57,21 +58,58 @@ class ERDoseEUVRepository:
     def __init__(self, db: PostgresDB):
         self.db = db
 
+    def fetch_source_count(self, target_date: date) -> int:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+        query = f"""
+            select count(*) as row_count
+            from {EUV_RAW_TABLE} r
+            where r.code_occur_time >= :start_time
+              and r.code_occur_time < :end_time
+              and lower(r.contents) like '%dose error detected in file:%'
+              and lower(r.contents) like '%root cause%'
+              and {active_nxe_eq_filter("r.eq_name")}
+        """
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
+        if df is None or df.empty:
+            return 0
+        return int(df.iloc[0]["row_count"])
+
+    def fetch_target_count(self, target_date: date) -> int:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+        query = f"""
+            select count(*) as row_count
+            from {ROOT_CAUSE_TABLE} p
+            where p.code_occur_time >= :start_time
+              and p.code_occur_time < :end_time
+              and {active_nxe_eq_filter("p.eq_name")}
+        """
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
+        if df is None or df.empty:
+            return 0
+        return int(df.iloc[0]["row_count"])
+
+    def truncate_target_partition(self, target_date: date, connection=None) -> int:
+        parsed_table = self._partition_table_name(ROOT_CAUSE_TABLE, target_date)
+        return self.db.execute(f"truncate table {parsed_table}", connection=connection)
+
     def fetch_raw_logs_in_chunks(
         self,
         start_time: datetime,
         end_time: datetime,
         chunk_size: int = 10000,
     ) -> Iterator[pd.DataFrame]:
+        params = {
+            "start_time": start_time,
+            "end_time": end_time,
+        }
         query = f"""
             select
-                r.er_line,
                 r.eq_name,
                 r.er_type,
                 r.code,
                 r.code_occur_time,
-                r.belong,
-                r."type" as type,
                 r.title,
                 r.contents,
                 r.reason_code,
@@ -80,28 +118,22 @@ class ERDoseEUVRepository:
             from {EUV_RAW_TABLE} r
             where r.code_occur_time >= :start_time
               and r.code_occur_time < :end_time
+              and {active_nxe_eq_filter("r.eq_name")}
             order by r.code_occur_time, r.eq_name, r.er_line
         """
-        params = {
-            "start_time": start_time,
-            "end_time": end_time,
-        }
         return self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)
 
-    def insert_root_causes_df(self, df: pd.DataFrame) -> int:
+    def insert_root_causes_df(self, df: pd.DataFrame, connection=None, analyze: bool = True) -> int:
         if df is None or df.empty:
             return 0
 
         df_to_insert = df.rename(columns=PARSED_TO_DB_COLUMN_MAP).copy()
 
         table_columns = [
-            "er_line",
             "eq_name",
             "er_type",
             "code",
             "code_occur_time",
-            "belong",
-            "type",
             "title",
             "contents",
             "reason_code",
@@ -180,7 +212,19 @@ class ERDoseEUVRepository:
                 table_name=table_name,
                 target_date=target_date,
                 df=group_df_clean,
+                connection=connection,
+                analyze=analyze,
             )
             inserted_count += len(group_df_clean)
 
         return inserted_count
+
+    def analyze_target_partition(self, target_date: str, connection=None) -> int:
+        partition_table = f"{ROOT_CAUSE_TABLE}_1_prt_p{target_date.replace('-', '')}"
+        return self.db.execute(f"ANALYZE {partition_table}", connection=connection)
+
+    def transaction(self):
+        return self.db.transaction()
+
+    def _partition_table_name(self, table_name: str, target_date: date) -> str:
+        return f'{table_name}_1_prt_p{target_date.strftime("%Y%m%d")}'

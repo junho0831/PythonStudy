@@ -32,6 +32,7 @@ class ERDoseParserTest(unittest.TestCase):
         self.assertEqual(parsed.action_handle, 2625)
         self.assertEqual(parsed.de_err, Decimal("0.0461075"))
         self.assertEqual(parsed.n_slit, 44)
+        self.assertEqual(parsed.use_yn, "Y")
 
     def test_missing_nullable_fields_return_none(self):
         raw = self._raw("system warning: dw-3411 skip the dose evaluation 0.1 [%]")
@@ -43,7 +44,7 @@ class ERDoseParserTest(unittest.TestCase):
         self.assertIsNone(parsed.action_handle)
         self.assertIsNone(parsed.de_err)
 
-    def test_wafer_id_is_extracted(self):
+    def test_lot_seq_is_extracted_from_wafer_id_label(self):
         raw = self._raw(
             """system warning: dw-3411 skip the dose evaluation 0.1 [%]
 wafer_id=1"""
@@ -52,7 +53,7 @@ wafer_id=1"""
         parsed = parse_dose_error(raw)
 
         self.assertIsNotNone(parsed)
-        self.assertEqual(parsed.wafer_id, 1)
+        self.assertEqual(parsed.lot_seq, 1)
 
     def test_wafer_no_is_not_treated_as_wafer_id(self):
         raw = self._raw(
@@ -63,12 +64,12 @@ wafer_no=7"""
         parsed = parse_dose_error(raw)
 
         self.assertIsNotNone(parsed)
-        self.assertIsNone(parsed.wafer_id)
+        self.assertIsNone(parsed.lot_seq)
 
-    def test_wafer_id_is_extracted_from_lot_id(self):
+    def test_lot_seq_is_extracted_from_lot_id(self):
         raw = self._raw("loading reticle 'gvhbrtb0v8' for lot id 2111.")
         parsed = parse_dose_error(raw)
-        self.assertEqual(parsed.wafer_id, 2111)
+        self.assertEqual(parsed.lot_seq, 2111)
 
     def test_de_err_is_extracted_from_min_de_error(self):
         raw = self._raw("min_de_error=-1.38157 [%] de_max_reexp_lvl=-15 [%] de_err_lvl=-1 [%]")
@@ -111,44 +112,46 @@ wafer_no=7"""
         self.assertEqual(parsed.action_handle, 48994)
         self.assertEqual(parsed.exposure_handle, 49100)
 
+    def test_parse_lo_0050(self):
+        contents = "lot 'HJO449.1_1747_0_MP232325' (id=3997) has started processing. recipe='PRODUCTION/KHXA/XA106NTD_MRC', layer='XA106NTD_MRC', number of wafers=25."
+        raw = self._raw(contents, code="LO-0050")
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.lot_id, "HJO449.1_1747_0_MP232325")
+        self.assertEqual(parsed.lot_name, "HJO449")
+
     def test_parse_lo_0061(self):
         contents = "loading reticle 'gvhbrtb0v8' for lot id 2111."
-        raw = self._raw(contents)
+        raw = self._raw(contents, code="LO-0061")
         parsed = parse_dose_error(raw)
-        self.assertEqual(parsed.wafer_id, 2111)
+        self.assertEqual(parsed.lot_seq, 2111)
 
     def test_parse_lo_8166(self):
         contents = "expose image(0) of production wafer(23) for lot(2111) started on chuck(wpxchuck_chuck_id_1)"
-        raw = self._raw(contents)
+        raw = self._raw(contents, code="LO-8166")
         parsed = parse_dose_error(raw)
-        self.assertEqual(parsed.wafer_id, 2111)
+        self.assertEqual(parsed.lot_seq, 2111)
         self.assertEqual(parsed.wafer_seq, 23)
 
     def test_parse_lo_8167(self):
         contents = "expose image(0) of production wafer(23) for lot(2111) finished on chuck(wpxchuck_chuck_id_1)"
-        raw = self._raw(contents)
+        raw = self._raw(contents, code="LO-8167")
         parsed = parse_dose_error(raw)
-        self.assertEqual(parsed.wafer_id, 2111)
+        self.assertEqual(parsed.lot_seq, 2111)
         self.assertEqual(parsed.wafer_seq, 23)
 
     def test_parse_ke_9103(self):
         contents = "die re-exposures have started."
-        raw = self._raw(contents)
+        raw = self._raw(contents, code="KE-9103")
         parsed = parse_dose_error(raw)
         self.assertIsNone(parsed.de_err)
-        self.assertIsNone(parsed.wafer_id)
+        self.assertIsNone(parsed.lot_seq)
         self.assertIsNone(parsed.wafer_seq)
 
-    def _raw(self, contents):
+    def _raw(self, contents, code="DW-3411"):
         return RawErLog(
-            er_date=20260413,
-            er_index=1,
-            er_line="L1",
             eq_name="EQ1",
-            code="DW-3411",
+            code=code,
             code_occur_time=datetime(2026, 4, 13, 10, 0, 0),
-            belong=None,
-            type=None,
             title="Dose warning",
             contents=contents,
         )

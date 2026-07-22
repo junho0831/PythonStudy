@@ -18,5 +18,8 @@ create table if not exists mbeat.er_data_raw_euv (
 create index if not exists idx_er_data_raw_euv_occur_time
 on mbeat.er_data_raw_euv (code_occur_time);
 
+create index if not exists idx_er_data_raw_euv_eq_time
+on mbeat.er_data_raw_euv (eq_name, code_occur_time);
+
 create index if not exists idx_er_data_raw_euv_line_eq_time
 on mbeat.er_data_raw_euv (er_line, eq_name, code_occur_time);
