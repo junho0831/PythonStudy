@@ -36,10 +36,20 @@ begin
     if not exists (select 1 from pg_attribute where attrelid = target_table and attname = 'lot_name' and attnum > 0 and not attisdropped) then
         alter table prism_common.er_dose_raw_parsed add column lot_name varchar;
     end if;
+    if not exists (select 1 from pg_attribute where attrelid = target_table and attname = 'use_yn' and attnum > 0 and not attisdropped) then
+        alter table prism_common.er_dose_raw_parsed add column use_yn varchar(1) default 'Y';
+    end if;
+
+    alter table prism_common.er_dose_raw_parsed
+    alter column use_yn set default 'Y';
 
     if exists (select 1 from pg_attribute where attrelid = target_table and attname = 'lot_seq' and attnum > 0 and not attisdropped) then
         comment on column prism_common.er_dose_raw_parsed.lot_seq is
         'ER lot sequence parsed from the raw message. Starts at 1 and matches lot_report.slot_seq.';
+    end if;
+    if exists (select 1 from pg_attribute where attrelid = target_table and attname = 'use_yn' and attnum > 0 and not attisdropped) then
+        comment on column prism_common.er_dose_raw_parsed.use_yn is
+        'Y for normal parsed rows. N for DW exposure handle jump rows kept for count consistency but excluded from normal analysis.';
     end if;
 end $$;
 

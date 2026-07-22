@@ -69,12 +69,14 @@ def test_parsed_table_has_eq_time_index_and_clean_columns():
     assert "wafer_seq           integer" in ddl
     assert "de_err              numeric(12,7)" in ddl
     assert "n_slit              integer" in ddl
+    assert "use_yn              varchar(1) default 'y' not null" in ddl
 
 
 def test_parsed_table_documents_retained_parsed_columns():
     ddl = _ddl()
 
     assert "comment on column prism_common.er_dose_raw_parsed.lot_seq" in ddl
+    assert "comment on column prism_common.er_dose_raw_parsed.use_yn" in ddl
     assert "matches lot_report.slot_seq" in ddl
     assert "parsed from de_err" in ddl
 
@@ -90,6 +92,8 @@ def test_raw_parsed_migration_sql_updates_existing_table():
     assert 'drop column "type"' in sql
     assert "add column lot_id varchar" in sql
     assert "add column lot_name varchar" in sql
+    assert "add column use_yn varchar(1) default 'y'" in sql
+    assert "alter column use_yn set default 'y'" in sql
     assert "drop index if exists prism_common.idx_er_dose_raw_parsed_line_eq_time" in sql
     assert "create index if not exists idx_er_dose_raw_parsed_eq_time" in sql
     assert "(eq_name, code_occur_time)" in sql

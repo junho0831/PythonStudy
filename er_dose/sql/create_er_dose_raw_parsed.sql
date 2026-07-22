@@ -15,6 +15,7 @@ create table if not exists prism_common.er_dose_raw_parsed (
     de_err              numeric(12,7),
     n_slit              integer,
     created_at          timestamp default now(),
+    use_yn              varchar(1) default 'Y' not null,
     primary key (code_occur_time)
 )
 partition by range (code_occur_time);
@@ -27,3 +28,6 @@ comment on column prism_common.er_dose_raw_parsed.lot_seq is
 
 comment on column prism_common.er_dose_raw_parsed.de_err is
 'Dose error value parsed from de_err in the raw message when available.';
+
+comment on column prism_common.er_dose_raw_parsed.use_yn is
+'Y for normal parsed rows. N for DW exposure handle jump rows kept for count consistency but excluded from normal analysis.';

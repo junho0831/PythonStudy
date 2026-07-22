@@ -86,6 +86,7 @@ erDiagram
         numeric de_err
         integer n_slit
         timestamp created_at
+        varchar use_yn
     }
 
     ER_DOSE_EUV_PARSED {
@@ -151,6 +152,7 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 2. `mbeat.er_data_raw`에서 Dose Error 후보를 `chunk` 단위로 조회
 3. 각 `chunk`의 RAW contents 파싱
    - 파싱 중 `lot_seq`나 `wafer_seq`가 없을 경우, 동일 `eq_name`에서 이전에 파싱된 가장 최근 값을 사용한다. 이는 chunk의 경계를 넘어 유지된다.
+   - DW 로그에서 `exposure_handle`이 같은 설비의 이전 값보다 `1000` 이상 커지면 저장은 하되 `use_yn = 'N'`으로 표시하고, 다음 비교 기준 exposure handle로는 사용하지 않는다.
 4. 각 `chunk`를 `prism_common.er_dose_raw_parsed`에 `COPY` append insert
 
 환경변수 기반 기본 실행에서 target date와 `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`가 모두 없으면 raw/euv 배치는 최근 4일 lookback 모드로 동작한다.
@@ -212,6 +214,7 @@ RAW parsed 저장 필드:
 
 - 원천 기반 컬럼: `eq_name`, `code`, `code_occur_time`, `title`, `contents`
 - 파싱 컬럼: `exposure_handle`, `action_handle`, `lot_id`, `lot_name`, `lot_seq`, `wafer_seq`, `de_err`, `n_slit`
+- 사용 여부 컬럼: `use_yn`. 일반 row는 `Y`, DW exposure handle jump row는 `N`
 
 필드가 없으면 nullable 컬럼은 `NULL`로 저장한다.
 

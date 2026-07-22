@@ -56,3 +56,4 @@ class ParsedErDoseError:
     wafer_seq: int | None
     de_err: Decimal | None
     n_slit: int | None
+    use_yn: str = "Y"

@@ -32,6 +32,7 @@ class ERDoseParserTest(unittest.TestCase):
         self.assertEqual(parsed.action_handle, 2625)
         self.assertEqual(parsed.de_err, Decimal("0.0461075"))
         self.assertEqual(parsed.n_slit, 44)
+        self.assertEqual(parsed.use_yn, "Y")
 
     def test_missing_nullable_fields_return_none(self):
         raw = self._raw("system warning: dw-3411 skip the dose evaluation 0.1 [%]")

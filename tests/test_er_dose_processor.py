@@ -273,6 +273,8 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertTrue(pd.isna(parsed_insert.loc[0, "lot_seq"]))
         self.assertIn("wafer_seq", parsed_insert.columns)
         self.assertTrue(pd.isna(parsed_insert.loc[0, "wafer_seq"]))
+        self.assertIn("use_yn", parsed_insert.columns)
+        self.assertEqual(parsed_insert.loc[0, "use_yn"], "Y")
         inserted_tables = [table_name for table_name, _ in db.inserted]
         self.assertEqual(inserted_tables, ["prism_common.er_dose_raw_parsed"])
 
@@ -294,7 +296,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(parsed_insert.loc[0, "lot_seq"], 2111)
         self.assertEqual(parsed_insert.loc[0, "wafer_seq"], 23)
 
-    def test_run_skips_dw_row_when_exposure_handle_jump_reaches_threshold(self):
+    def test_run_marks_dw_jump_rows_unused_without_skipping_insert(self):
         jump_contents = SAMPLE_CONTENTS.replace("exposure_handle:2631", "exposure_handle:3631")
         next_contents = SAMPLE_CONTENTS.replace("exposure_handle:2631", "exposure_handle:3632")
         raw_df = pd.DataFrame(
@@ -312,9 +314,14 @@ class ERDoseProcessorTest(unittest.TestCase):
             processor.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
 
         parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
-        self.assertEqual(len(parsed_insert), 1)
+        self.assertEqual(len(parsed_insert), 3)
         self.assertEqual(parsed_insert.loc[0, "exposure_handle"], 2631)
-        self.assertIn("skip_test_shot", stdout.getvalue())
+        self.assertEqual(parsed_insert.loc[0, "use_yn"], "Y")
+        self.assertEqual(parsed_insert.loc[1, "exposure_handle"], 3631)
+        self.assertEqual(parsed_insert.loc[1, "use_yn"], "N")
+        self.assertEqual(parsed_insert.loc[2, "exposure_handle"], 3632)
+        self.assertEqual(parsed_insert.loc[2, "use_yn"], "N")
+        self.assertIn("mark_unused_test_shot", stdout.getvalue())
 
     def test_run_processes_multiple_chunks(self):
         raw_df = pd.DataFrame(
@@ -529,6 +536,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertNotIn("type", inserted_df.columns)
         self.assertEqual(inserted_df.loc[0, "exposure_handle"], 11388)
         self.assertTrue(pd.isna(inserted_df.loc[1, "exposure_handle"]))
+        self.assertEqual(list(inserted_df["use_yn"]), ["Y", "Y"])
 
     def _row(self, row_no, code, contents, code_occur_time=None, eq_name="EQ1"):
         return {

@@ -159,15 +159,18 @@ class ERDoseProcessor(CountReloadProcessor):
                 if previous_exposure_handle is not None:
                     exposure_handle_diff = exposure_handle - previous_exposure_handle
                     if exposure_handle_diff >= EXPOSURE_HANDLE_JUMP_THRESHOLD:
+                        parsed_dict["use_yn"] = "N"
                         print(
                             "[ER_DOSE] "
-                            f"skip_test_shot eq_name={eq_name} "
+                            f"mark_unused_test_shot eq_name={eq_name} "
                             f"prev_exposure_handle={previous_exposure_handle} "
                             f"exposure_handle={exposure_handle} "
                             f"diff={exposure_handle_diff}"
                         )
-                        continue
-                self.exposure_handles[eq_name] = exposure_handle
+                    else:
+                        self.exposure_handles[eq_name] = exposure_handle
+                else:
+                    self.exposure_handles[eq_name] = exposure_handle
 
             if eq_name is not None:
                 state = self.lot_states.setdefault(eq_name, {"lot_seq": None, "wafer_seq": None})
