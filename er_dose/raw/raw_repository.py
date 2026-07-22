@@ -172,13 +172,15 @@ class ERDoseRepository:
             "use_yn",
         ]
 
-        # COPY 대상 테이블 컬럼과 정확히 맞춘다.
-        df_to_insert = df[[col for col in table_columns if col in df.columns]].copy()
+        df_to_insert = df.copy()
         if "created_at" not in df_to_insert.columns:
             df_to_insert["created_at"] = datetime.now()
         if "use_yn" not in df_to_insert.columns:
             df_to_insert["use_yn"] = "Y"
-        df_to_insert = df_to_insert[[col for col in table_columns if col in df_to_insert.columns]].copy()
+
+        # COPY 대상 테이블 컬럼과 정확히 맞춘다.
+        insert_columns = [col for col in table_columns if col in df_to_insert.columns]
+        df_to_insert = df_to_insert[insert_columns].copy()
 
         int_columns = [
             "exposure_handle",
