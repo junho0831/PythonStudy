@@ -162,7 +162,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         db = FakeDB(
             pd.DataFrame(),
             fetch_df_result=pd.DataFrame(
-                [{"eq_name": "EQ1", "lot_seq": 1, "wafer_seq": 2}]
+                [{"eq_name": "EQ1", "lot_id": "LOT.1", "lot_name": "LOT", "lot_seq": 1, "wafer_seq": 2}]
             ),
         )
         repo = ERDoseRepository(db)
@@ -171,7 +171,7 @@ class ERDoseProcessorTest(unittest.TestCase):
             datetime(2026, 5, 2),
         )
 
-        self.assertEqual(states["EQ1"], {"lot_seq": 1, "wafer_seq": 2})
+        self.assertEqual(states["EQ1"], {"lot_id": "LOT.1", "lot_name": "LOT", "lot_seq": 1, "wafer_seq": 2})
         self.assertIn("p.eq_name in", db.fetch_query)
         self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
 
@@ -211,7 +211,7 @@ class ERDoseProcessorTest(unittest.TestCase):
     def test_fetch_latest_lot_states_returns_latest_state_per_eq_name(self):
         history_df = pd.DataFrame(
             [
-                {"eq_name": "EQ1", "lot_seq": 1001, "wafer_seq": 21},
+                {"eq_name": "EQ1", "lot_id": "LOT.1", "lot_name": "LOT", "lot_seq": 1001, "wafer_seq": 21},
                 {"eq_name": "EQ2", "lot_seq": None, "wafer_seq": 7},
             ]
         )
@@ -231,8 +231,8 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(
             lot_states,
             {
-                "EQ1": {"lot_seq": 1001, "wafer_seq": 21},
-                "EQ2": {"lot_seq": None, "wafer_seq": 7},
+                "EQ1": {"lot_id": "LOT.1", "lot_name": "LOT", "lot_seq": 1001, "wafer_seq": 21},
+                "EQ2": {"lot_id": None, "lot_name": None, "lot_seq": None, "wafer_seq": 7},
             },
         )
 
@@ -283,7 +283,7 @@ class ERDoseProcessorTest(unittest.TestCase):
             self._row(1, "lo-0061", "system info: lo-0061 normal message", eq_name="EQ1")
         ])
         history_df = pd.DataFrame([
-            {"eq_name": "EQ1", "lot_seq": 2111, "wafer_seq": 23}
+            {"eq_name": "EQ1", "lot_id": "HJO449.1_1747_0_MP232325", "lot_name": "HJO449", "lot_seq": 2111, "wafer_seq": 23}
         ])
         db = FakeDB(raw_df, fetch_df_result=history_df)
         repo = ERDoseRepository(db)
@@ -293,8 +293,34 @@ class ERDoseProcessorTest(unittest.TestCase):
             processor.run(start_time=datetime(2026, 5, 2), end_time=datetime(2026, 5, 3))
 
         parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
+        self.assertEqual(parsed_insert.loc[0, "lot_id"], "HJO449.1_1747_0_MP232325")
+        self.assertEqual(parsed_insert.loc[0, "lot_name"], "HJO449")
         self.assertEqual(parsed_insert.loc[0, "lot_seq"], 2111)
         self.assertEqual(parsed_insert.loc[0, "wafer_seq"], 23)
+
+    def test_run_uses_latest_lo_0050_lot_id_and_name(self):
+        lo_contents = (
+            "lot 'HJO449.1_1747_0_MP232325' (id=3997) has started processing. "
+            "recipe='PRODUCTION/KHXA/XA106NTD_MRC', layer='XA106NTD_MRC', number of wafers=25."
+        )
+        raw_df = pd.DataFrame(
+            [
+                self._row(1, "LO-0050", lo_contents, eq_name="EQ1"),
+                self._row(2, "DW-3411", SAMPLE_CONTENTS, eq_name="EQ1"),
+            ]
+        )
+        db = FakeDB(raw_df)
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+
+        with redirect_stdout(StringIO()):
+            processor.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
+
+        parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
+        self.assertEqual(parsed_insert.loc[0, "lot_id"], "HJO449.1_1747_0_MP232325")
+        self.assertEqual(parsed_insert.loc[0, "lot_name"], "HJO449")
+        self.assertEqual(parsed_insert.loc[1, "lot_id"], "HJO449.1_1747_0_MP232325")
+        self.assertEqual(parsed_insert.loc[1, "lot_name"], "HJO449")
 
     def test_run_marks_dw_jump_rows_unused_without_skipping_insert(self):
         jump_contents = SAMPLE_CONTENTS.replace("exposure_handle:2631", "exposure_handle:3631")

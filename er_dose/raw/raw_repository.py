@@ -48,18 +48,20 @@ class ERDoseRepository:
 
             current_start = current_end
 
-    def fetch_latest_lot_states(self, start_time: datetime) -> dict[str, dict[str, int | None]]:
+    def fetch_latest_lot_states(self, start_time: datetime) -> dict[str, dict[str, int | str | None]]:
         previous_day_start = datetime.combine((start_time - timedelta(days=1)).date(), datetime.min.time())
         query = f"""
             select distinct on (p.eq_name)
                 p.eq_name,
+                p.lot_id,
+                p.lot_name,
                 p.lot_seq,
                 p.wafer_seq
             from {PARSED_TABLE} p
             where p.code_occur_time >= :previous_day_start
               and p.code_occur_time < :start_time
               and p.eq_name is not null
-              and (p.lot_seq is not null or p.wafer_seq is not null)
+              and (p.lot_id is not null or p.lot_name is not null or p.lot_seq is not null or p.wafer_seq is not null)
               and {active_nxe_eq_filter("p.eq_name")}
             order by p.eq_name, p.code_occur_time desc
         """
@@ -67,12 +69,14 @@ class ERDoseRepository:
         if df is None or df.empty:
             return {}
 
-        lot_states: dict[str, dict[str, int | None]] = {}
+        lot_states: dict[str, dict[str, int | str | None]] = {}
         for _, row in df.iterrows():
             eq_name = row["eq_name"]
             if pd.isna(eq_name):
                 continue
             lot_states[str(eq_name)] = {
+                "lot_id": None if pd.isna(row.get("lot_id")) else str(row["lot_id"]),
+                "lot_name": None if pd.isna(row.get("lot_name")) else str(row["lot_name"]),
                 "lot_seq": None if pd.isna(row.get("lot_seq")) else int(row["lot_seq"]),
                 "wafer_seq": None if pd.isna(row.get("wafer_seq")) else int(row["wafer_seq"]),
             }

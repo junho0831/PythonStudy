@@ -21,8 +21,8 @@ class ERDoseProcessor(CountReloadProcessor):
 
     def __init__(self, repository: ERDoseRepository):
         self.repository = repository
-        # 설비별 가장 최근의 lot_seq, wafer_seq를 기억 (청크가 나뉘어도 유지)
-        self.lot_states: dict[str, dict[str, int | None]] = {}
+        # 설비별 가장 최근 lot 값을 기억한다. 청크가 나뉘어도 유지된다.
+        self.lot_states: dict[str, dict[str, int | str | None]] = {}
         self.exposure_handles: dict[str, int] = {}
 
     def run(
@@ -201,7 +201,25 @@ class ERDoseProcessor(CountReloadProcessor):
                     self.exposure_handles[eq_name] = exposure_handle
 
             if eq_name is not None:
-                state = self.lot_states.setdefault(eq_name, {"lot_seq": None, "wafer_seq": None})
+                state = self.lot_states.setdefault(
+                    eq_name,
+                    {
+                        "lot_id": None,
+                        "lot_name": None,
+                        "lot_seq": None,
+                        "wafer_seq": None,
+                    },
+                )
+
+                if parsed_dict.get("lot_id") is not None:
+                    state["lot_id"] = parsed_dict["lot_id"]
+                else:
+                    parsed_dict["lot_id"] = state["lot_id"]
+
+                if parsed_dict.get("lot_name") is not None:
+                    state["lot_name"] = parsed_dict["lot_name"]
+                else:
+                    parsed_dict["lot_name"] = state["lot_name"]
 
                 if parsed_dict.get("lot_seq") is not None:
                     state["lot_seq"] = parsed_dict["lot_seq"]
