@@ -106,6 +106,51 @@ class PostgresDB:
             if own_connection:
                 conn.close()
 
+    def copy_insert_to_partition_table_without_dedup(
+        self,
+        schema: str,
+        table_name: str,
+        target_date: str,
+        df: pd.DataFrame,
+        connection=None,
+    ) -> None:
+        if df is None or df.empty:
+            print("insert 대상 데이터가 없습니다.")
+            return
+
+        partition_table = f'{schema}.{table_name}_1_prt_p{target_date.replace("-", "")}'
+        query = f"COPY {partition_table} FROM STDIN WITH CSV HEADER"
+
+        buffer = io.StringIO()
+        df.to_csv(buffer, index=False)
+        buffer.seek(0)
+
+        own_connection = connection is None
+        conn = connection or self.__engine.raw_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.copy_expert(query, buffer)
+
+            print(f"{len(df)} rows were saved.")
+
+            cursor.execute(f"ANALYZE {partition_table}")
+            if own_connection:
+                conn.commit()
+
+            print(f"data inserted into table {partition_table} successfully.")
+
+        except Exception as e:
+            if own_connection:
+                conn.rollback()
+            print(f"[ERROR] copy insert failed: {e}")
+            raise
+
+        finally:
+            cursor.close()
+            if own_connection:
+                conn.close()
+
     @contextmanager
     def transaction(self):
         conn = self._connect_raw()

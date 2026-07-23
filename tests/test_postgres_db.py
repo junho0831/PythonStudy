@@ -26,6 +26,9 @@ class FakeCursor:
         self.copy_query = query
         self.copy_payload = file.getvalue()
 
+    def close(self):
+        pass
+
 
 class FakeConnection:
     def __init__(self):
@@ -48,7 +51,53 @@ class FakeConnection:
 
 
 class PostgresDBTest(unittest.TestCase):
-    pass
+    def test_copy_insert_to_partition_table_deduplicates_rows(self):
+        db = PostgresDB(dsn="postgresql://user:password@localhost:5432/db")
+        connection = FakeConnection()
+        db._PostgresDB__engine = type("FakeEngine", (), {"raw_connection": lambda _: connection})()
+        df = pd.DataFrame(
+            [
+                {"eq_name": "EQ1", "code": "DW-3411"},
+                {"eq_name": "EQ1", "code": "DW-3411"},
+            ]
+        )
+
+        db.copy_insert_to_partition_table(
+            schema="prism_common",
+            table_name="er_dose_raw_parsed",
+            target_date="2026-07-20",
+            df=df,
+        )
+
+        self.assertEqual(connection.cursor_obj.copy_payload.count("EQ1,DW-3411"), 1)
+
+    def test_copy_insert_to_partition_table_without_dedup_keeps_duplicate_rows(self):
+        db = PostgresDB(dsn="postgresql://user:password@localhost:5432/db")
+        connection = FakeConnection()
+        db._PostgresDB__engine = type("FakeEngine", (), {"raw_connection": lambda _: connection})()
+        df = pd.DataFrame(
+            [
+                {"eq_name": "EQ1", "code": "DW-3411"},
+                {"eq_name": "EQ1", "code": "DW-3411"},
+            ]
+        )
+
+        db.copy_insert_to_partition_table_without_dedup(
+            schema="prism_common",
+            table_name="er_dose_raw_parsed",
+            target_date="2026-07-20",
+            df=df,
+        )
+
+        self.assertEqual(
+            connection.cursor_obj.copy_query,
+            "COPY prism_common.er_dose_raw_parsed_1_prt_p20260720 FROM STDIN WITH CSV HEADER",
+        )
+        self.assertEqual(connection.cursor_obj.copy_payload.count("EQ1,DW-3411"), 2)
+        self.assertIn(
+            ("ANALYZE prism_common.er_dose_raw_parsed_1_prt_p20260720", None),
+            connection.cursor_obj.executed,
+        )
 
 
 if __name__ == "__main__":

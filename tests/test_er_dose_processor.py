@@ -85,6 +85,12 @@ class FakeDB:
         self.partition_inserts.append((full_table_name, target_date, df.copy()))
         return len(df)
 
+    def copy_insert_to_partition_table_without_dedup(self, schema, table_name, target_date, df, connection=None):
+        full_table_name = f"{schema}.{table_name}"
+        self.inserted.append((full_table_name, df))
+        self.partition_inserts.append((full_table_name, target_date, df.copy()))
+        return len(df)
+
 
 class ERDoseProcessorTest(unittest.TestCase):
     def test_fetch_raw_logs_uses_general_raw_table_and_code_occur_time_range(self):
