@@ -123,7 +123,7 @@ class ERDoseEUVRepository:
         """
         return self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)
 
-    def insert_root_causes_df(self, df: pd.DataFrame, connection=None, analyze: bool = True) -> int:
+    def insert_root_causes_df(self, df: pd.DataFrame, connection=None) -> int:
         if df is None or df.empty:
             return 0
 
@@ -213,20 +213,10 @@ class ERDoseEUVRepository:
                 target_date=target_date,
                 df=group_df_clean,
                 connection=connection,
-                analyze=analyze,
             )
             inserted_count += len(group_df_clean)
 
         return inserted_count
-
-    def analyze_target_partition(self, target_date: str, connection=None) -> int:
-        schema, table_name = ROOT_CAUSE_TABLE.split(".", maxsplit=1)
-        return self.db.analyze_partition_table(
-            schema=schema,
-            table_name=table_name,
-            target_date=target_date,
-            connection=connection,
-        )
 
     def transaction(self):
         return self.db.transaction()

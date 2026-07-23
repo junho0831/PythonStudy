@@ -111,21 +111,13 @@ class ERDoseProcessor(CountReloadProcessor):
                 continue
 
             parsed_df = pd.DataFrame(parsed_rows)
-            chunk_inserted = self.repository.insert_parsed_df(parsed_df, connection=connection, analyze=False)
+            chunk_inserted = self.repository.insert_parsed_df(parsed_df, connection=connection)
             insert_count += chunk_inserted
             print(
                 "[ER_DOSE] "
                 f"chunk={chunk_index} "
                 f"inserted={chunk_inserted} "
                 f"inserted_total={insert_count}"
-            )
-
-        if insert_count > 0:
-            target_date_value = start_time.date().isoformat()
-            self.repository.analyze_target_partition(target_date_value, connection=connection)
-            print(
-                "[ER_DOSE] "
-                f"analyze partition_date={target_date_value}"
             )
 
         print(
