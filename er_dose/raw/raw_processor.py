@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -145,39 +146,10 @@ class ERDoseProcessor(CountReloadProcessor):
 
     def _parse_chunk(self, raw_df) -> list[dict[str, DoseErrorValue]]:
         parsed_rows: list[dict[str, DoseErrorValue]] = []
-        columns = {column: index for index, column in enumerate(raw_df.columns)}
-        eq_name_index = columns["eq_name"]
-        code_index = columns["code"]
-        code_occur_time_index = columns["code_occur_time"]
-        title_index = columns["title"]
-        contents_index = columns["contents"]
 
-        for row in raw_df.itertuples(index=False, name=None):
-            contents = row[contents_index]
-            raw = RawErLog(
-                eq_name=self._nullable_str(row[eq_name_index]),
-                code=self._nullable_str(row[code_index]),
-                code_occur_time=self._normalize_datetime(row[code_occur_time_index]),
-                title=self._nullable_str(row[title_index]),
-                contents=str(contents) if pd.notna(contents) else "",
-            )
-            parsed = parse_dose_error(raw)
-            parsed_dict = {
-                "eq_name": parsed.eq_name,
-                "code": parsed.code,
-                "code_occur_time": parsed.code_occur_time,
-                "title": parsed.title,
-                "contents": parsed.contents,
-                "exposure_handle": parsed.exposure_handle,
-                "action_handle": parsed.action_handle,
-                "lot_id": parsed.lot_id,
-                "lot_name": parsed.lot_name,
-                "lot_seq": parsed.lot_seq,
-                "wafer_seq": parsed.wafer_seq,
-                "de_err": parsed.de_err,
-                "n_slit": parsed.n_slit,
-                "use_yn": parsed.use_yn,
-            }
+        for row in raw_df.itertuples(index=False):
+            raw = self._row_to_raw_log(row._asdict())
+            parsed_dict = asdict(parse_dose_error(raw))
 
             eq_name = parsed_dict.get("eq_name")
             code = parsed_dict.get("code")
