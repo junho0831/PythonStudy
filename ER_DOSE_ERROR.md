@@ -153,7 +153,10 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 3. 각 `chunk`의 RAW contents 파싱
    - 파싱 중 `lot_seq`나 `wafer_seq`가 없을 경우, 동일 `eq_name`에서 이전에 파싱된 가장 최근 값을 사용한다. 이는 chunk의 경계를 넘어 유지된다.
    - DW 로그에서 `exposure_handle`이 같은 설비의 이전 값보다 `1000` 이상 커지면 저장은 하되 `use_yn = 'N'`으로 표시하고, 다음 비교 기준 exposure handle로는 사용하지 않는다.
-4. 각 `chunk`를 `prism_common.er_dose_raw_parsed`에 `COPY` append insert
+4. 각 `chunk`를 `prism_common.er_dose_raw_parsed` 일별 파티션에 `COPY` append insert
+   - RAW/EUV 파티션 적재는 기존 `copy_insert_to_partition_table`을 사용한다.
+   - 적재 전 DataFrame 컬럼 순서를 parsed 테이블 컬럼 순서에 맞춘다.
+5. 하루 단위 적재 경로에서는 `start_time` 날짜 파티션 적재 완료 후 분석 전용 `analyze_partition_table`로 `ANALYZE`를 1회 실행
 
 환경변수 기반 기본 실행에서 target date와 `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`가 모두 없으면 raw/euv 배치는 최근 4일 lookback 모드로 동작한다.
 

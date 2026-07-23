@@ -149,7 +149,7 @@ class ERDoseRepository:
     def _partition_table_name(self, table_name: str, target_date: date) -> str:
         return f'{table_name}_1_prt_p{target_date.strftime("%Y%m%d")}'
 
-    def insert_parsed_df(self, df: pd.DataFrame, connection=None) -> int:
+    def insert_parsed_df(self, df: pd.DataFrame, connection=None, analyze: bool = True) -> int:
         if df is None or df.empty:
             return 0
 
@@ -214,10 +214,20 @@ class ERDoseRepository:
                 target_date=target_date,
                 df=group_df_clean,
                 connection=connection,
+                analyze=analyze,
             )
             inserted_count += len(group_df_clean)
 
         return inserted_count
+
+    def analyze_target_partition(self, target_date: str, connection=None) -> int:
+        schema, table_name = PARSED_TABLE.split(".", maxsplit=1)
+        return self.db.analyze_partition_table(
+            schema=schema,
+            table_name=table_name,
+            target_date=target_date,
+            connection=connection,
+        )
 
     def transaction(self):
         return self.db.transaction()

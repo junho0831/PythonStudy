@@ -43,6 +43,7 @@ class FakeDB:
         self.target_counts = target_counts or {}
         self.executed = []
         self.inserted = []
+        self.copy_options = []
         self.connection = object()
         self.partition_inserts = []
         self.queries_called = []
@@ -73,17 +74,26 @@ class FakeDB:
         self.executed.append((query, params, connection))
         return 0
 
-    def copy_insert_df(self, table_name, df, connection=None):
-        self.insert_table_name = table_name
-        self.inserted.append((table_name, df))
-        self.insert_connection = connection
-        return len(df)
-
-    def copy_insert_to_partition_table(self, schema, table_name, target_date, df, is_truncate=False, connection=None):
+    def copy_insert_to_partition_table(
+        self,
+        schema,
+        table_name,
+        target_date,
+        df,
+        is_truncate=False,
+        connection=None,
+        analyze=True,
+    ):
         full_table_name = f"{schema}.{table_name}"
         self.inserted.append((full_table_name, df))
         self.partition_inserts.append((full_table_name, target_date, df.copy()))
+        self.copy_options.append({"target_date": target_date, "analyze": analyze, "connection": connection})
         return len(df)
+
+    def analyze_partition_table(self, schema, table_name, target_date, connection=None):
+        query = f"ANALYZE {schema}.{table_name}_1_prt_p{target_date.replace('-', '')}"
+        self.executed.append((query, None, connection))
+        return 0
 
 
 class ERDoseProcessorTest(unittest.TestCase):
@@ -345,6 +355,9 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(len(db.inserted), 2)
         self.assertEqual(len(db.inserted[0][1]), 2)
         self.assertEqual(len(db.inserted[1][1]), 1)
+        self.assertEqual([option["analyze"] for option in db.copy_options], [False, False])
+        analyze_queries = [query for query, _, _ in db.executed if query == "ANALYZE prism_common.er_dose_raw_parsed_1_prt_p20260501"]
+        self.assertEqual(len(analyze_queries), 1)
 
     def test_run_accepts_target_date_and_builds_daily_window(self):
         raw_df = pd.DataFrame([
@@ -444,6 +457,9 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(truncate_queries, ["truncate table prism_common.er_dose_raw_parsed_1_prt_p20260501"])
         self.assertEqual(len(db.partition_inserts), 1)
         self.assertIs(db.executed[0][2], db.connection)
+        analyze_queries = [item for item in db.executed if item[0] == "ANALYZE prism_common.er_dose_raw_parsed_1_prt_p20260501"]
+        self.assertEqual(len(analyze_queries), 1)
+        self.assertIs(analyze_queries[0][2], db.connection)
         self.assertIn("lookback_done start_date=2026-05-01 end_date=2026-05-01", stdout.getvalue())
         self.assertIn("checked_dates=1 reloaded_dates=1 source_rows=1 inserted=1", stdout.getvalue())
 

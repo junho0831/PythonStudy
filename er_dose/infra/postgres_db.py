@@ -4,7 +4,6 @@ import io
 import os
 import re
 from contextlib import contextmanager
-from io import StringIO
 from pathlib import Path
 
 import pandas as pd
@@ -63,6 +62,7 @@ class PostgresDB:
         df: pd.DataFrame,
         is_truncate: bool = False,
         connection=None,
+        analyze: bool = True,
     ) -> None:
         if df is None or df.empty:
             print("insert 대상 데이터가 없습니다.")
@@ -89,7 +89,8 @@ class PostgresDB:
 
             print(f"{len(insert_df)} rows were saved.")
 
-            cursor.execute(f"ANALYZE {partition_table}")
+            if analyze:
+                cursor.execute(f"ANALYZE {partition_table}")
             if own_connection:
                 conn.commit()
 
@@ -105,6 +106,16 @@ class PostgresDB:
             cursor.close()
             if own_connection:
                 conn.close()
+
+    def analyze_partition_table(
+        self,
+        schema: str,
+        table_name: str,
+        target_date: str,
+        connection=None,
+    ) -> int:
+        partition_table = f'{schema}.{table_name}_1_prt_p{target_date.replace("-", "")}'
+        return self.execute(f"ANALYZE {partition_table}", connection=connection)
 
     @contextmanager
     def transaction(self):
@@ -149,46 +160,6 @@ class PostgresDB:
                 if not rows:
                     break
                 yield pd.DataFrame(rows, columns=columns)
-
-    def copy_insert_df(self, table_name: str, df, connection=None) -> int:
-        if df.empty:
-            return 0
-
-        normalized_df = df.where(pd.notna(df), None)
-        columns = list(normalized_df.columns)
-        table_sql = self._quote_identifier_path(table_name)
-        column_sql = ", ".join(self._quote_identifier(column) for column in columns)
-        query = f"copy {table_sql} ({column_sql}) from stdin with csv null ''"
-
-        stream = StringIO()
-        for row in normalized_df.itertuples(index=False, name=None):
-            serialized = []
-            for value in row:
-                if value is None or pd.isna(value):
-                    serialized.append("")
-                    continue
-                text = str(value).replace('"', '""')
-                serialized.append(f'"{text}"')
-            stream.write(",".join(serialized))
-            stream.write("\n")
-        stream.seek(0)
-
-        own_connection = connection is None
-        conn = connection or self._connect_raw()
-        try:
-            with conn.cursor() as cur:
-                cur.copy_expert(query, stream)
-            if own_connection:
-                conn.commit()
-        except Exception:
-            if own_connection:
-                conn.rollback()
-            raise
-        finally:
-            if own_connection:
-                conn.close()
-
-        return len(normalized_df)
 
     def execute(self, query: str, params=None, connection=None) -> int:
         own_connection = connection is None
