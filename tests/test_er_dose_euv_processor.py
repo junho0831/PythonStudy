@@ -32,6 +32,7 @@ class FakeDB:
         self.fetch_params = None
         self.executed = []
         self.inserted = []
+        self.copy_options = []
         self.connection = object()
         self.partition_inserts = []
 
@@ -68,10 +69,12 @@ class FakeDB:
         df,
         is_truncate=False,
         connection=None,
+        analyze=True,
     ):
         full_table_name = f"{schema}.{table_name}"
         self.inserted.append((full_table_name, df.copy()))
         self.partition_inserts.append((full_table_name, target_date, df.copy()))
+        self.copy_options.append({"target_date": target_date, "analyze": analyze, "connection": connection})
         return len(df)
 
 
@@ -171,6 +174,9 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         table_name, inserted_df = db.inserted[0]
         self.assertEqual(table_name, "prism_common.er_dose_euv_parsed")
         self.assertEqual(len(inserted_df), 1)
+        self.assertEqual([option["analyze"] for option in db.copy_options], [False])
+        analyze_queries = [query for query, _, _ in db.executed if query == "ANALYZE prism_common.er_dose_euv_parsed_1_prt_p20260504"]
+        self.assertEqual(len(analyze_queries), 1)
         self.assertNotIn("er_line", inserted_df.columns)
         self.assertNotIn("belong", inserted_df.columns)
         self.assertNotIn("type", inserted_df.columns)
@@ -272,6 +278,9 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         self.assertEqual(truncate_queries, ["truncate table prism_common.er_dose_euv_parsed_1_prt_p20260504"])
         self.assertEqual(len(db.partition_inserts), 1)
         self.assertIs(db.executed[0][2], db.connection)
+        analyze_queries = [item for item in db.executed if item[0] == "ANALYZE prism_common.er_dose_euv_parsed_1_prt_p20260504"]
+        self.assertEqual(len(analyze_queries), 1)
+        self.assertIs(analyze_queries[0][2], db.connection)
         self.assertIn("lookback_done start_date=2026-05-04 end_date=2026-05-04", stdout.getvalue())
         self.assertIn("checked_dates=1 reloaded_dates=1 source_rows=1 inserted=1", stdout.getvalue())
 

@@ -51,16 +51,11 @@ class FakeConnection:
 
 
 class PostgresDBTest(unittest.TestCase):
-    def test_copy_insert_to_partition_table_deduplicates_rows(self):
+    def test_copy_insert_to_partition_table_reuses_column_copy_insert(self):
         db = PostgresDB(dsn="postgresql://user:password@localhost:5432/db")
         connection = FakeConnection()
         db._PostgresDB__engine = type("FakeEngine", (), {"raw_connection": lambda _: connection})()
-        df = pd.DataFrame(
-            [
-                {"eq_name": "EQ1", "code": "DW-3411"},
-                {"eq_name": "EQ1", "code": "DW-3411"},
-            ]
-        )
+        df = pd.DataFrame([{"eq_name": "EQ1", "use_yn": "Y"}])
 
         db.copy_insert_to_partition_table(
             schema="prism_common",
@@ -69,32 +64,32 @@ class PostgresDBTest(unittest.TestCase):
             df=df,
         )
 
-        self.assertEqual(connection.cursor_obj.copy_payload.count("EQ1,DW-3411"), 1)
+        self.assertEqual(
+            connection.cursor_obj.copy_query,
+            'copy "prism_common"."er_dose_raw_parsed_1_prt_p20260720" ("eq_name", "use_yn") from stdin with csv null \'\'',
+        )
+        self.assertIn('"EQ1","Y"', connection.cursor_obj.copy_payload)
+        self.assertIn(
+            ("ANALYZE prism_common.er_dose_raw_parsed_1_prt_p20260720", None),
+            connection.cursor_obj.executed,
+        )
+        self.assertTrue(connection.committed)
 
-    def test_copy_insert_to_partition_table_without_dedup_keeps_duplicate_rows(self):
+    def test_copy_insert_to_partition_table_can_skip_analyze(self):
         db = PostgresDB(dsn="postgresql://user:password@localhost:5432/db")
         connection = FakeConnection()
         db._PostgresDB__engine = type("FakeEngine", (), {"raw_connection": lambda _: connection})()
-        df = pd.DataFrame(
-            [
-                {"eq_name": "EQ1", "code": "DW-3411"},
-                {"eq_name": "EQ1", "code": "DW-3411"},
-            ]
-        )
+        df = pd.DataFrame([{"eq_name": "EQ1"}])
 
-        db.copy_insert_to_partition_table_without_dedup(
+        db.copy_insert_to_partition_table(
             schema="prism_common",
             table_name="er_dose_raw_parsed",
             target_date="2026-07-20",
             df=df,
+            analyze=False,
         )
 
-        self.assertEqual(
-            connection.cursor_obj.copy_query,
-            "COPY prism_common.er_dose_raw_parsed_1_prt_p20260720 FROM STDIN WITH CSV HEADER",
-        )
-        self.assertEqual(connection.cursor_obj.copy_payload.count("EQ1,DW-3411"), 2)
-        self.assertIn(
+        self.assertNotIn(
             ("ANALYZE prism_common.er_dose_raw_parsed_1_prt_p20260720", None),
             connection.cursor_obj.executed,
         )

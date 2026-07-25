@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import os
 import re
 from contextlib import contextmanager
@@ -63,18 +62,14 @@ class PostgresDB:
         df: pd.DataFrame,
         is_truncate: bool = False,
         connection=None,
+        analyze: bool = True,
     ) -> None:
         if df is None or df.empty:
             print("insert 대상 데이터가 없습니다.")
             return
 
         partition_table = f'{schema}.{table_name}_1_prt_p{target_date.replace("-", "")}'
-        query = f"COPY {partition_table} FROM STDIN WITH CSV HEADER"
-
-        buffer = io.StringIO()
         insert_df = df.drop_duplicates()
-        insert_df.to_csv(buffer, index=False)
-        buffer.seek(0)
 
         own_connection = connection is None
         conn = connection or self.__engine.raw_connection()
@@ -85,11 +80,12 @@ class PostgresDB:
                 print(f"TRUNCATE TABLE {partition_table}")
                 cursor.execute(f"TRUNCATE TABLE {partition_table}")
 
-            cursor.copy_expert(query, buffer)
+            self.copy_insert_df(partition_table, insert_df, connection=conn)
 
             print(f"{len(insert_df)} rows were saved.")
 
-            cursor.execute(f"ANALYZE {partition_table}")
+            if analyze:
+                cursor.execute(f"ANALYZE {partition_table}")
             if own_connection:
                 conn.commit()
 

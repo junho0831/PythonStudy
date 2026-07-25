@@ -67,6 +67,7 @@ class ERDoseProcessor(CountReloadProcessor):
 
         fetched_count = 0
         insert_count = 0
+        inserted_target_dates: set[str] = set()
 
         print(
             "[ER_DOSE] "
@@ -111,13 +112,23 @@ class ERDoseProcessor(CountReloadProcessor):
                 continue
 
             parsed_df = pd.DataFrame(parsed_rows)
-            chunk_inserted = self.repository.insert_parsed_df(parsed_df, connection=connection)
+            inserted_target_dates.update(
+                pd.to_datetime(parsed_df["code_occur_time"]).dt.strftime("%Y-%m-%d").dropna().unique()
+            )
+            chunk_inserted = self.repository.insert_parsed_df(parsed_df, connection=connection, analyze=False)
             insert_count += chunk_inserted
             print(
                 "[ER_DOSE] "
                 f"chunk={chunk_index} "
                 f"inserted={chunk_inserted} "
                 f"inserted_total={insert_count}"
+            )
+
+        for target_date in sorted(inserted_target_dates):
+            self.repository.analyze_target_partition(target_date, connection=connection)
+            print(
+                "[ER_DOSE] "
+                f"analyze partition_date={target_date}"
             )
 
         print(
