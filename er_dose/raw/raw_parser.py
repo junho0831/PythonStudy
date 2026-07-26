@@ -37,8 +37,7 @@ _DE_ERR_PATTERNS = [
 def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
     """Parse DW-/LO-/KE- dose warning logs using raw code format."""
     contents = raw.contents
-    contents_lower = contents.lower()
-    code_norm = raw.code.upper() if raw.code else ""
+    code_norm = raw.code if raw.code else ""
 
     exposure_handle = None
     action_handle = None
@@ -50,26 +49,19 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
     n_slit = None
 
     if code_norm.startswith("DW-"):
-        if "exposure_handle" in contents_lower:
-            exposure_handle = extract_int(contents, rf"exposure_handle\s*:\s*{_INT_RE}")
-        if "action_handle" in contents_lower:
-            action_handle = extract_int(contents, rf"action_handle\s*=\s*{_INT_RE}")
-        if "lot(" in contents_lower or "lot id" in contents_lower or "wafer_id" in contents_lower:
-            lot_seq = extract_first_int(contents, _LOT_SEQ_PATTERNS, minimum=1)
-        if "wafer(" in contents_lower:
-            wafer_seq = extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
-        if "de_err" in contents_lower or "min_de_error" in contents_lower:
-            de_err = extract_first_decimal(contents, _DE_ERR_PATTERNS)
-        if "n_slit" in contents_lower:
-            n_slit = extract_int(contents, rf"n_slit\s*=\s*{_INT_RE}")
+        exposure_handle = extract_int(contents, rf"exposure_handle\s*:\s*{_INT_RE}")
+        action_handle = extract_int(contents, rf"action_handle\s*=\s*{_INT_RE}")
+        lot_seq = extract_first_int(contents, _LOT_SEQ_PATTERNS, minimum=1)
+        wafer_seq = extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
+        de_err = extract_first_decimal(contents, _DE_ERR_PATTERNS)
+        n_slit = extract_int(contents, rf"n_slit\s*=\s*{_INT_RE}")
+
     elif code_norm.startswith("LO-"):
-        if code_norm == "LO-0050" and "lot '" in contents_lower:
+        if code_norm == "LO-0050":
             lot_id = extract_text(contents, r"lot\s+'([^']+)'")
             lot_name = lot_id.split(".", maxsplit=1)[0] if lot_id is not None else None
-        if "lot(" in contents_lower or "lot id" in contents_lower or "wafer_id" in contents_lower:
-            lot_seq = extract_first_int(contents, _LOT_SEQ_PATTERNS, minimum=1)
-        if "wafer(" in contents_lower:
-            wafer_seq = extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
+        lot_seq = extract_first_int(contents, _LOT_SEQ_PATTERNS, minimum=1)
+        wafer_seq = extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
 
     return ParsedErDoseError(
         eq_name=raw.eq_name,
