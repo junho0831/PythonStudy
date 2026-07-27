@@ -37,7 +37,7 @@ _DE_ERR_PATTERNS = [
 def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
     """Parse DW-/LO-/KE- dose warning logs using raw code format."""
     contents = raw.contents
-    code_norm = raw.code if raw.code else ""
+    code_norm = raw.code.upper() if raw.code else ""
 
     exposure_handle = None
     action_handle = None
@@ -60,7 +60,9 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
         if code_norm == "LO-0050":
             lot_id = extract_text(contents, r"lot\s+'([^']+)'")
             lot_name = lot_id.split(".", maxsplit=1)[0] if lot_id is not None else None
-        lot_seq = extract_first_int(contents, _LOT_SEQ_PATTERNS, minimum=1)
+            lot_seq = extract_int(contents, rf"\(id\s*=\s*{_INT_RE}\)")
+        if lot_seq is None:
+            lot_seq = extract_first_int(contents, _LOT_SEQ_PATTERNS, minimum=1)
         wafer_seq = extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
 
     return ParsedErDoseError(

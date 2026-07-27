@@ -164,8 +164,9 @@ class ERDoseProcessor(CountReloadProcessor):
 
             eq_name = parsed_dict.get("eq_name")
             code = parsed_dict.get("code")
+            code_norm = code.upper() if code is not None else ""
             exposure_handle = parsed_dict.get("exposure_handle")
-            if eq_name is not None and code is not None and code.upper().startswith("DW-") and exposure_handle is not None:
+            if eq_name is not None and code_norm.startswith("DW-") and exposure_handle is not None:
                 previous_exposure_handle = self.exposure_handles.get(eq_name)
                 if previous_exposure_handle is not None:
                     exposure_handle_diff = exposure_handle - previous_exposure_handle
@@ -205,7 +206,8 @@ class ERDoseProcessor(CountReloadProcessor):
                     parsed_dict["lot_name"] = state["lot_name"]
 
                 if parsed_dict.get("lot_seq") is not None:
-                    state["lot_seq"] = parsed_dict["lot_seq"]
+                    if code_norm != "LO-0050":
+                        state["lot_seq"] = parsed_dict["lot_seq"]
                 else:
                     parsed_dict["lot_seq"] = state["lot_seq"]
 
@@ -215,6 +217,31 @@ class ERDoseProcessor(CountReloadProcessor):
                     parsed_dict["wafer_seq"] = state["wafer_seq"]
 
             parsed_rows.append(parsed_dict)
+
+        lot_info_by_seq: dict[int, dict[str, str | None]] = {}
+        for parsed_row in parsed_rows:
+            lot_seq = parsed_row.get("lot_seq")
+            if not isinstance(lot_seq, int):
+                continue
+            lot_id = parsed_row.get("lot_id")
+            lot_name = parsed_row.get("lot_name")
+            if isinstance(lot_id, str) or isinstance(lot_name, str):
+                lot_info_by_seq[lot_seq] = {
+                    "lot_id": lot_id if isinstance(lot_id, str) else None,
+                    "lot_name": lot_name if isinstance(lot_name, str) else None,
+                }
+
+        for parsed_row in parsed_rows:
+            lot_seq = parsed_row.get("lot_seq")
+            if not isinstance(lot_seq, int):
+                continue
+            lot_info = lot_info_by_seq.get(lot_seq)
+            if lot_info is None:
+                continue
+            if parsed_row.get("lot_id") is None:
+                parsed_row["lot_id"] = lot_info["lot_id"]
+            if parsed_row.get("lot_name") is None:
+                parsed_row["lot_name"] = lot_info["lot_name"]
 
         return parsed_rows
 
