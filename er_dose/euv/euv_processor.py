@@ -23,7 +23,7 @@ class ERDoseEUVProcessor(CountReloadProcessor):
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         chunk_size: int = 10000,
-        lookback_days: int = 4,
+        lookback_days: int = 2,
         reference_date: date | None = None,
         target_date: date | None = None,
     ) -> None:

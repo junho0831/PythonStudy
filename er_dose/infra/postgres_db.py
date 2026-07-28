@@ -63,16 +63,17 @@ class PostgresDB:
         is_truncate: bool = False,
         connection=None,
         analyze: bool = True,
-    ) -> None:
+        dedup: bool = False,
+    ) -> int:
         if df is None or df.empty:
             print("insert 대상 데이터가 없습니다.")
-            return
+            return 0
 
         partition_table = f'{schema}.{table_name}_1_prt_p{target_date.replace("-", "")}'
-        insert_df = df.drop_duplicates()
+        insert_df = df.drop_duplicates() if dedup else df
 
         own_connection = connection is None
-        conn = connection or self.__engine.raw_connection()
+        conn = connection or (self.__engine.raw_connection() if self.__engine is not None else self._connect_raw())
         cursor = conn.cursor()
 
         try:
@@ -80,9 +81,9 @@ class PostgresDB:
                 print(f"TRUNCATE TABLE {partition_table}")
                 cursor.execute(f"TRUNCATE TABLE {partition_table}")
 
-            self.copy_insert_df(partition_table, insert_df, connection=conn)
+            saved_count = self.copy_insert_df(partition_table, insert_df, connection=conn)
 
-            print(f"{len(insert_df)} rows were saved.")
+            print(f"{saved_count} rows were saved.")
 
             if analyze:
                 cursor.execute(f"ANALYZE {partition_table}")
@@ -90,51 +91,7 @@ class PostgresDB:
                 conn.commit()
 
             print(f"data inserted into table {partition_table} successfully.")
-
-        except Exception as e:
-            if own_connection:
-                conn.rollback()
-            print(f"[ERROR] copy insert failed: {e}")
-            raise
-
-        finally:
-            cursor.close()
-            if own_connection:
-                conn.close()
-
-    def copy_insert_to_partition_table_without_dedup(
-        self,
-        schema: str,
-        table_name: str,
-        target_date: str,
-        df: pd.DataFrame,
-        connection=None,
-    ) -> None:
-        if df is None or df.empty:
-            print("insert 대상 데이터가 없습니다.")
-            return
-
-        partition_table = f'{schema}.{table_name}_1_prt_p{target_date.replace("-", "")}'
-        query = f"COPY {partition_table} FROM STDIN WITH CSV HEADER"
-
-        buffer = io.StringIO()
-        df.to_csv(buffer, index=False)
-        buffer.seek(0)
-
-        own_connection = connection is None
-        conn = connection or self.__engine.raw_connection()
-        cursor = conn.cursor()
-
-        try:
-            cursor.copy_expert(query, buffer)
-
-            print(f"{len(df)} rows were saved.")
-
-            cursor.execute(f"ANALYZE {partition_table}")
-            if own_connection:
-                conn.commit()
-
-            print(f"data inserted into table {partition_table} successfully.")
+            return saved_count
 
         except Exception as e:
             if own_connection:

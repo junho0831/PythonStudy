@@ -212,7 +212,7 @@ class ERDoseRepository:
                 f"partition_date={target_date} "
                 f"rows={len(group_df_clean)}"
             )
-            self.db.copy_insert_to_partition_table_without_dedup(
+            self.db.copy_insert_to_partition_table(
                 schema=schema,
                 table_name=table_name,
                 target_date=target_date,
