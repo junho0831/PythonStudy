@@ -152,14 +152,15 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 2. `mbeat.er_data_raw`에서 Dose Error 후보를 `chunk` 단위로 조회
 3. 각 `chunk`의 RAW contents 파싱
    - 파싱 중 `lot_seq`나 `wafer_seq`가 없을 경우, 동일 `eq_name`에서 이전에 파싱된 가장 최근 값을 사용한다. 이는 chunk의 경계를 넘어 유지된다.
+   - 청크 내 파싱된 `lot_id` 및 `lot_name`은 동일 설비(`eq_name`) 및 `lot_seq` 복합 키 `(eq_name, lot_seq)`를 공유하는 모든 행에 2-Pass 백필 방식으로 보정 대입된다.
    - DW 로그에서 `exposure_handle`이 같은 설비의 이전 값보다 `1000` 이상 커지면 저장은 하되 `use_yn = 'N'`으로 표시하고, 다음 비교 기준 exposure handle로는 사용하지 않는다.
 4. 각 `chunk`를 `prism_common.er_dose_raw_parsed` 일별 파티션에 `COPY` append insert
    - 파티션 적재는 공통 `copy_insert_df`를 재사용하며, `COPY` 대상 컬럼명을 명시하므로 테이블 물리 컬럼 순서와 값이 밀리지 않는다.
 5. 해당 실행에서 insert된 파티션별로 적재 완료 후 `ANALYZE`를 1회 실행
 
-환경변수 기반 기본 실행에서 target date와 `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`가 모두 없으면 raw/euv 배치는 최근 4일 lookback 모드로 동작한다.
+환경변수 기반 기본 실행에서 target date와 `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`가 모두 없으면 raw/euv 배치는 최근 2일 lookback 모드로 동작한다.
 
-1. 실행일 기준 `오늘 포함 최근 4일`을 날짜 오름차순으로 순회
+1. 실행일 기준 `오늘 포함 최근 2일`을 날짜 오름차순으로 순회
 2. 각 날짜에 대해 원천 raw 건수와 타겟 parsed 건수를 비교
 3. 건수가 같으면 해당 날짜는 스킵
 4. 건수가 다르면 해당 날짜의 parsed 파티션을 `TRUNCATE`
@@ -216,9 +217,20 @@ RAW parsed 저장 필드:
 
 - 원천 기반 컬럼: `eq_name`, `code`, `code_occur_time`, `title`, `contents`
 - 파싱 컬럼: `exposure_handle`, `action_handle`, `lot_id`, `lot_name`, `lot_seq`, `wafer_seq`, `de_err`, `n_slit`
-- 사용 여부 컬럼: `use_yn`. 일반 row는 `Y`, DW exposure handle jump row는 `N`
+- 사용 여부 컬럼: `use_yn`. 일반 로그는 `Y`, `exposure_handle` 1000 이상 급증 DW 테스트샷 로그는 `N` (분석 시 `WHERE use_yn = 'Y'` 조건 활용, 원천 raw/parsed 건수 일치용 DB 보존)
 
 필드가 없으면 nullable 컬럼은 `NULL`로 저장한다.
+
+## LO-0050 파싱 및 (eq_name, lot_seq) 2-Pass 백필 보정 규칙
+
+1. **`LO-0050` 파싱 규칙**:
+   - `lot_id`: 원문 텍스트의 `lot '([^']+)'` 정규식 패턴에서 추출한다.
+   - `lot_name`: 추출된 `lot_id`에서 첫 번째 `.`(점) 문자를 기준으로 이전 텍스트를 파출(`lot_id.split('.', maxsplit=1)[0]`)한다.
+   - `lot_seq`: `(id=\s*\d+)` 정규식 패턴에서 우선 추출하며, 미매칭 시 기존 `_LOT_SEQ_PATTERNS` 패턴으로 폴백한다.
+
+2. **`(eq_name, lot_seq)` 복합 키 기반 2-Pass 백필 규칙**:
+   - **Pass 1 (정보 수집)**: 청크 순회 시 파싱된 `lot_id` 및 `lot_name`을 설비 이름(`eq_name`)과 로트 시퀀스(`lot_seq`)의 복합 키 `(eq_name, lot_seq)`로 딕셔너리에 수집한다. 설비 간 로트 시퀀스 번호 중복에 따른 오염을 차단한다.
+   - **Pass 2 (보정 대입)**: 동일 청크 내에서 동일 `(eq_name, lot_seq)` 복합 키를 공유하는 모든 로그 행에 대해 유효한 `lot_id` 및 `lot_name`을 무조건 보정 대입한다.
 
 ## 실행
 
@@ -228,7 +240,7 @@ EUV 날짜 변수는 `ER_DOSE_EUV_TARGET_DATE` 를 사용한다.
 
 DB 접속은 `--dsn`, 프로젝트 루트 `er_dose.properties`, `ER_DOSE_DB_DSN`, `DATABASE_URL` 순서로 사용한다.
 기본 `chunk` 크기는 `ER_DOSE_RAW` 및 `ER_DOSE_EUV` 배치 모두 `30000`이며 `--chunk-size`로 조정할 수 있다.
-RAW 기본 실행은 최근 4일 lookback 모드이며, `--lookback-days` 또는 환경변수 기반 실행의 `ER_DOSE_LOOKBACK_DAYS`로 일수를 바꿀 수 있다.
+RAW 기본 실행은 최근 2일 lookback 모드이며, `--lookback-days` 또는 환경변수 기반 실행의 `ER_DOSE_LOOKBACK_DAYS`로 일수를 바꿀 수 있다.
 
 ```bash
 python -m er_dose.run_er_dose_batch \

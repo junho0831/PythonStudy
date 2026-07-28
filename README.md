@@ -39,11 +39,11 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 `ER_DOSE_RAW` 배치는 `mbeat.er_data_raw`의 dose warning 로그를 파싱해 `prism_common.er_dose_raw_parsed`에 적재합니다. parsed 테이블에는 `eq_name`, `code`, `code_occur_time`, `title`, `contents`와 `contents`에서 실제로 필요한 `exposure_handle`, `action_handle`, `lot_id`, `lot_name`, `lot_seq`, `wafer_seq`, `de_err`, `n_slit`, `use_yn`을 저장합니다. 조회 대상 `code`는 `DW-3411`, `DW-3425`, `DW-343A`, `DW-343B`, `LO-0050`, `LO-0061`, `LO-8166`, `LO-8167`, `KE-9103`, `KE-9104`이며, 코드 값은 DB에 저장된 원본 형식 그대로 비교합니다.
 
-배치는 `code_occur_time` 기간 조건으로 조회한 후보를 한 번에 메모리로 올리지 않고, `chunk` 단위로 읽어서 파싱 후 바로 `COPY` 적재합니다. 파티션 적재도 공통 `copy_insert_df`를 재사용하므로 `COPY` 대상 컬럼명을 명시해 테이블 물리 컬럼 순서와 값이 밀리지 않습니다. 현재 기본 `chunk` 크기는 `ER_DOSE_RAW` 및 `ER_DOSE_EUV` 배치 모두 `30000`이며 실행 시 조정할 수 있습니다. 조회는 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`) 기반 스트리밍으로 수행되지만, 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받으므로 운영 환경에 맞게 조정해야 합니다. 청크 단위로 처리되더라도 설비(`eq_name`)별로 이전에 파싱한 `lot_seq`와 `wafer_seq`를 기억하여, 해당 값이 없는 로그에 이전 값을 채워넣는 로직이 적용되어 있습니다.
+배치는 `code_occur_time` 기간 조건으로 조회한 후보를 한 번에 메모리로 올리지 않고, `chunk` 단위로 읽어서 파싱 후 바로 `COPY` 적재합니다. 파티션 적재도 공통 `copy_insert_df`를 재사용하므로 `COPY` 대상 컬럼명을 명시해 테이블 물리 컬럼 순서와 값이 밀리지 않습니다. 현재 기본 `chunk` 크기는 `ER_DOSE_RAW` 및 `ER_DOSE_EUV` 배치 모두 `30000`이며 실행 시 조정할 수 있습니다. 조회는 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`) 기반 스트리밍으로 수행되지만, 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받으므로 운영 환경에 맞게 조정해야 합니다. 청크 단위로 처리되더라도 설비(`eq_name`)별로 이전에 파싱한 `lot_seq`와 `wafer_seq`를 기억하며, 동일 청크 내에서 `(eq_name, lot_seq)` 복합 키를 기반으로 `lot_id`와 `lot_name` 정보를 모든 매칭 행에 2-Pass 백필 방식으로 보정 적용하는 로직이 구현되어 있습니다.
 
-RAW/EUV processor 경유 적재에서는 청크마다 `ANALYZE`를 실행하지 않고, 해당 실행에서 데이터가 들어간 파티션을 모아 파티션별로 적재 완료 후 `ANALYZE`를 1회 실행합니다. 공통 `COPY` 함수 자체의 기본값은 기존 호환성을 위해 청크별 `ANALYZE`를 유지합니다.
+RAW/EUV processor 경유 적재에서는 청크마다 `ANALYZE`를 실행하지 않고, 해당 실행에서 데이터가 들어간 파티션을 모아 파티션별로 적재 완료 후 `ANALYZE`를 1회 실행합니다. 공통 DB 메서드(`copy_insert_to_partition_table`) 역시 `analyze=False` 옵션을 전달받아 매 청크 인서트 시의 `ANALYZE` 실행을 생략하도록 정돈되었습니다.
 
-`ER_DOSE_RAW`와 `ER_DOSE_EUV`의 processor 기본 실행은 최근 4일 lookback 모드입니다. 실행일 기준 `오늘 포함 최근 4일`을 날짜별로 검사하고, 원천 raw 건수와 parsed 건수를 비교합니다. 건수가 같으면 해당 날짜는 스킵하고, 건수가 다르면 해당 날짜 parsed 파티션을 `TRUNCATE`한 뒤 원천 raw를 처음부터 다시 파싱해 적재합니다. `ER_DOSE_EUV_TARGET_DATE`를 명시하면 해당 날짜 1일만 같은 방식으로 검사하고, `ER_DOSE_START_TIME`/`ER_DOSE_END_TIME`를 명시하면 count 비교 없이 지정한 시간 범위를 처리합니다. EUV source count는 root cause 파싱 대상인 `contents`만 세어 parsed count와 비교합니다.
+`ER_DOSE_RAW`와 `ER_DOSE_EUV`의 processor 기본 실행은 최근 2일 lookback 모드입니다. 실행일 기준 `오늘 포함 최근 2일`을 날짜별로 검사하고, 원천 raw 건수와 parsed 건수를 비교합니다. 건수가 같으면 해당 날짜는 스킵하고, 건수가 다르면 해당 날짜 parsed 파티션을 `TRUNCATE`한 뒤 원천 raw를 처음부터 다시 파싱해 적재합니다. `ER_DOSE_EUV_TARGET_DATE`를 명시하면 해당 날짜 1일만 같은 방식으로 검사하고, `ER_DOSE_START_TIME`/`ER_DOSE_END_TIME`를 명시하면 count 비교 없이 지정한 시간 범위를 처리합니다. EUV source count는 root cause 파싱 대상인 `contents`만 세어 parsed count와 비교합니다.
 
 DW 로그에서 `exposure_handle`이 같은 설비의 이전 값보다 `1000` 이상 커지면 테스트샷성 row로 보고 저장은 하되 `use_yn='N'`으로 표시합니다. 일반 분석에서는 `use_yn='Y'` 조건을 사용하면 되고, row 자체는 저장되므로 raw count와 parsed count 비교가 계속 어긋나는 문제를 피할 수 있습니다.
 
@@ -221,7 +221,7 @@ ER_DOSE_DB_DSN=postgresql://user:password@host:5432/dbname
 - `ER_DOSE_RAW_TARGET_DATE`: ER Dose raw 대상 날짜, `YYYY-MM-DD`
 - `ER_DOSE_EUV_TARGET_DATE`: ER Dose EUV 대상 날짜, `YYYY-MM-DD`
 - `ER_DOSE_CHUNK_SIZE`: ER Dose raw/euv fetch chunk 크기
-- `ER_DOSE_LOOKBACK_DAYS`: `ER_DOSE_RAW` 기본 lookback 일수, 기본값 `4`
+- `ER_DOSE_LOOKBACK_DAYS`: `ER_DOSE_RAW` 기본 lookback 일수, 기본값 `2`
 - `INPUT_DATE`: `RBI_INPUT_DATE` 대체값
 - `ER_DOSE_TARGET_DATE`: raw 레거시 대상 날짜 이름
 - `TARGET_DATE`: `ER_DOSE_TARGET_DATE` 레거시 대체값
@@ -246,7 +246,7 @@ pip3 install --target .vendor SQLAlchemy psycopg2-binary
 - 내부적으로 `ER_DOSE_RAW`는 `ER_DOSE_RAW_TARGET_DATE`, `ER_DOSE_EUV`는 `ER_DOSE_EUV_TARGET_DATE`를 사용합니다.
 - raw/euv processor 모두 대상 날짜 기준으로 하루 범위를 계산합니다.
 - `BATCH_TARGET=ER_DOSE_RAW`가 현재 raw 배치의 기본 이름입니다. 레거시 `ER_DOSE`도 계속 지원합니다.
-- `BATCH_TARGET=ER_DOSE_RAW` 또는 `BATCH_TARGET=ER_DOSE_EUV`를 환경변수만으로 실행하고 날짜 인자를 주지 않으면 최근 4일 lookback + 날짜별 count 비교 기반 재적재 전략이 적용됩니다.
+- `BATCH_TARGET=ER_DOSE_RAW` 또는 `BATCH_TARGET=ER_DOSE_EUV`를 환경변수만으로 실행하고 날짜 인자를 주지 않으면 최근 2일 lookback + 날짜별 count 비교 기반 재적재 전략이 적용됩니다.
 - 인자 없이 `main.py`를 실행하면 기존과 동일하게 환경변수 기반 실행입니다.
 
 ### DB 초기화
@@ -314,7 +314,7 @@ ER_DOSE_DB_DSN='postgresql://user:password@host:5432/dbname' \
 
 직접 ER Dose 실행 스크립트를 사용할 수도 있습니다.
 
-`ER_DOSE_RAW`를 날짜 없이 실행하면 최근 4일 lookback 모드로 동작합니다.
+`ER_DOSE_RAW`를 날짜 없이 실행하면 최근 2일 lookback 모드로 동작합니다.
 
 ```bash
 python3 -m er_dose.run_er_dose_batch \
