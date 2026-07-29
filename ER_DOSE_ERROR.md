@@ -152,7 +152,6 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 2. `mbeat.er_data_raw`에서 Dose Error 후보를 `chunk` 단위로 조회
 3. 각 `chunk`의 RAW contents 파싱
    - 파싱 중 `lot_seq`나 `wafer_seq`가 없을 경우, 동일 `eq_name`에서 이전에 파싱된 가장 최근 값을 사용한다. 이는 chunk의 경계를 넘어 유지된다.
-   - 청크 내 파싱된 `lot_id` 및 `lot_name`은 동일 설비(`eq_name`) 및 `lot_seq` 복합 키 `(eq_name, lot_seq)`를 공유하는 모든 행에 2-Pass 백필 방식으로 보정 대입된다.
    - DW 로그에서 `exposure_handle`이 같은 설비의 이전 값보다 `1000` 이상 커지면 저장은 하되 `use_yn = 'N'`으로 표시하고, 다음 비교 기준 exposure handle로는 사용하지 않는다.
 4. 각 `chunk`를 `prism_common.er_dose_raw_parsed` 일별 파티션에 `COPY` append insert
    - 파티션 적재는 공통 `copy_insert_df`를 재사용하며, `COPY` 대상 컬럼명을 명시하므로 테이블 물리 컬럼 순서와 값이 밀리지 않는다.
@@ -221,16 +220,11 @@ RAW parsed 저장 필드:
 
 필드가 없으면 nullable 컬럼은 `NULL`로 저장한다.
 
-## LO-0050 파싱 및 (eq_name, lot_seq) 2-Pass 백필 보정 규칙
+## LO-0050 파싱 규칙
 
-1. **`LO-0050` 파싱 규칙**:
-   - `lot_id`: 원문 텍스트의 `lot '([^']+)'` 정규식 패턴에서 추출한다.
-   - `lot_name`: 추출된 `lot_id`에서 첫 번째 `.`(점) 문자를 기준으로 이전 텍스트를 파출(`lot_id.split('.', maxsplit=1)[0]`)한다.
-   - `lot_seq`: `(id=\s*\d+)` 정규식 패턴에서 우선 추출하며, 미매칭 시 기존 `_LOT_SEQ_PATTERNS` 패턴으로 폴백한다.
-
-2. **`(eq_name, lot_seq)` 복합 키 기반 2-Pass 백필 규칙**:
-   - **Pass 1 (정보 수집)**: 청크 순회 시 파싱된 `lot_id` 및 `lot_name`을 설비 이름(`eq_name`)과 로트 시퀀스(`lot_seq`)의 복합 키 `(eq_name, lot_seq)`로 딕셔너리에 수집한다. 설비 간 로트 시퀀스 번호 중복에 따른 오염을 차단한다.
-   - **Pass 2 (보정 대입)**: 동일 청크 내에서 동일 `(eq_name, lot_seq)` 복합 키를 공유하는 모든 로그 행에 대해 유효한 `lot_id` 및 `lot_name`을 무조건 보정 대입한다.
+- `lot_id`: 원문 텍스트의 `lot '([^']+)'` 정규식 패턴에서 추출한다.
+- `lot_name`: 추출된 `lot_id`에서 첫 번째 `.`(점) 문자를 기준으로 이전 텍스트를 파출(`lot_id.split('.', maxsplit=1)[0]`)한다.
+- `lot_seq`: `(id=\s*\d+)` 정규식 패턴에서 우선 추출하며, 미매칭 시 기존 `_LOT_SEQ_PATTERNS` 패턴으로 폴백한다.
 
 ## 실행
 

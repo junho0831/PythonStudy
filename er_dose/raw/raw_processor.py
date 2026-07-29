@@ -218,34 +218,6 @@ class ERDoseProcessor(CountReloadProcessor):
 
             parsed_rows.append(parsed_dict)
 
-        lot_info_by_key: dict[tuple[Any, int], dict[str, str | None]] = {}
-        for parsed_row in parsed_rows:
-            eq_name = parsed_row.get("eq_name")
-            lot_seq = parsed_row.get("lot_seq")
-            if eq_name is None or not isinstance(lot_seq, int):
-                continue
-            lot_id = parsed_row.get("lot_id")
-            lot_name = parsed_row.get("lot_name")
-            if isinstance(lot_id, str) or isinstance(lot_name, str):
-                current = lot_info_by_key.get((eq_name, lot_seq), {"lot_id": None, "lot_name": None})
-                lot_info_by_key[(eq_name, lot_seq)] = {
-                    "lot_id": lot_id if isinstance(lot_id, str) else current["lot_id"],
-                    "lot_name": lot_name if isinstance(lot_name, str) else current["lot_name"],
-                }
-
-        for parsed_row in parsed_rows:
-            eq_name = parsed_row.get("eq_name")
-            lot_seq = parsed_row.get("lot_seq")
-            if eq_name is None or not isinstance(lot_seq, int):
-                continue
-            lot_info = lot_info_by_key.get((eq_name, lot_seq))
-            if lot_info is None:
-                continue
-            if lot_info["lot_id"] is not None:
-                parsed_row["lot_id"] = lot_info["lot_id"]
-            if lot_info["lot_name"] is not None:
-                parsed_row["lot_name"] = lot_info["lot_name"]
-
         return parsed_rows
 
     def _normalize_datetime(self, value: Any) -> datetime | None:

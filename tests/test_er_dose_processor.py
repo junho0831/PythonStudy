@@ -333,31 +333,6 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(parsed_insert.loc[1, "lot_id"], "HJO449.1_1747_0_MP232325")
         self.assertEqual(parsed_insert.loc[1, "lot_name"], "HJO449")
 
-    def test_run_fills_lot_id_and_name_when_lot_seq_matches_lo_0050(self):
-        lo_contents = (
-            "lot 'HJO449.1_1747_0_MP232325' (id=3997) has started processing. "
-            "recipe='PRODUCTION/KHXA/XA106NTD_MRC', layer='XA106NTD_MRC', number of wafers=25."
-        )
-        lot_contents = "loading reticle 'gvhbrtb0v8' for lot id 3997."
-        raw_df = pd.DataFrame(
-            [
-                self._row(1, "LO-0061", lot_contents, eq_name="EQ1"),
-                self._row(2, "LO-0050", lo_contents, eq_name="EQ1"),
-            ]
-        )
-        db = FakeDB(raw_df)
-        repo = ERDoseRepository(db)
-        processor = ERDoseProcessor(repo)
-
-        with redirect_stdout(StringIO()):
-            processor.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
-
-        parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
-        self.assertEqual(parsed_insert.loc[0, "lot_seq"], 3997)
-        self.assertEqual(parsed_insert.loc[0, "lot_id"], "HJO449.1_1747_0_MP232325")
-        self.assertEqual(parsed_insert.loc[0, "lot_name"], "HJO449")
-        self.assertEqual(parsed_insert.loc[1, "lot_seq"], 3997)
-
     def test_run_keeps_lo_0050_lot_seq_from_updating_lot_state(self):
         lo_contents = (
             "lot 'HJO449.1_1747_0_MP232325' (id=3997) has started processing. "
@@ -431,34 +406,6 @@ class ERDoseProcessorTest(unittest.TestCase):
         parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
         self.assertTrue(pd.isna(parsed_insert.loc[0, "lot_id"]))
         self.assertEqual(parsed_insert.loc[1, "lot_id"], "HJO449.1_1747_0_MP232325")
-
-    def test_run_overwrites_stale_lot_state_when_same_lot_seq_has_new_lot_id(self):
-        lot_contents = "loading reticle 'gvhbrtb0v8' for lot id 2111."
-        lo_contents = (
-            "lot 'HJO449.1_1747_0_MP232325' (id=2111) has started processing. "
-            "recipe='PRODUCTION/KHXA/XA106NTD_MRC', layer='XA106NTD_MRC', number of wafers=25."
-        )
-        raw_df = pd.DataFrame(
-            [
-                self._row(1, "LO-0061", lot_contents, eq_name="EQ1"),
-                self._row(2, "LO-0050", lo_contents, eq_name="EQ1"),
-            ]
-        )
-        history_df = pd.DataFrame([
-            {"eq_name": "EQ1", "lot_id": "OLD_LOT.1", "lot_name": "OLD_LOT", "lot_seq": 2111, "wafer_seq": 23}
-        ])
-        db = FakeDB(raw_df, fetch_df_result=history_df)
-        repo = ERDoseRepository(db)
-        processor = ERDoseProcessor(repo)
-
-        with redirect_stdout(StringIO()):
-            processor.run(start_time=datetime(2026, 5, 2), end_time=datetime(2026, 5, 3))
-
-        parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
-        self.assertEqual(parsed_insert.loc[0, "lot_id"], "HJO449.1_1747_0_MP232325")
-        self.assertEqual(parsed_insert.loc[0, "lot_name"], "HJO449")
-        self.assertEqual(parsed_insert.loc[1, "lot_id"], "HJO449.1_1747_0_MP232325")
-        self.assertEqual(parsed_insert.loc[1, "lot_name"], "HJO449")
 
     def test_run_processes_multiple_chunks(self):
         raw_df = pd.DataFrame(
