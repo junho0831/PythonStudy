@@ -37,7 +37,7 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 ## ER Dose Error 배치
 
-`ER_DOSE_RAW` 배치는 `mbeat.er_data_raw`의 dose warning 로그를 파싱해 `prism_common.er_dose_raw_parsed`에 적재합니다. parsed 테이블에는 `eq_name`, `code`, `code_occur_time`, `title`, `contents`와 `contents`에서 실제로 필요한 `exposure_handle`, `action_handle`, `lot_id`, `lot_name`, `lot_seq`, `wafer_seq`, `de_err`, `n_slit`, `use_yn`을 저장합니다. 조회 대상 `code`는 `DW-3411`, `DW-3425`, `DW-343A`, `DW-343B`, `LO-0050`, `LO-0061`, `LO-8166`, `LO-8167`, `KE-9103`, `KE-9104`이며, 코드 값은 DB에 저장된 원본 형식 그대로 비교합니다.
+`ER_DOSE_RAW` 배치는 `mbeat.er_data_raw`의 dose warning 로그를 파싱해 `prism_common.er_dose_raw_parsed`에 적재하며, 수집 완료 후 `prism_common.de_trend_die_yield_daily` 일별 DIE Yield 서머리 테이블을 갱신합니다. parsed 테이블에는 `eq_name`, `code`, `code_occur_time`, `title`, `contents`와 `contents`에서 실제로 필요한 `exposure_handle`, `action_handle`, `lot_id`, `lot_name`, `lot_seq`, `wafer_seq`, `de_err`, `n_slit`, `use_yn`을 저장합니다. 조회 대상 `code`는 `DW-3411`, `DW-3425`, `DW-343A`, `DW-343B`, `LO-0050`, `LO-0061`, `LO-8166`, `LO-8167`, `KE-9103`, `KE-9104`이며, 코드 값은 DB에 저장된 원본 형식 그대로 비교합니다.
 
 배치는 `code_occur_time` 기간 조건으로 조회한 후보를 한 번에 메모리로 올리지 않고, `chunk` 단위로 읽어서 파싱 후 바로 `COPY` 적재합니다. 파티션 적재도 공통 `copy_insert_df`를 재사용하므로 `COPY` 대상 컬럼명을 명시해 테이블 물리 컬럼 순서와 값이 밀리지 않습니다. 현재 기본 `chunk` 크기는 `ER_DOSE_RAW` 및 `ER_DOSE_EUV` 배치 모두 `30000`이며 실행 시 조정할 수 있습니다. 조회는 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`) 기반 스트리밍으로 수행되지만, 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받으므로 운영 환경에 맞게 조정해야 합니다. 청크 단위로 처리되더라도 설비(`eq_name`)별로 이전에 파싱한 `lot_seq`와 `wafer_seq`를 기억하여 지속 적용합니다.
 
@@ -47,7 +47,7 @@ RAW/EUV processor 경유 적재에서는 청크마다 `ANALYZE`를 실행하지 
 
 DW 로그에서 `exposure_handle`이 같은 설비의 이전 값보다 `1000` 이상 커지면 테스트샷성 row로 보고 저장은 하되 `use_yn='N'`으로 표시합니다. 일반 분석에서는 `use_yn='Y'` 조건을 사용하면 되고, row 자체는 저장되므로 raw count와 parsed count 비교가 계속 어긋나는 문제를 피할 수 있습니다.
 
-`ER_DOSE_EUV`는 `mbeat.er_data_raw_euv` 기반 root cause 결과용 실행입니다. 대상 결과는 `prism_common.er_dose_euv_parsed`에 저장하며, `er_line`, `belong`, `type`은 저장하지 않습니다. `contents`에서 `dose_error_detected_in_file`, `exposure_id`, `time`, `root_cause`와 각종 EUV metric 컬럼을 파싱해 적재합니다. 컬럼명은 소문자 snake_case 기준으로 공백, `.`, `-`, `<`, `=`를 `_`로 치환하며, 파생 컬럼은 `root_cause_code`만 저장합니다.
+`ER_DOSE_EUV`는 `mbeat.er_data_raw_euv` 기반 root cause 결과용 실행입니다. 대상 결과는 `prism_common.er_dose_euv_parsed`에 저장하며, `er_line`, `belong`, `type`은 저장하지 않습니다. `contents`에서 `dose_error_detected_in_file`, `exposure_id`, `time`, `root_cause`와 각종 EUV metric 컬럼을 파싱해 적재합니다. 컬럼명은 소문자 snake_case 기준으로 공백, `.`, `-`, `<`, `=`를 `_`로 치환하며, 파생 컬럼은 `root_cause_code`만 저장합니다. 파싱 및 적재가 완료되면 `prism_common.de_trend_root_cause_daily` 서머리 테이블에 일별/설비별/원인별 발생 빈도(`frequency`)를 자동 `UPSERT` 합니다.
 
 상세 스키마와 파싱 규칙은 [ER_DOSE_ERROR.md](ER_DOSE_ERROR.md)를 기준으로 관리합니다.
 

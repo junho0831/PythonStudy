@@ -8,6 +8,7 @@
 mbeat.er_data_raw
   -> er_dose batch
   -> prism_common.er_dose_raw_parsed
+  -> prism_common.de_trend_die_yield_daily (summary)
 ```
 
 Root cause는 이 배치와 별도 흐름이다.
@@ -16,6 +17,7 @@ Root cause는 이 배치와 별도 흐름이다.
 mbeat.er_data_raw_euv
   -> contents root cause 파싱
   -> prism_common.er_dose_euv_parsed
+  -> prism_common.de_trend_root_cause_daily (summary)
 ```
 
 `prism_common.er_dose_raw_parsed`와 `prism_common.er_dose_euv_parsed`는 서로 조인하거나 매칭하지 않는다.
@@ -24,24 +26,30 @@ mbeat.er_data_raw_euv
 
 - `mbeat.er_data_raw`: Dose Error 파싱 대상 RAW. `er_date`, `er_index`가 있다.
 - `prism_common.er_dose_raw_parsed`: `er_data_raw` 파싱 결과. 현재 배치가 적재하는 대상이다.
+- `prism_common.de_trend_die_yield_daily`: DIE Yield 일별 요약 서머리 테이블 (`occur_date`, `eq_name`, `total_die`, `reject_shot`, `to_repair_die`, `repair_nok`, `total_wafer`, `reject_wafer`).
 - `mbeat.er_data_raw_euv`: Root cause source description 후보 RAW. `contents`에 `dose error detected in file`, `root cause`, `exposure id`, 각종 EUV 지표가 들어온다. `er_date`, `er_index`가 없다.
 - `prism_common.er_dose_euv_parsed`: FE 조회용 root cause 결과 테이블. `er_data_raw_euv.contents`를 파싱한 구조화 컬럼과 원문을 저장하며, `er_dose_raw_parsed`와 무관하다.
+- `prism_common.de_trend_root_cause_daily`: EUV Root Cause 일별 발생 빈도 요약 서머리 테이블 (`occur_date`, `eq_name`, `root_cause`, `frequency`).
 
 DDL:
 
 - [Parsed 테이블 생성](er_dose/sql/create_er_dose_raw_parsed.sql)
 - [RAW Parsed 스키마 마이그레이션](er_dose/sql/migrate_er_dose_raw_parsed_schema.sql)
+- [DIE Yield 서머리 테이블 생성](er_dose/sql/create_de_trend_die_yield_daily.sql)
 - [EUV Parsed 테이블 생성](er_dose/sql/create_er_dose_euv_parsed.sql)
 - [EUV Parsed 스키마 마이그레이션](er_dose/sql/migrate_er_dose_euv_parsed_schema.sql)
 - [EUV Parsed 컬럼 rename 마이그레이션](er_dose/sql/rename_er_dose_euv_parsed_columns.sql)
 - [RAW EUV 테이블 생성](er_dose/sql/create_er_data_raw_euv.sql)
+- [Root Cause 서머리 테이블 생성](er_dose/sql/create_de_trend_root_cause_daily.sql)
 
 ## ERD
 
 ```mermaid
 erDiagram
     ER_DATA_RAW ||--o{ ER_DOSE_RAW_PARSED : "parse"
+    ER_DOSE_RAW_PARSED ||--o{ DE_TREND_DIE_YIELD_DAILY : "summary"
     ER_DATA_RAW_EUV ||--o{ ER_DOSE_EUV_PARSED : "source description"
+    ER_DOSE_EUV_PARSED ||--o{ DE_TREND_ROOT_CAUSE_DAILY : "summary"
 
     ER_DATA_RAW {
         int4 er_date
@@ -138,6 +146,26 @@ erDiagram
         numeric rbdy_total_power_lf
         numeric rbdy_total_power_mf
         text software_version
+    }
+
+    DE_TREND_DIE_YIELD_DAILY {
+        date occur_date PK
+        varchar eq_name PK
+        int8 total_die
+        int8 reject_shot
+        int8 to_repair_die
+        int8 repair_nok
+        int8 total_wafer
+        int8 reject_wafer
+        timestamp created_at
+    }
+
+    DE_TREND_ROOT_CAUSE_DAILY {
+        date occur_date PK
+        varchar eq_name PK
+        varchar root_cause PK
+        int8 frequency
+        timestamp created_at
     }
 ```
 
