@@ -184,6 +184,7 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 4. 각 `chunk`를 `prism_common.er_dose_raw_parsed` 일별 파티션에 `COPY` append insert
    - 파티션 적재는 공통 `copy_insert_df`를 재사용하며, `COPY` 대상 컬럼명을 명시하므로 테이블 물리 컬럼 순서와 값이 밀리지 않는다.
 5. 해당 실행에서 insert된 파티션별로 적재 완료 후 `ANALYZE`를 1회 실행
+6. 적재된 파티션 날짜를 기준으로 DIE Yield 서머리 테이블(`prism_common.de_trend_die_yield_daily`) 및 EUV Root Cause 서머리 테이블(`prism_common.de_trend_root_cause_daily`)에 `UPSERT` 집계 업데이트 실행
 
 환경변수 기반 기본 실행에서 target date와 `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`가 모두 없으면 raw/euv 배치는 최근 2일 lookback 모드로 동작한다.
 
@@ -192,10 +193,11 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 3. 건수가 같으면 해당 날짜는 스킵
 4. 건수가 다르면 해당 날짜의 parsed 파티션을 `TRUNCATE`
 5. 원천 raw를 해당 날짜 처음부터 다시 조회해 chunk 단위로 파싱 후 insert
+6. 적재 완료 후 해당 날짜의 서머리 테이블 2종을 `UPSERT` 업데이트
 
 `ER_DOSE_EUV_TARGET_DATE`가 있으면 해당 날짜 1일만 같은 방식으로 count 비교 후 필요 시 재적재한다. `ER_DOSE_START_TIME`/`ER_DOSE_END_TIME`으로 시간 범위를 직접 지정하면 count 비교 없이 해당 범위를 처리한다.
 
-`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다. EUV source count도 parsed count와 맞추기 위해 `contents`에 `dose error detected in file:`과 `root cause`가 있는 row만 계산한다. EUV parsed 결과에는 `eq_name`, `er_type`, `code`, `code_occur_time`, `title`, `contents`, `reason_code`, `task`, `compile_script`와 root cause 파싱 컬럼만 저장한다.
+`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다. EUV source count도 parsed count와 맞추기 위해 `contents`에 `dose error detected in file:`과 `root cause`가 있는 row만 계산한다. EUV parsed 결과에는 `eq_name`, `er_type`, `code`, `code_occur_time`, `title`, `contents`, `reason_code`, `task`, `compile_script`와 root cause 파싱 컬럼만 저장하며, 적재 완료 후 `de_trend_root_cause_daily` 서머리 테이블을 `UPSERT` 업데이트한다.
 RAW와 EUV 모두 대용량 처리를 위해 전체 결과를 한 번에 메모리로 올리지 않고 `read chunk -> parse -> insert` 방식으로 반복 처리한다.
 또한, 데이터베이스 드라이버 단의 메모리 팽창을 방지하기 위해 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`)를 활성화하여 스트리밍 조회를 수행한다. 다만 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받기 때문에 운영 환경에서 조정이 필요할 수 있다.
 RAW와 EUV 모두 조회 SQL에서 `prism_dev.photo_eqp_info`의 `use_yn = 'Y'`이고 `eqp_model_name like 'NXE%'`인 `eqp_id`를 서브쿼리로 조회해 `eq_name` 필터로 사용한다. RAW의 이전 `lot_seq`, `wafer_seq` 상태 조회에도 같은 조건을 적용한다.
@@ -251,7 +253,7 @@ RAW parsed 저장 필드:
 ## LO-0050 파싱 규칙
 
 - `lot_id`: 원문 텍스트의 `lot '([^']+)'` 정규식 패턴에서 추출한다.
-- `lot_name`: 추출된 `lot_id`에서 첫 번째 `.`(점) 문자를 기준으로 이전 텍스트를 파출(`lot_id.split('.', maxsplit=1)[0]`)한다.
+- `lot_name`: 추출된 `lot_id`에서 첫 번째 `.`(점) 문자를 기준으로 이전 텍스트를 추출(`lot_id.split('.', maxsplit=1)[0]`)한다.
 - `lot_seq`: `(id=\s*\d+)` 정규식 패턴에서 우선 추출하며, 미매칭 시 기존 `_LOT_SEQ_PATTERNS` 패턴으로 폴백한다.
 
 ## 실행
