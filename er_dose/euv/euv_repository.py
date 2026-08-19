@@ -223,6 +223,64 @@ class ERDoseEUVRepository:
         partition_table = f"{ROOT_CAUSE_TABLE}_1_prt_p{target_date.replace('-', '')}"
         return self.db.execute(f"ANALYZE {partition_table}", connection=connection)
 
+    def upsert_root_cause_daily_summary(self, target_date: date | str, connection=None) -> int:
+        if isinstance(target_date, str):
+            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+
+        query = f"""
+            insert into prism_common.de_trend_root_cause_daily (
+                occur_date,
+                eq_name,
+                root_cause,
+                frequency,
+                created_at
+            )
+            with root_cause_data as (
+                select
+                    e.code_occur_time::date as occur_date,
+                    e.eq_name,
+                    replace(
+                        trim(
+                            split_part(
+                                case
+                                    when e.root_cause like '%CE & MP%' then replace(e.root_cause, 'CE & MP', 'CE @ MP')
+                                    when e.root_cause like '%l2Dx & l2Dy%' then replace(e.root_cause, 'L2Dx & L2Dy', 'L2Dx @ L2Dx')
+                                    when e.root_cause like '%E&T%' then replace(e.root_cause, 'E&T', 'E@T')
+                                    else e.root_cause
+                                end,
+                                '&',
+                                1
+                            )
+                        ),
+                        '@',
+                        '&'
+                    ) as root_cause
+                from {ROOT_CAUSE_TABLE} e
+                where e.code_occur_time >= :start_time
+                  and e.code_occur_time < :end_time
+                  and e.code = 'OSD-0200'
+                  and e.root_cause is not null
+                  and trim(e.root_cause) != ''
+            )
+            select
+                occur_date,
+                eq_name,
+                root_cause,
+                count(*) as frequency,
+                now() as created_at
+            from root_cause_data
+            where root_cause is not null
+              and root_cause != ''
+            group by occur_date, eq_name, root_cause
+            on conflict (occur_date, eq_name, root_cause)
+            do update set
+                frequency = excluded.frequency,
+                created_at = now();
+        """
+        return self.db.execute(query, params={"start_time": start_time, "end_time": end_time}, connection=connection)
+
     def transaction(self):
         return self.db.transaction()
 

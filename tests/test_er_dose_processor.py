@@ -645,5 +645,25 @@ class ERDoseProcessorTest(unittest.TestCase):
         raise AssertionError(f"{table_name} was not inserted")
 
 
+    def test_summary_tables_upsert_called(self):
+        raw_df = pd.DataFrame(
+            [
+                self._row(1, "dw-3411", SAMPLE_CONTENTS, code_occur_time=datetime(2026, 6, 15, 10, 0, 0)),
+            ]
+        )
+        db = FakeDB(raw_df)
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+        processor.run(start_time=datetime(2026, 6, 15), end_time=datetime(2026, 6, 16), chunk_size=1000)
+
+        executed_queries = [query.lower() for query, _, _ in db.executed]
+        has_die_yield = any("de_trend_die_yield_daily" in q for q in executed_queries)
+        has_root_cause = any("de_trend_root_cause_daily" in q for q in executed_queries)
+
+        self.assertTrue(has_die_yield, "de_trend_die_yield_daily UPSERT was not executed")
+        self.assertTrue(has_root_cause, "de_trend_root_cause_daily UPSERT was not executed")
+
+
 if __name__ == "__main__":
     unittest.main()
+
