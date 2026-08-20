@@ -8,6 +8,7 @@
 mbeat.er_data_raw
   -> er_dose batch
   -> prism_common.er_dose_raw_parsed
+  -> prism_common.de_trend_die_yield_daily (summary)
 ```
 
 Root cause는 이 배치와 별도 흐름이다.
@@ -16,6 +17,7 @@ Root cause는 이 배치와 별도 흐름이다.
 mbeat.er_data_raw_euv
   -> contents root cause 파싱
   -> prism_common.er_dose_euv_parsed
+  -> prism_common.de_trend_root_cause_daily (summary)
 ```
 
 `prism_common.er_dose_raw_parsed`와 `prism_common.er_dose_euv_parsed`는 서로 조인하거나 매칭하지 않는다.
@@ -24,24 +26,30 @@ mbeat.er_data_raw_euv
 
 - `mbeat.er_data_raw`: Dose Error 파싱 대상 RAW. `er_date`, `er_index`가 있다.
 - `prism_common.er_dose_raw_parsed`: `er_data_raw` 파싱 결과. 현재 배치가 적재하는 대상이다.
+- `prism_common.de_trend_die_yield_daily`: DIE Yield 일별 요약 서머리 테이블 (`occur_date`, `eq_name`, `total_die`, `reject_shot`, `to_repair_die`, `repair_nok`, `total_wafer`, `reject_wafer`).
 - `mbeat.er_data_raw_euv`: Root cause source description 후보 RAW. `contents`에 `dose error detected in file`, `root cause`, `exposure id`, 각종 EUV 지표가 들어온다. `er_date`, `er_index`가 없다.
 - `prism_common.er_dose_euv_parsed`: FE 조회용 root cause 결과 테이블. `er_data_raw_euv.contents`를 파싱한 구조화 컬럼과 원문을 저장하며, `er_dose_raw_parsed`와 무관하다.
+- `prism_common.de_trend_root_cause_daily`: EUV Root Cause 일별 발생 빈도 요약 서머리 테이블 (`occur_date`, `eq_name`, `root_cause`, `frequency`).
 
 DDL:
 
 - [Parsed 테이블 생성](er_dose/sql/create_er_dose_raw_parsed.sql)
 - [RAW Parsed 스키마 마이그레이션](er_dose/sql/migrate_er_dose_raw_parsed_schema.sql)
+- [DIE Yield 서머리 테이블 생성](er_dose/sql/create_de_trend_die_yield_daily.sql)
 - [EUV Parsed 테이블 생성](er_dose/sql/create_er_dose_euv_parsed.sql)
 - [EUV Parsed 스키마 마이그레이션](er_dose/sql/migrate_er_dose_euv_parsed_schema.sql)
 - [EUV Parsed 컬럼 rename 마이그레이션](er_dose/sql/rename_er_dose_euv_parsed_columns.sql)
 - [RAW EUV 테이블 생성](er_dose/sql/create_er_data_raw_euv.sql)
+- [Root Cause 서머리 테이블 생성](er_dose/sql/create_de_trend_root_cause_daily.sql)
 
 ## ERD
 
 ```mermaid
 erDiagram
     ER_DATA_RAW ||--o{ ER_DOSE_RAW_PARSED : "parse"
+    ER_DOSE_RAW_PARSED ||--o{ DE_TREND_DIE_YIELD_DAILY : "summary"
     ER_DATA_RAW_EUV ||--o{ ER_DOSE_EUV_PARSED : "source description"
+    ER_DOSE_EUV_PARSED ||--o{ DE_TREND_ROOT_CAUSE_DAILY : "summary"
 
     ER_DATA_RAW {
         int4 er_date
@@ -139,6 +147,26 @@ erDiagram
         numeric rbdy_total_power_mf
         text software_version
     }
+
+    DE_TREND_DIE_YIELD_DAILY {
+        date occur_date PK
+        varchar eq_name PK
+        int8 total_die
+        int8 reject_shot
+        int8 to_repair_die
+        int8 repair_nok
+        int8 total_wafer
+        int8 reject_wafer
+        timestamp created_at
+    }
+
+    DE_TREND_ROOT_CAUSE_DAILY {
+        date occur_date PK
+        varchar eq_name PK
+        varchar root_cause PK
+        int8 frequency
+        timestamp created_at
+    }
 ```
 
 Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. 실제 `varchar` 길이와 `numeric` 정밀도는 이 repo의 DDL 기준이다. `mbeat.er_data_raw`는 기존 원천 테이블이므로 배치가 읽는 컬럼만 표시한다.
@@ -156,18 +184,20 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 4. 각 `chunk`를 `prism_common.er_dose_raw_parsed` 일별 파티션에 `COPY` append insert
    - 파티션 적재는 공통 `copy_insert_df`를 재사용하며, `COPY` 대상 컬럼명을 명시하므로 테이블 물리 컬럼 순서와 값이 밀리지 않는다.
 5. 해당 실행에서 insert된 파티션별로 적재 완료 후 `ANALYZE`를 1회 실행
+6. 적재된 파티션 날짜를 기준으로 DIE Yield 서머리 테이블(`prism_common.de_trend_die_yield_daily`) 및 EUV Root Cause 서머리 테이블(`prism_common.de_trend_root_cause_daily`)에 `UPSERT` 집계 업데이트 실행
 
-환경변수 기반 기본 실행에서 target date와 `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`가 모두 없으면 raw/euv 배치는 최근 4일 lookback 모드로 동작한다.
+환경변수 기반 기본 실행에서 target date와 `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`가 모두 없으면 raw/euv 배치는 최근 2일 lookback 모드로 동작한다.
 
-1. 실행일 기준 `오늘 포함 최근 4일`을 날짜 오름차순으로 순회
+1. 실행일 기준 `오늘 포함 최근 2일`을 날짜 오름차순으로 순회
 2. 각 날짜에 대해 원천 raw 건수와 타겟 parsed 건수를 비교
 3. 건수가 같으면 해당 날짜는 스킵
 4. 건수가 다르면 해당 날짜의 parsed 파티션을 `TRUNCATE`
 5. 원천 raw를 해당 날짜 처음부터 다시 조회해 chunk 단위로 파싱 후 insert
+6. 적재 완료 후 해당 날짜의 서머리 테이블 2종을 `UPSERT` 업데이트
 
 `ER_DOSE_EUV_TARGET_DATE`가 있으면 해당 날짜 1일만 같은 방식으로 count 비교 후 필요 시 재적재한다. `ER_DOSE_START_TIME`/`ER_DOSE_END_TIME`으로 시간 범위를 직접 지정하면 count 비교 없이 해당 범위를 처리한다.
 
-`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다. EUV source count도 parsed count와 맞추기 위해 `contents`에 `dose error detected in file:`과 `root cause`가 있는 row만 계산한다. EUV parsed 결과에는 `eq_name`, `er_type`, `code`, `code_occur_time`, `title`, `contents`, `reason_code`, `task`, `compile_script`와 root cause 파싱 컬럼만 저장한다.
+`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다. EUV source count도 parsed count와 맞추기 위해 `contents`에 `dose error detected in file:`과 `root cause`가 있는 row만 계산한다. EUV parsed 결과에는 `eq_name`, `er_type`, `code`, `code_occur_time`, `title`, `contents`, `reason_code`, `task`, `compile_script`와 root cause 파싱 컬럼만 저장하며, 적재 완료 후 `de_trend_root_cause_daily` 서머리 테이블을 `UPSERT` 업데이트한다.
 RAW와 EUV 모두 대용량 처리를 위해 전체 결과를 한 번에 메모리로 올리지 않고 `read chunk -> parse -> insert` 방식으로 반복 처리한다.
 또한, 데이터베이스 드라이버 단의 메모리 팽창을 방지하기 위해 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`)를 활성화하여 스트리밍 조회를 수행한다. 다만 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받기 때문에 운영 환경에서 조정이 필요할 수 있다.
 RAW와 EUV 모두 조회 SQL에서 `prism_dev.photo_eqp_info`의 `use_yn = 'Y'`이고 `eqp_model_name like 'NXE%'`인 `eqp_id`를 서브쿼리로 조회해 `eq_name` 필터로 사용한다. RAW의 이전 `lot_seq`, `wafer_seq` 상태 조회에도 같은 조건을 적용한다.
@@ -216,9 +246,15 @@ RAW parsed 저장 필드:
 
 - 원천 기반 컬럼: `eq_name`, `code`, `code_occur_time`, `title`, `contents`
 - 파싱 컬럼: `exposure_handle`, `action_handle`, `lot_id`, `lot_name`, `lot_seq`, `wafer_seq`, `de_err`, `n_slit`
-- 사용 여부 컬럼: `use_yn`. 일반 row는 `Y`, DW exposure handle jump row는 `N`
+- 사용 여부 컬럼: `use_yn`. 일반 로그는 `Y`, `exposure_handle` 1000 이상 급증 DW 테스트샷 로그는 `N` (분석 시 `WHERE use_yn = 'Y'` 조건 활용, 원천 raw/parsed 건수 일치용 DB 보존)
 
 필드가 없으면 nullable 컬럼은 `NULL`로 저장한다.
+
+## LO-0050 파싱 규칙
+
+- `lot_id`: 원문 텍스트의 `lot '([^']+)'` 정규식 패턴에서 추출한다.
+- `lot_name`: 추출된 `lot_id`에서 첫 번째 `.`(점) 문자를 기준으로 이전 텍스트를 추출(`lot_id.split('.', maxsplit=1)[0]`)한다.
+- `lot_seq`: `(id=\s*\d+)` 정규식 패턴에서 우선 추출하며, 미매칭 시 기존 `_LOT_SEQ_PATTERNS` 패턴으로 폴백한다.
 
 ## 실행
 
@@ -228,7 +264,7 @@ EUV 날짜 변수는 `ER_DOSE_EUV_TARGET_DATE` 를 사용한다.
 
 DB 접속은 `--dsn`, 프로젝트 루트 `er_dose.properties`, `ER_DOSE_DB_DSN`, `DATABASE_URL` 순서로 사용한다.
 기본 `chunk` 크기는 `ER_DOSE_RAW` 및 `ER_DOSE_EUV` 배치 모두 `30000`이며 `--chunk-size`로 조정할 수 있다.
-RAW 기본 실행은 최근 4일 lookback 모드이며, `--lookback-days` 또는 환경변수 기반 실행의 `ER_DOSE_LOOKBACK_DAYS`로 일수를 바꿀 수 있다.
+RAW 기본 실행은 최근 2일 lookback 모드이며, `--lookback-days` 또는 환경변수 기반 실행의 `ER_DOSE_LOOKBACK_DAYS`로 일수를 바꿀 수 있다.
 
 ```bash
 python -m er_dose.run_er_dose_batch \

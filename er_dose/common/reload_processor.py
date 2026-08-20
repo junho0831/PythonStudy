@@ -33,7 +33,7 @@ class CountReloadProcessor:
 
     def run_recent_days(
         self,
-        lookback_days: int = 4,
+        lookback_days: int = 2,
         reference_date: date | None = None,
         chunk_size: int = 10000,
     ) -> None:

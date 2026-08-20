@@ -20,9 +20,6 @@
   <component name="ChangeListManager">
     <list default="true" id="9fc81ff4-5cda-47d6-ad9b-ac08b12c0f95" name="변경" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/er_dose_flow.drawio" beforeDir="false" afterPath="$PROJECT_DIR$/docs/er_dose_flow.drawio" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/er_dose/parsers/dose_error_parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/er_dose/parsers/dose_error_parser.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/test_er_dose_parser.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_er_dose_parser.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -150,7 +147,7 @@
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "ai.playground.ignore.import.keys.banner.in.settings": "true",
     "codeWithMe.voiceChat.enabledByDefault": "false",
-    "git-widget-placeholder": "master",
+    "git-widget-placeholder": "feature/query-refactor",
     "last_opened_file_path": "/Users/parkjunho/PycharmProjects/PythonStudy",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",

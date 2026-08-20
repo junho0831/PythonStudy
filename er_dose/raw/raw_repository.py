@@ -131,7 +131,6 @@ class ERDoseRepository:
         }
 
         target_codes_sql = ", ".join(f"'{code}'" for code in TARGET_CODES)
-
         raw_table = self._partition_table_name(MAIN_RAW_TABLE, start_time.date())
 
         query = f"""
@@ -150,8 +149,10 @@ class ERDoseRepository:
         """
         return query, params
 
+
     def _partition_table_name(self, table_name: str, target_date: date) -> str:
         return f'{table_name}_1_prt_p{target_date.strftime("%Y%m%d")}'
+
 
     def insert_parsed_df(self, df: pd.DataFrame, connection=None, analyze: bool = True) -> int:
         if df is None or df.empty:
@@ -212,7 +213,7 @@ class ERDoseRepository:
                 f"partition_date={target_date} "
                 f"rows={len(group_df_clean)}"
             )
-            self.db.copy_insert_to_partition_table_without_dedup(
+            self.db.copy_insert_to_partition_table(
                 schema=schema,
                 table_name=table_name,
                 target_date=target_date,
@@ -227,6 +228,127 @@ class ERDoseRepository:
     def analyze_target_partition(self, target_date: str, connection=None) -> int:
         partition_table = f"{PARSED_TABLE}_1_prt_p{target_date.replace('-', '')}"
         return self.db.execute(f"ANALYZE {partition_table}", connection=connection)
+
+    def upsert_die_yield_daily_summary(self, target_date: date | str, connection=None) -> int:
+        if isinstance(target_date, str):
+            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+
+        query = f"""
+            insert into prism_common.de_trend_die_yield_daily (
+                occur_date,
+                eq_name,
+                total_die,
+                reject_shot,
+                to_repair_die,
+                repair_nok,
+                total_wafer,
+                reject_wafer,
+                created_at
+            )
+            with target_lot_finish as (
+                select
+                    f.eq_name,
+                    f.lot_seq,
+                    f.code_occur_time as finish_time
+                from {PARSED_TABLE} f
+                where f.code_occur_time >= :start_time
+                  and f.code_occur_time < :end_time
+                  and f.code = 'LO-0051'
+                  and f.lot_seq is not null
+            ),
+            lot_process_data as (
+                select
+                    f.eq_name,
+                    f.lot_seq,
+                    max(s.code_occur_time) as start_time,
+                    f.finish_time
+                from target_lot_finish f
+                join {PARSED_TABLE} s
+                  on s.eq_name = f.eq_name
+                 and s.lot_seq = f.lot_seq
+                 and s.code = 'LO-0050'
+                 and s.code_occur_time < f.finish_time
+                group by f.eq_name, f.lot_seq, f.finish_time
+            ),
+            wafer_code_data as (
+                select
+                    p.finish_time::date as occur_date,
+                    d.eq_name,
+                    d.lot_seq,
+                    d.wafer_seq,
+                    count(*) filter (where d.code = 'DW-3411') as normal_die,
+                    count(*) filter (where d.code = 'DW-3425') as reject_shot,
+                    count(*) filter (where d.code = 'DW-343A') as to_repair_die,
+                    count(*) filter (where d.code = 'DW-343B') as repair_nok,
+                    max(case when d.code in ('DW-3425', 'DW-343B') then 1 else 0 end) as reject_yn,
+                    max(case when d.lot_seq is not null and d.wafer_seq is not null then 1 else 0 end) as valid_wafer_yn
+                from lot_process_data p
+                join {PARSED_TABLE} d
+                  on d.eq_name = p.eq_name
+                 and d.lot_seq = p.lot_seq
+                 and d.code_occur_time >= p.start_time
+                 and d.code_occur_time <= p.finish_time
+                where d.code in ('DW-3411', 'DW-3425', 'DW-343A', 'DW-343B')
+                group by p.finish_time::date, d.eq_name, d.lot_seq, d.wafer_seq
+            )
+            select
+                occur_date,
+                eq_name,
+                sum(normal_die + reject_shot + repair_nok) as total_die,
+                sum(reject_shot) as reject_shot,
+                sum(to_repair_die) as to_repair_die,
+                sum(repair_nok) as repair_nok,
+                sum(valid_wafer_yn) as total_wafer,
+                sum(case when valid_wafer_yn = 1 then reject_yn else 0 end) as reject_wafer,
+                now() as created_at
+            from wafer_code_data
+            group by occur_date, eq_name
+            on conflict (occur_date, eq_name)
+            do update set
+                total_die = excluded.total_die,
+                reject_shot = excluded.reject_shot,
+                to_repair_die = excluded.to_repair_die,
+                repair_nok = excluded.repair_nok,
+                total_wafer = excluded.total_wafer,
+                reject_wafer = excluded.reject_wafer,
+                created_at = now();
+        """
+        return self.db.execute(query, params={"start_time": start_time, "end_time": end_time}, connection=connection)
+
+    def upsert_root_cause_daily_summary(self, target_date: date | str, connection=None) -> int:
+        if isinstance(target_date, str):
+            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+
+        query = """
+            insert into prism_common.de_trend_root_cause_daily (
+                occur_date,
+                eq_name,
+                root_cause,
+                frequency,
+                created_at
+            )
+            select
+                p.code_occur_time::date as occur_date,
+                p.eq_name,
+                p.root_cause,
+                count(*) as frequency,
+                now() as created_at
+            from prism_common.er_dose_euv_parsed p
+            where p.code_occur_time >= :start_time
+              and p.code_occur_time < :end_time
+              and p.eq_name is not null
+              and p.root_cause is not null
+            group by p.code_occur_time::date, p.eq_name, p.root_cause
+            on conflict (occur_date, eq_name, root_cause)
+            do update set
+                frequency = excluded.frequency,
+                created_at = now();
+        """
+        return self.db.execute(query, params={"start_time": start_time, "end_time": end_time}, connection=connection)
 
     def transaction(self):
         return self.db.transaction()

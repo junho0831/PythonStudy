@@ -23,7 +23,7 @@ class ERDoseEUVProcessor(CountReloadProcessor):
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         chunk_size: int = 10000,
-        lookback_days: int = 4,
+        lookback_days: int = 2,
         reference_date: date | None = None,
         target_date: date | None = None,
     ) -> None:
@@ -118,9 +118,10 @@ class ERDoseEUVProcessor(CountReloadProcessor):
 
         for target_date in sorted(inserted_target_dates):
             self.repository.analyze_target_partition(target_date, connection=connection)
+            self.repository.upsert_root_cause_daily_summary(target_date, connection=connection)
             print(
                 "[ER_DOSE_EUV] "
-                f"analyze partition_date={target_date}"
+                f"summary updated (root_cause) partition_date={target_date}"
             )
 
         print(
@@ -172,3 +173,4 @@ class ERDoseEUVProcessor(CountReloadProcessor):
         if hasattr(value, "to_pydatetime"):
             return value.to_pydatetime()
         return value
+

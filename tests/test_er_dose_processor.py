@@ -96,12 +96,6 @@ class FakeDB:
         self.copy_options.append({"target_date": target_date, "analyze": analyze, "connection": connection})
         return len(df)
 
-    def copy_insert_to_partition_table_without_dedup(self, schema, table_name, target_date, df, connection=None):
-        full_table_name = f"{schema}.{table_name}"
-        self.inserted.append((full_table_name, df))
-        self.partition_inserts.append((full_table_name, target_date, df.copy()))
-        return len(df)
-
 
 class ERDoseProcessorTest(unittest.TestCase):
     def test_fetch_raw_logs_uses_general_raw_table_and_code_occur_time_range(self):
@@ -339,6 +333,31 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(parsed_insert.loc[1, "lot_id"], "HJO449.1_1747_0_MP232325")
         self.assertEqual(parsed_insert.loc[1, "lot_name"], "HJO449")
 
+    def test_run_keeps_lo_0050_lot_seq_from_updating_lot_state(self):
+        lo_contents = (
+            "lot 'HJO449.1_1747_0_MP232325' (id=3997) has started processing. "
+            "recipe='PRODUCTION/KHXA/XA106NTD_MRC', layer='XA106NTD_MRC', number of wafers=25."
+        )
+        raw_df = pd.DataFrame(
+            [
+                self._row(1, "LO-0050", lo_contents, eq_name="EQ1"),
+                self._row(2, "DW-3411", SAMPLE_CONTENTS, eq_name="EQ1"),
+            ]
+        )
+        history_df = pd.DataFrame([
+            {"eq_name": "EQ1", "lot_id": "OLD.1", "lot_name": "OLD", "lot_seq": 2111, "wafer_seq": 23}
+        ])
+        db = FakeDB(raw_df, fetch_df_result=history_df)
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+
+        with redirect_stdout(StringIO()):
+            processor.run(start_time=datetime(2026, 5, 2), end_time=datetime(2026, 5, 3))
+
+        parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
+        self.assertEqual(parsed_insert.loc[0, "lot_seq"], 3997)
+        self.assertEqual(parsed_insert.loc[1, "lot_seq"], 2111)
+
     def test_run_marks_dw_jump_rows_unused_without_skipping_insert(self):
         jump_contents = SAMPLE_CONTENTS.replace("exposure_handle:2631", "exposure_handle:3631")
         next_contents = SAMPLE_CONTENTS.replace("exposure_handle:2631", "exposure_handle:3632")
@@ -365,6 +384,28 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(parsed_insert.loc[2, "exposure_handle"], 3632)
         self.assertEqual(parsed_insert.loc[2, "use_yn"], "N")
         self.assertIn("mark_unused_test_shot", stdout.getvalue())
+
+    def test_run_does_not_fill_lot_id_across_different_eq_name(self):
+        lo_contents = (
+            "lot 'HJO449.1_1747_0_MP232325' (id=2111) has started processing. "
+            "recipe='PRODUCTION/KHXA/XA106NTD_MRC', layer='XA106NTD_MRC', number of wafers=25."
+        )
+        raw_df = pd.DataFrame(
+            [
+                self._row(1, "LO-0061", "loading reticle 'gvhbrtb0v8' for lot id 2111.", eq_name="EQ1"),
+                self._row(2, "LO-0050", lo_contents, eq_name="EQ2"),
+            ]
+        )
+        db = FakeDB(raw_df)
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+
+        with redirect_stdout(StringIO()):
+            processor.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
+
+        parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
+        self.assertTrue(pd.isna(parsed_insert.loc[0, "lot_id"]))
+        self.assertEqual(parsed_insert.loc[1, "lot_id"], "HJO449.1_1747_0_MP232325")
 
     def test_run_processes_multiple_chunks(self):
         raw_df = pd.DataFrame(
@@ -604,5 +645,25 @@ class ERDoseProcessorTest(unittest.TestCase):
         raise AssertionError(f"{table_name} was not inserted")
 
 
+    def test_summary_tables_upsert_called(self):
+        raw_df = pd.DataFrame(
+            [
+                self._row(1, "dw-3411", SAMPLE_CONTENTS, code_occur_time=datetime(2026, 6, 15, 10, 0, 0)),
+            ]
+        )
+        db = FakeDB(raw_df)
+        repo = ERDoseRepository(db)
+        processor = ERDoseProcessor(repo)
+        processor.run(start_time=datetime(2026, 6, 15), end_time=datetime(2026, 6, 16), chunk_size=1000)
+
+        executed_queries = [query.lower() for query, _, _ in db.executed]
+        has_die_yield = any("de_trend_die_yield_daily" in q for q in executed_queries)
+        has_root_cause = any("de_trend_root_cause_daily" in q for q in executed_queries)
+
+        self.assertTrue(has_die_yield, "de_trend_die_yield_daily UPSERT was not executed")
+        self.assertTrue(has_root_cause, "de_trend_root_cause_daily UPSERT was not executed")
+
+
 if __name__ == "__main__":
     unittest.main()
+

@@ -118,6 +118,15 @@ wafer_no=7"""
         parsed = parse_dose_error(raw)
         self.assertEqual(parsed.lot_id, "HJO449.1_1747_0_MP232325")
         self.assertEqual(parsed.lot_name, "HJO449")
+        self.assertEqual(parsed.lot_seq, 3997)
+
+    def test_parse_lo_0050_accepts_lowercase_code(self):
+        contents = "lot 'HJO449.1_1747_0_MP232325' (id=3997) has started processing. recipe='PRODUCTION/KHXA/XA106NTD_MRC', layer='XA106NTD_MRC', number of wafers=25."
+        raw = self._raw(contents, code="lo-0050")
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.lot_id, "HJO449.1_1747_0_MP232325")
+        self.assertEqual(parsed.lot_name, "HJO449")
+        self.assertEqual(parsed.lot_seq, 3997)
 
     def test_parse_lo_0061(self):
         contents = "loading reticle 'gvhbrtb0v8' for lot id 2111."
