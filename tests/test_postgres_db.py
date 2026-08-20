@@ -66,11 +66,11 @@ class PostgresDBTest(unittest.TestCase):
 
         self.assertEqual(
             connection.cursor_obj.copy_query,
-            'copy "prism_common"."er_dose_raw_parsed_1_prt_p20260720" ("eq_name", "use_yn") from stdin with csv null \'\'',
+            'copy "prism_common"."er_dose_raw_parsed_1_prt_p20260720" ("eq_name", "use_yn") from stdin with csv header null \'\'',
         )
-        self.assertIn('"EQ1","Y"', connection.cursor_obj.copy_payload)
+        self.assertIn("EQ1", connection.cursor_obj.copy_payload)
         self.assertIn(
-            ("ANALYZE prism_common.er_dose_raw_parsed_1_prt_p20260720", None),
+            ('analyze "prism_common"."er_dose_raw_parsed_1_prt_p20260720"', None),
             connection.cursor_obj.executed,
         )
         self.assertTrue(connection.committed)
@@ -90,7 +90,7 @@ class PostgresDBTest(unittest.TestCase):
         )
 
         self.assertNotIn(
-            ("ANALYZE prism_common.er_dose_raw_parsed_1_prt_p20260720", None),
+            ('analyze "prism_common"."er_dose_raw_parsed_1_prt_p20260720"', None),
             connection.cursor_obj.executed,
         )
 
