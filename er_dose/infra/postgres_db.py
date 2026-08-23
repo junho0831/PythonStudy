@@ -63,42 +63,38 @@ class PostgresDB:
         is_truncate: bool = False,
         connection=None,
         analyze: bool = True,
-        dedup: bool = False,
     ) -> int:
         if df is None or df.empty:
             print("insert 대상 데이터가 없습니다.")
             return 0
 
-        partition_suffix = target_date.replace("-", "")
-        partition_table = f"{table_name}_1_prt_p{partition_suffix}"
-        partition_sql = f"{self._quote_identifier(schema)}.{self._quote_identifier(partition_table)}"
-        insert_df = df.drop_duplicates() if dedup else df
-        columns_sql = ", ".join(self._quote_identifier(col) for col in insert_df.columns)
-        query = f"copy {partition_sql} ({columns_sql}) from stdin with csv header null ''"
+        partition_table = f'{schema}.{table_name}_1_prt_p{target_date.replace("-", "")}'
+        query = f"COPY {partition_table} FROM STDIN WITH CSV HEADER"
 
         buffer = StringIO()
-        insert_df.to_csv(buffer, index=False, na_rep="")
+        df.to_csv(buffer, index=False)
         buffer.seek(0)
 
         own_connection = connection is None
-        conn = connection or (self.__engine.raw_connection() if self.__engine is not None else self._connect_raw())
+        conn = connection or self.__engine.raw_connection()
+        cursor = conn.cursor()
+
         try:
-            with conn.cursor() as cursor:
-                if is_truncate:
-                    print(f"TRUNCATE TABLE {partition_sql}")
-                    cursor.execute(f"truncate table {partition_sql}")
+            if is_truncate:
+                print(f"TRUNCATE TABLE {partition_table}")
+                cursor.execute(f"TRUNCATE TABLE {partition_table}")
 
-                cursor.copy_expert(query, buffer)
-                saved_count = len(insert_df)
-                print(f"{saved_count} rows were saved.")
+            cursor.copy_expert(query, buffer)
+            saved_count = len(df)
+            print(f"{saved_count} rows were saved.")
 
-                if analyze:
-                    cursor.execute(f"analyze {partition_sql}")
+            if analyze:
+                cursor.execute(f"ANALYZE {partition_table}")
 
             if own_connection:
                 conn.commit()
 
-            print(f"data inserted into table {partition_sql} successfully.")
+            print(f"data inserted into table {partition_table} successfully.")
             return saved_count
 
         except Exception as e:
@@ -108,6 +104,7 @@ class PostgresDB:
             raise
 
         finally:
+            cursor.close()
             if own_connection:
                 conn.close()
 
