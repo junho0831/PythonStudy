@@ -182,7 +182,7 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
    - 파싱 중 `lot_seq`나 `wafer_seq`가 없을 경우, 동일 `eq_name`에서 이전에 파싱된 가장 최근 값을 사용한다. 이는 chunk의 경계를 넘어 유지된다.
    - DW 로그에서 `exposure_handle`이 같은 설비의 이전 값보다 `1000` 이상 커지면 저장은 하되 `use_yn = 'N'`으로 표시하고, 다음 비교 기준 exposure handle로는 사용하지 않는다.
 4. 각 `chunk`를 `prism_common.er_dose_raw_parsed` 일별 파티션에 `COPY` append insert
-   - 파티션 적재는 공통 `copy_insert_df`를 재사용하며, `COPY` 대상 컬럼명을 명시하므로 테이블 물리 컬럼 순서와 값이 밀리지 않는다.
+   - 파티션 적재는 공통 `copy_insert_to_partition_table`을 사용하며, DataFrame 컬럼을 테이블 물리 컬럼 순서와 동일하게 정렬한 뒤 `COPY ... FROM STDIN WITH CSV HEADER`를 실행한다.
 5. 해당 실행에서 insert된 파티션별로 적재 완료 후 `ANALYZE`를 1회 실행
 6. 적재된 파티션 날짜를 기준으로 DIE Yield 서머리 테이블(`prism_common.de_trend_die_yield_daily`) 및 EUV Root Cause 서머리 테이블(`prism_common.de_trend_root_cause_daily`)에 `UPSERT` 집계 업데이트 실행
 

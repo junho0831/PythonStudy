@@ -51,7 +51,7 @@ class FakeConnection:
 
 
 class PostgresDBTest(unittest.TestCase):
-    def test_copy_insert_to_partition_table_uses_f1a505f_copy_format_without_dedup(self):
+    def test_copy_insert_to_partition_table_keeps_duplicate_rows(self):
         db = PostgresDB(dsn="postgresql://user:password@localhost:5432/db")
         connection = FakeConnection()
         db._PostgresDB__engine = type("FakeEngine", (), {"raw_connection": lambda _: connection})()
