@@ -154,8 +154,8 @@ class ERDoseRepository:
         return f'{table_name}_1_prt_p{target_date.strftime("%Y%m%d")}'
 
 
-    def insert_parsed_df(self, df: pd.DataFrame, connection=None, analyze: bool = True) -> int:
-        if df is None or df.empty:
+    def insert_parsed_df(self, parsed_df):
+        if parsed_df is None or parsed_df.empty:
             return 0
 
         # prism_common.er_dose_raw_parsed 에 존재하는 컬럼만 적재한다.
@@ -177,7 +177,7 @@ class ERDoseRepository:
             "use_yn",
         ]
 
-        df_to_insert = df.copy()
+        df_to_insert = parsed_df.copy()
         if "created_at" not in df_to_insert.columns:
             df_to_insert["created_at"] = datetime.now()
         if "use_yn" not in df_to_insert.columns:
@@ -198,32 +198,20 @@ class ERDoseRepository:
             if column in df_to_insert.columns:
                 df_to_insert[column] = pd.to_numeric(df_to_insert[column], errors="coerce").astype("Int64")
 
-        # 파티션 날짜별로 나눠 적재한다.
-        df_to_insert["_target_date"] = (
-            pd.to_datetime(df_to_insert["code_occur_time"]).dt.strftime("%Y-%m-%d")
-        )
-
         schema, table_name = PARSED_TABLE.split(".", maxsplit=1)
-
-        inserted_count = 0
-        for target_date, group_df in df_to_insert.groupby("_target_date"):
-            group_df_clean = group_df.drop(columns=["_target_date"])
-            print(
-                "[ER_DOSE] "
-                f"partition_date={target_date} "
-                f"rows={len(group_df_clean)}"
-            )
-            self.db.copy_insert_to_partition_table(
-                schema=schema,
-                table_name=table_name,
-                target_date=target_date,
-                df=group_df_clean,
-                connection=connection,
-                analyze=analyze,
-            )
-            inserted_count += len(group_df_clean)
-
-        return inserted_count
+        target_date = pd.Timestamp(df_to_insert.iloc[0]["code_occur_time"]).strftime("%Y-%m-%d")
+        print(
+            "[ER_DOSE] "
+            f"partition_date={target_date} "
+            f"rows={len(df_to_insert)}"
+        )
+        self.db.copy_insert_to_partition_table(
+            schema=schema,
+            table_name=table_name,
+            target_date=target_date,
+            df=df_to_insert,
+        )
+        return len(df_to_insert)
 
     def analyze_target_partition(self, target_date: str, connection=None) -> int:
         partition_table = f"{PARSED_TABLE}_1_prt_p{target_date.replace('-', '')}"
