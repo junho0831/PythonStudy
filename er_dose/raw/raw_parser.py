@@ -57,10 +57,14 @@ def parse_dose_error(raw: RawErLog) -> ParsedErDoseError:
         n_slit = extract_int(contents, rf"n_slit\s*=\s*{_INT_RE}")
 
     elif code_norm.startswith("LO-"):
-        if code_norm in {"LO-0050", "LO-0051", "LO-0052"}:
+        if code_norm in {"LO-0050", "LO-0051"}:
             lot_id = extract_text(contents, r"lot\s+'([^']+)'")
             lot_name = lot_id.split(".", maxsplit=1)[0] if lot_id is not None else None
             lot_seq = extract_int(contents, rf"\(id\s*=\s*{_INT_RE}\)")
+        elif code_norm == "LO-0052":
+            lot_id = extract_text(contents, r"lot\s+(?:\(\s*name\s*=\s*)?'([^']+)'")
+            lot_name = lot_id.split(".", maxsplit=1)[0] if lot_id is not None else None
+            lot_seq = extract_int(contents, rf"(?:\(|,\s*)id\s*=\s*{_INT_RE}\)")
         if lot_seq is None:
             lot_seq = extract_first_int(contents, _LOT_SEQ_PATTERNS, minimum=1)
         wafer_seq = extract_first_int(contents, _WAFER_SEQ_PATTERNS, minimum=1)
