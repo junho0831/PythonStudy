@@ -5,7 +5,6 @@ from contextlib import redirect_stdout
 from datetime import datetime
 from io import StringIO
 from threading import Event
-from unittest.mock import patch
 
 import pandas as pd
 
@@ -89,12 +88,14 @@ class FakeDB:
         target_date,
         df,
         is_truncate=False,
+        connection=None,
+        analyze=True,
     ):
         full_table_name = f"{schema}.{table_name}"
         self.inserted.append((full_table_name, df))
         self.partition_inserts.append((full_table_name, target_date, df.copy()))
-        self.copy_options.append({"target_date": target_date})
-        return None
+        self.copy_options.append({"target_date": target_date, "analyze": analyze, "connection": connection})
+        return len(df)
 
 
 class ERDoseProcessorTest(unittest.TestCase):
@@ -689,7 +690,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertTrue(pd.isna(inserted_df.loc[1, "exposure_handle"]))
         self.assertEqual(list(inserted_df["use_yn"]), ["Y", "Y"])
 
-    def test_insert_parsed_df_uses_first_row_target_date_without_date_grouping(self):
+    def test_insert_parsed_df_groups_rows_by_target_date(self):
         db = FakeDB(pd.DataFrame())
         repo = ERDoseRepository(db)
         df = pd.DataFrame(
@@ -700,16 +701,24 @@ class ERDoseProcessorTest(unittest.TestCase):
                     "code_occur_time": datetime(2026, 6, 15, 10, 0, 0),
                     "title": "Dose warning",
                     "contents": SAMPLE_CONTENTS,
-                }
+                },
+                {
+                    "eq_name": "EQ1",
+                    "code": "DW-3411",
+                    "code_occur_time": datetime(2026, 6, 16, 10, 0, 0),
+                    "title": "Dose warning",
+                    "contents": SAMPLE_CONTENTS,
+                },
             ]
         )
 
-        with patch("er_dose.raw.raw_repository.pd.to_datetime") as to_datetime:
-            repo.insert_parsed_df(df)
+        repo.insert_parsed_df(df)
 
-        to_datetime.assert_not_called()
-        self.assertEqual(db.copy_options[0]["target_date"], "2026-06-15")
-        self.assertNotIn("_target_date", db.partition_inserts[0][2].columns)
+        self.assertEqual(
+            [option["target_date"] for option in db.copy_options],
+            ["2026-06-15", "2026-06-16"],
+        )
+        self.assertTrue(all("_target_date" not in item[2].columns for item in db.partition_inserts))
 
     def _row(self, row_no, code, contents, code_occur_time=None, eq_name="EQ1"):
         return {

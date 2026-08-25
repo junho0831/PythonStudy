@@ -41,8 +41,6 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 배치는 `code_occur_time` 기간 조건으로 조회한 후보를 한 번에 메모리로 올리지 않고, `chunk` 단위로 읽어서 파싱 후 바로 `COPY` 적재합니다. 파티션 적재는 공통 `copy_insert_to_partition_table`을 사용하며, 적재 전에 DataFrame 컬럼을 테이블의 물리 컬럼 순서와 동일하게 정렬한 뒤 `COPY ... FROM STDIN WITH CSV HEADER`를 실행합니다. 현재 기본 `chunk` 크기는 `ER_DOSE_RAW` 및 `ER_DOSE_EUV` 배치 모두 `30000`이며 실행 시 조정할 수 있습니다. 조회는 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`) 기반 스트리밍으로 수행되지만, 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받으므로 운영 환경에 맞게 조정해야 합니다. 청크 단위로 처리되더라도 설비(`eq_name`)별로 이전에 파싱한 `lot_seq`와 `wafer_seq`를 기억하여 지속 적용합니다. `ER_DOSE_RAW`은 적재 worker 1개를 사용해 이전 청크의 `COPY`와 다음 청크의 조회·파싱을 겹쳐 실행하며, 대기 중인 DataFrame은 최대 1개로 제한합니다. 이 변경의 운영 실측 결과는 [DB 스트리밍 및 RAW 성능 개선 문서](docs/db_streaming_optimization.md#5-er-dose-raw-파싱적재-파이프라인-실측)에 기록합니다.
 
-`ER_DOSE_RAW`은 기존 공통 `copy_insert_to_partition_table` 호출 형식을 유지하므로 공통 메서드의 기본 동작에 따라 각 청크 적재 시 `ANALYZE`가 실행되고, 전체 적재 완료 후에도 대상 파티션을 한 번 더 분석합니다. `ER_DOSE_EUV`는 `analyze=False`로 청크별 분석을 생략하고 전체 적재 완료 후 대상 파티션별로 `ANALYZE`를 1회 실행합니다.
-
 `ER_DOSE_RAW`와 `ER_DOSE_EUV`의 processor 기본 실행은 최근 2일 lookback 모드입니다. 실행일 기준 `오늘 포함 최근 2일`을 날짜별로 검사하고, 원천 raw 건수와 parsed 건수를 비교합니다. 건수가 같으면 해당 날짜는 스킵하고, 건수가 다르면 해당 날짜 parsed 파티션을 `TRUNCATE`한 뒤 원천 raw를 처음부터 다시 파싱해 적재합니다. `ER_DOSE_EUV_TARGET_DATE`를 명시하면 해당 날짜 1일만 같은 방식으로 검사하고, `ER_DOSE_START_TIME`/`ER_DOSE_END_TIME`를 명시하면 count 비교 없이 지정한 시간 범위를 처리합니다. EUV source count는 root cause 파싱 대상인 `contents`만 세어 parsed count와 비교합니다.
 
 DW 로그에서 `exposure_handle`이 같은 설비의 이전 값보다 `1000` 이상 커지면 테스트샷성 row로 보고 저장은 하되 `use_yn='N'`으로 표시합니다. 일반 분석에서는 `use_yn='Y'` 조건을 사용하면 되고, row 자체는 저장되므로 raw count와 parsed count 비교가 계속 어긋나는 문제를 피할 수 있습니다.
