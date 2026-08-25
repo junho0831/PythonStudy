@@ -128,6 +128,14 @@ wafer_no=7"""
         self.assertEqual(parsed.lot_name, "HJO449")
         self.assertEqual(parsed.lot_seq, 3997)
 
+    def test_parse_lo_0051_finished_lot(self):
+        contents = "lot 'HJO449.1_1747_0_MP232325' (id=3997) has finished processing."
+        raw = self._raw(contents, code="LO-0051")
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.lot_id, "HJO449.1_1747_0_MP232325")
+        self.assertEqual(parsed.lot_name, "HJO449")
+        self.assertEqual(parsed.lot_seq, 3997)
+
     def test_parse_lo_0061(self):
         contents = "loading reticle 'gvhbrtb0v8' for lot id 2111."
         raw = self._raw(contents, code="LO-0061")

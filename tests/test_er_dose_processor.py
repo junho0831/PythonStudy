@@ -138,6 +138,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertIn("'DW-343A'", db.fetch_query)
         self.assertIn("'DW-343B'", db.fetch_query)
         self.assertIn("'LO-0050'", db.fetch_query)
+        self.assertIn("'LO-0051'", db.fetch_query)
         self.assertIn("'LO-0061'", db.fetch_query)
         self.assertIn("'LO-8166'", db.fetch_query)
         self.assertIn("'LO-8167'", db.fetch_query)
