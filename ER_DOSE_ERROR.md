@@ -181,26 +181,30 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 3. 각 `chunk`의 RAW contents 파싱
    - 파싱 중 `lot_seq`나 `wafer_seq`가 없을 경우, 동일 `eq_name`에서 이전에 파싱된 가장 최근 값을 사용한다. 이는 chunk의 경계를 넘어 유지된다.
    - DW 로그에서 `exposure_handle`이 같은 설비의 이전 값보다 `1000` 이상 커지면 저장은 하되 `use_yn = 'N'`으로 표시하고, 다음 비교 기준 exposure handle로는 사용하지 않는다.
+   - RAW는 이전 chunk의 `COPY`를 적재 worker 1개에서 실행하는 동안 다음 chunk를 조회·파싱한다. 동시에 대기하는 적재 작업은 1개로 제한해 처리 순서와 메모리 사용량을 유지한다.
 4. 각 `chunk`를 `prism_common.er_dose_raw_parsed` 일별 파티션에 `COPY` append insert
-   - 파티션 적재는 공통 `copy_insert_df`를 재사용하며, `COPY` 대상 컬럼명을 명시하므로 테이블 물리 컬럼 순서와 값이 밀리지 않는다.
-5. 해당 실행에서 insert된 파티션별로 적재 완료 후 `ANALYZE`를 1회 실행
-6. 적재된 파티션 날짜를 기준으로 DIE Yield 서머리 테이블(`prism_common.de_trend_die_yield_daily`) 및 EUV Root Cause 서머리 테이블(`prism_common.de_trend_root_cause_daily`)에 `UPSERT` 집계 업데이트 실행
+   - 파티션 적재는 공통 `copy_insert_to_partition_table`을 사용하며, DataFrame 컬럼을 테이블 물리 컬럼 순서와 동일하게 정렬한 뒤 `COPY ... FROM STDIN WITH CSV HEADER`를 실행한다.
+5. 적재된 파티션 날짜를 기준으로 DIE Yield 서머리 테이블(`prism_common.de_trend_die_yield_daily`) 및 EUV Root Cause 서머리 테이블(`prism_common.de_trend_root_cause_daily`)에 `UPSERT` 집계 업데이트 실행
 
 환경변수 기반 기본 실행에서 target date와 `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`가 모두 없으면 raw/euv 배치는 최근 2일 lookback 모드로 동작한다.
 
 1. 실행일 기준 `오늘 포함 최근 2일`을 날짜 오름차순으로 순회
-2. 각 날짜에 대해 원천 raw 건수와 타겟 parsed 건수를 비교
+2. 각 날짜에 대해 원천 raw 전체 건수와 타겟 parsed 전체 건수를 비교
 3. 건수가 같으면 해당 날짜는 스킵
-4. 건수가 다르면 해당 날짜의 parsed 파티션을 `TRUNCATE`
-5. 원천 raw를 해당 날짜 처음부터 다시 조회해 chunk 단위로 파싱 후 insert
-6. 적재 완료 후 해당 날짜의 서머리 테이블 2종을 `UPSERT` 업데이트
+4. RAW/EUV 건수가 다르고 parsed 건수가 0보다 크면 원천의 `eq_name`, `code`, `code_occur_time` 기준 중복 제거 건수를 추가 계산
+5. 중복 제거 건수가 parsed 건수와 같으면 스킵
+6. 중복 제거 건수도 다르거나 parsed 건수가 0이면 해당 날짜의 parsed 파티션을 `TRUNCATE`
+7. 원천 raw를 해당 날짜 처음부터 다시 조회해 chunk 단위로 파싱 후 insert
+8. 적재 완료 후 해당 날짜의 서머리 테이블 2종을 `UPSERT` 업데이트
 
 `ER_DOSE_EUV_TARGET_DATE`가 있으면 해당 날짜 1일만 같은 방식으로 count 비교 후 필요 시 재적재한다. `ER_DOSE_START_TIME`/`ER_DOSE_END_TIME`으로 시간 범위를 직접 지정하면 count 비교 없이 해당 범위를 처리한다.
 
-`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다. EUV source count도 parsed count와 맞추기 위해 `contents`에 `dose error detected in file:`과 `root cause`가 있는 row만 계산한다. EUV parsed 결과에는 `eq_name`, `er_type`, `code`, `code_occur_time`, `title`, `contents`, `reason_code`, `task`, `compile_script`와 root cause 파싱 컬럼만 저장하며, 적재 완료 후 `de_trend_root_cause_daily` 서머리 테이블을 `UPSERT` 업데이트한다.
+`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다. EUV source count도 parsed count와 맞추기 위해 `contents`에 `dose error detected in file:`과 `root cause`가 있는 row만 계산하며, 전체 건수가 다를 때는 RAW와 동일하게 고유 이벤트 count를 추가 비교한다. EUV parsed 결과에는 `eq_name`, `er_type`, `code`, `code_occur_time`, `title`, `contents`, `reason_code`, `task`, `compile_script`와 root cause 파싱 컬럼만 저장하며, 적재 완료 후 `de_trend_root_cause_daily` 서머리 테이블을 `UPSERT` 업데이트한다.
 RAW와 EUV 모두 대용량 처리를 위해 전체 결과를 한 번에 메모리로 올리지 않고 `read chunk -> parse -> insert` 방식으로 반복 처리한다.
 또한, 데이터베이스 드라이버 단의 메모리 팽창을 방지하기 위해 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`)를 활성화하여 스트리밍 조회를 수행한다. 다만 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받기 때문에 운영 환경에서 조정이 필요할 수 있다.
 RAW와 EUV 모두 조회 SQL에서 `prism_dev.photo_eqp_info`의 `use_yn = 'Y'`이고 `eqp_model_name like 'NXE%'`인 `eqp_id`를 서브쿼리로 조회해 `eq_name` 필터로 사용한다. RAW의 이전 `lot_seq`, `wafer_seq` 상태 조회에도 같은 조건을 적용한다.
+
+RAW의 청크 파싱·적재 파이프라인 적용 전후 운영 실측값과 파싱 객체 변환 벤치마크는 [DB 스트리밍 및 RAW 성능 개선 문서](docs/db_streaming_optimization.md#5-er-dose-raw-파싱적재-파이프라인-실측)를 기준으로 관리한다.
 
 ## Root Cause 파싱 대상
 
@@ -234,6 +238,8 @@ software version : 2.0 [nxe3400 mv 250w]
   - `DW-343A`
   - `DW-343B`
   - `LO-0050`
+  - `LO-0051`
+  - `LO-0052`
   - `LO-0061`
   - `LO-8166`
   - `LO-8167`
@@ -250,11 +256,12 @@ RAW parsed 저장 필드:
 
 필드가 없으면 nullable 컬럼은 `NULL`로 저장한다.
 
-## LO-0050 파싱 규칙
+## LO-0050/LO-0051/LO-0052 파싱 규칙
 
-- `lot_id`: 원문 텍스트의 `lot '([^']+)'` 정규식 패턴에서 추출한다.
+- `LO-0050`의 lot 시작, `LO-0051`의 lot 종료, `LO-0052`의 lot 중단 메시지에 동일한 파싱 규칙을 적용한다.
+- `lot_id`: `lot '...'` 또는 `lot (name='...', id=...)` 형식에서 추출한다.
 - `lot_name`: 추출된 `lot_id`에서 첫 번째 `.`(점) 문자를 기준으로 이전 텍스트를 추출(`lot_id.split('.', maxsplit=1)[0]`)한다.
-- `lot_seq`: `(id=\s*\d+)` 정규식 패턴에서 우선 추출하며, 미매칭 시 기존 `_LOT_SEQ_PATTERNS` 패턴으로 폴백한다.
+- `lot_seq`: `(id=...)` 또는 `, id=...)` 형식에서 우선 추출하며, 미매칭 시 기존 `_LOT_SEQ_PATTERNS` 패턴으로 폴백한다.
 
 ## 실행
 

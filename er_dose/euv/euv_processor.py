@@ -173,4 +173,3 @@ class ERDoseEUVProcessor(CountReloadProcessor):
         if hasattr(value, "to_pydatetime"):
             return value.to_pydatetime()
         return value
-

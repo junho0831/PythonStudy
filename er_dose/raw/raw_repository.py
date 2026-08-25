@@ -17,6 +17,8 @@ TARGET_CODES = (
     "DW-343A",
     "DW-343B",
     "LO-0050",
+    "LO-0051",
+    "LO-0052",
     "LO-0061",
     "LO-8166",
     "LO-8167",
@@ -82,12 +84,13 @@ class ERDoseRepository:
             }
         return lot_states
 
-    def fetch_source_count(self, target_date: date) -> int:
+    def fetch_source_count(self, target_date: date, distinct: bool = False) -> int:
         start_time = datetime.combine(target_date, datetime.min.time())
         end_time = start_time + timedelta(days=1)
         target_codes_sql = ", ".join(f"'{code}'" for code in TARGET_CODES)
+        count_sql = "count(distinct (r.eq_name, r.code, r.code_occur_time))" if distinct else "count(*)"
         query = f"""
-            select count(*) as row_count
+            select {count_sql} as row_count
             from {MAIN_RAW_TABLE} r
             where r.code_occur_time >= :start_time
               and r.code_occur_time < :end_time

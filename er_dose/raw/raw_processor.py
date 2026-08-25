@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -71,6 +71,7 @@ class ERDoseProcessor(CountReloadProcessor):
         fetched_count = 0
         insert_count = 0
         inserted_target_dates: set[str] = set()
+        pending_insert = None
 
         print(
             "[ER_DOSE] "
@@ -80,52 +81,74 @@ class ERDoseProcessor(CountReloadProcessor):
             f"preloaded_eq={len(self.lot_states)}"
         )
 
-        for chunk_index, raw_df in enumerate(
-            self.repository.fetch_raw_logs_in_chunks(
-                start_time=start_time,
-                end_time=end_time,
-                chunk_size=chunk_size,
-            ),
-            start=1,
-        ):
-            chunk_fetched = int(len(raw_df))
-            fetched_count += chunk_fetched
-            print(
-                "[ER_DOSE] "
-                f"chunk={chunk_index} "
-                f"fetched={chunk_fetched} "
-                f"fetched_total={fetched_count}"
-            )
-
-            parsed_rows = self._parse_chunk(raw_df)
-            parsed_count = len(parsed_rows)
-            print(
-                "[ER_DOSE] "
-                f"chunk={chunk_index} "
-                f"parsed={parsed_count}"
-            )
-
-            if not parsed_rows:
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="er-dose-insert") as insert_executor:
+            for chunk_index, raw_df in enumerate(
+                self.repository.fetch_raw_logs_in_chunks(
+                    start_time=start_time,
+                    end_time=end_time,
+                    chunk_size=chunk_size,
+                ),
+                start=1,
+            ):
+                chunk_fetched = int(len(raw_df))
+                fetched_count += chunk_fetched
                 print(
                     "[ER_DOSE] "
                     f"chunk={chunk_index} "
-                    f"inserted=0 "
+                    f"fetched={chunk_fetched} "
+                    f"fetched_total={fetched_count}"
+                )
+
+                parsed_rows = self._parse_chunk(raw_df)
+                parsed_count = len(parsed_rows)
+                print(
+                    "[ER_DOSE] "
+                    f"chunk={chunk_index} "
+                    f"parsed={parsed_count}"
+                )
+
+                if pending_insert is not None:
+                    inserted_chunk_index, insert_future = pending_insert
+                    chunk_inserted = insert_future.result()
+                    insert_count += chunk_inserted
+                    print(
+                        "[ER_DOSE] "
+                        f"chunk={inserted_chunk_index} "
+                        f"inserted={chunk_inserted} "
+                        f"inserted_total={insert_count}"
+                    )
+                    pending_insert = None
+
+                if not parsed_rows:
+                    print(
+                        "[ER_DOSE] "
+                        f"chunk={chunk_index} "
+                        f"inserted=0 "
+                        f"inserted_total={insert_count}"
+                    )
+                    continue
+
+                parsed_df = pd.DataFrame(parsed_rows)
+                chunk_occur_time = self._normalize_datetime(parsed_df.iloc[0]["code_occur_time"])
+                if chunk_occur_time is None:
+                    raise ValueError("code_occur_time is required")
+                chunk_target_date = chunk_occur_time.date().isoformat()
+                inserted_target_dates.add(chunk_target_date)
+                pending_insert = (
+                    chunk_index,
+                    insert_executor.submit(self.repository.insert_parsed_df, parsed_df),
+                )
+
+            if pending_insert is not None:
+                inserted_chunk_index, insert_future = pending_insert
+                chunk_inserted = insert_future.result()
+                insert_count += chunk_inserted
+                print(
+                    "[ER_DOSE] "
+                    f"chunk={inserted_chunk_index} "
+                    f"inserted={chunk_inserted} "
                     f"inserted_total={insert_count}"
                 )
-                continue
-
-            parsed_df = pd.DataFrame(parsed_rows)
-            inserted_target_dates.update(
-                pd.to_datetime(parsed_df["code_occur_time"]).dt.strftime("%Y-%m-%d").dropna().unique()
-            )
-            chunk_inserted = self.repository.insert_parsed_df(parsed_df, connection=connection, analyze=False)
-            insert_count += chunk_inserted
-            print(
-                "[ER_DOSE] "
-                f"chunk={chunk_index} "
-                f"inserted={chunk_inserted} "
-                f"inserted_total={insert_count}"
-            )
 
         for target_date in sorted(inserted_target_dates):
             self.repository.analyze_target_partition(target_date, connection=connection)
@@ -142,6 +165,16 @@ class ERDoseProcessor(CountReloadProcessor):
             f"inserted={insert_count}"
         )
         return insert_count
+
+    def _reload_target_date(self, target_date: date, chunk_size: int) -> int:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+        self.repository.truncate_target_partition(target_date)
+        return self._run_window(
+            start_time=start_time,
+            end_time=end_time,
+            chunk_size=chunk_size,
+        )
 
     def _row_to_raw_log(self, row: Any) -> RawErLog:
         code_occur_time = self._normalize_datetime(row.get("code_occur_time"))
@@ -165,7 +198,7 @@ class ERDoseProcessor(CountReloadProcessor):
 
         for row in raw_df.itertuples(index=False):
             raw = self._row_to_raw_log(row._asdict())
-            parsed_dict = asdict(parse_dose_error(raw))
+            parsed_dict = vars(parse_dose_error(raw)).copy()
 
             eq_name = parsed_dict.get("eq_name")
             code = parsed_dict.get("code")
@@ -230,6 +263,7 @@ class ERDoseProcessor(CountReloadProcessor):
         if hasattr(value, "to_pydatetime"):
             return value.to_pydatetime()
         return value
+
 
 
 class ERDoseEUVProcessor(CountReloadProcessor):
@@ -393,4 +427,3 @@ class ERDoseEUVProcessor(CountReloadProcessor):
         if hasattr(value, "to_pydatetime"):
             return value.to_pydatetime()
         return value
-

@@ -14,6 +14,8 @@ DW_TARGET_CODES = (
 
 LO_TARGET_CODES = (
     "LO-0050",
+    "LO-0051",
+    "LO-0052",
     "LO-0061",
     "LO-8166",
     "LO-8167",

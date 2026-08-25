@@ -24,10 +24,11 @@ class FakeTransaction:
 
 
 class FakeDB:
-    def __init__(self, raw_df, source_counts=None, target_counts=None):
+    def __init__(self, raw_df, source_counts=None, target_counts=None, distinct_source_counts=None):
         self.raw_df = raw_df
         self.source_counts = source_counts or {}
         self.target_counts = target_counts or {}
+        self.distinct_source_counts = distinct_source_counts or {}
         self.fetch_query = None
         self.fetch_params = None
         self.executed = []
@@ -40,6 +41,10 @@ class FakeDB:
         self.fetch_query = query
         self.fetch_params = params
         lowered = query.lower()
+        if "count(distinct" in lowered:
+            target_date = params["start_time"].date()
+            row_count = self.distinct_source_counts.get(target_date, self.source_counts.get(target_date, 0))
+            return pd.DataFrame([{"row_count": row_count}])
         if "count(*) as row_count" in lowered:
             target_date = params["start_time"].date()
             if "from mbeat.er_data_raw_euv r" in lowered:
@@ -196,14 +201,19 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         repo = ERDoseEUVRepository(db)
 
         self.assertEqual(repo.fetch_source_count(target_date), 1)
+        self.assertIn("count(*) as row_count", db.fetch_query)
         self.assertIn("from mbeat.er_data_raw_euv r", db.fetch_query)
         self.assertIn("lower(r.contents) like '%dose error detected in file:%'", db.fetch_query)
         self.assertIn("lower(r.contents) like '%root cause%'", db.fetch_query)
         self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
 
         self.assertEqual(repo.fetch_target_count(target_date), 1)
+        self.assertIn("count(*) as row_count", db.fetch_query)
         self.assertIn("from prism_common.er_dose_euv_parsed p", db.fetch_query)
         self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
+
+        repo.fetch_source_count(target_date, distinct=True)
+        self.assertIn("count(distinct (r.eq_name, r.code, r.code_occur_time))", db.fetch_query)
 
     def test_run_recent_days_skips_when_counts_match(self):
         target_date = date(2026, 5, 4)
@@ -263,6 +273,7 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
             raw_df,
             source_counts={target_date: 1},
             target_counts={target_date: 0},
+            distinct_source_counts={target_date: 0},
         )
         repo = ERDoseEUVRepository(db)
         processor = ERDoseEUVProcessor(repo)
@@ -283,6 +294,27 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         self.assertIs(analyze_queries[0][2], db.connection)
         self.assertIn("lookback_done start_date=2026-05-04 end_date=2026-05-04", stdout.getvalue())
         self.assertIn("checked_dates=1 reloaded_dates=1 source_rows=1 inserted=1", stdout.getvalue())
+
+    def test_run_recent_days_skips_when_only_source_duplicates_differ(self):
+        target_date = date(2026, 5, 4)
+        db = FakeDB(
+            pd.DataFrame(),
+            source_counts={target_date: 2},
+            target_counts={target_date: 1},
+            distinct_source_counts={target_date: 1},
+        )
+        processor = ERDoseEUVProcessor(ERDoseEUVRepository(db))
+
+        with redirect_stdout(StringIO()) as stdout:
+            processor.run_recent_days(
+                lookback_days=1,
+                reference_date=target_date,
+                chunk_size=100,
+            )
+
+        self.assertEqual(db.executed, [])
+        self.assertEqual(len(db.partition_inserts), 0)
+        self.assertIn("checked_dates=1 reloaded_dates=0 source_rows=0 inserted=0", stdout.getvalue())
 
 
 if __name__ == "__main__":
