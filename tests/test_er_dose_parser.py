@@ -144,6 +144,14 @@ wafer_no=7"""
         self.assertEqual(parsed.lot_name, "jmra22")
         self.assertEqual(parsed.lot_seq, 19789)
 
+    def test_parse_lo_0052_root_error_lot(self):
+        contents = "error getting root error for lot (name='pbs3i5.1_1905_0_mc600447', id=9616)"
+        raw = self._raw(contents, code="LO-0052")
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.lot_id, "pbs3i5.1_1905_0_mc600447")
+        self.assertEqual(parsed.lot_name, "pbs3i5")
+        self.assertEqual(parsed.lot_seq, 9616)
+
     def test_parse_lo_0061(self):
         contents = "loading reticle 'gvhbrtb0v8' for lot id 2111."
         raw = self._raw(contents, code="LO-0061")
