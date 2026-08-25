@@ -5,7 +5,7 @@ from typing import Protocol
 
 
 class CountReloadRepository(Protocol):
-    def fetch_source_count(self, target_date: date) -> int:
+    def fetch_source_count(self, target_date: date, distinct: bool = False) -> int:
         ...
 
     def fetch_target_count(self, target_date: date) -> int:
@@ -58,6 +58,11 @@ class CountReloadProcessor:
             if source_count == target_count:
                 current_date += timedelta(days=1)
                 continue
+            if target_count > 0:
+                distinct_source_count = self.repository.fetch_source_count(current_date, distinct=True)
+                if distinct_source_count == target_count:
+                    current_date += timedelta(days=1)
+                    continue
 
             reloaded_dates += 1
             source_rows += source_count

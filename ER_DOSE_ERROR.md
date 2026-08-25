@@ -189,15 +189,17 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 환경변수 기반 기본 실행에서 target date와 `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`가 모두 없으면 raw/euv 배치는 최근 2일 lookback 모드로 동작한다.
 
 1. 실행일 기준 `오늘 포함 최근 2일`을 날짜 오름차순으로 순회
-2. 각 날짜에 대해 원천 raw 건수와 타겟 parsed 건수를 비교
+2. 각 날짜에 대해 원천 raw 전체 건수와 타겟 parsed 전체 건수를 비교
 3. 건수가 같으면 해당 날짜는 스킵
-4. 건수가 다르면 해당 날짜의 parsed 파티션을 `TRUNCATE`
-5. 원천 raw를 해당 날짜 처음부터 다시 조회해 chunk 단위로 파싱 후 insert
-6. 적재 완료 후 해당 날짜의 서머리 테이블 2종을 `UPSERT` 업데이트
+4. RAW/EUV 건수가 다르고 parsed 건수가 0보다 크면 원천의 `eq_name`, `code`, `code_occur_time` 기준 중복 제거 건수를 추가 계산
+5. 중복 제거 건수가 parsed 건수와 같으면 스킵
+6. 중복 제거 건수도 다르거나 parsed 건수가 0이면 해당 날짜의 parsed 파티션을 `TRUNCATE`
+7. 원천 raw를 해당 날짜 처음부터 다시 조회해 chunk 단위로 파싱 후 insert
+8. 적재 완료 후 해당 날짜의 서머리 테이블 2종을 `UPSERT` 업데이트
 
 `ER_DOSE_EUV_TARGET_DATE`가 있으면 해당 날짜 1일만 같은 방식으로 count 비교 후 필요 시 재적재한다. `ER_DOSE_START_TIME`/`ER_DOSE_END_TIME`으로 시간 범위를 직접 지정하면 count 비교 없이 해당 범위를 처리한다.
 
-`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다. EUV source count도 parsed count와 맞추기 위해 `contents`에 `dose error detected in file:`과 `root cause`가 있는 row만 계산한다. EUV parsed 결과에는 `eq_name`, `er_type`, `code`, `code_occur_time`, `title`, `contents`, `reason_code`, `task`, `compile_script`와 root cause 파싱 컬럼만 저장하며, 적재 완료 후 `de_trend_root_cause_daily` 서머리 테이블을 `UPSERT` 업데이트한다.
+`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다. EUV source count도 parsed count와 맞추기 위해 `contents`에 `dose error detected in file:`과 `root cause`가 있는 row만 계산하며, 전체 건수가 다를 때는 RAW와 동일하게 고유 이벤트 count를 추가 비교한다. EUV parsed 결과에는 `eq_name`, `er_type`, `code`, `code_occur_time`, `title`, `contents`, `reason_code`, `task`, `compile_script`와 root cause 파싱 컬럼만 저장하며, 적재 완료 후 `de_trend_root_cause_daily` 서머리 테이블을 `UPSERT` 업데이트한다.
 RAW와 EUV 모두 대용량 처리를 위해 전체 결과를 한 번에 메모리로 올리지 않고 `read chunk -> parse -> insert` 방식으로 반복 처리한다.
 또한, 데이터베이스 드라이버 단의 메모리 팽창을 방지하기 위해 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`)를 활성화하여 스트리밍 조회를 수행한다. 다만 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받기 때문에 운영 환경에서 조정이 필요할 수 있다.
 RAW와 EUV 모두 조회 SQL에서 `prism_dev.photo_eqp_info`의 `use_yn = 'Y'`이고 `eqp_model_name like 'NXE%'`인 `eqp_id`를 서브쿼리로 조회해 `eq_name` 필터로 사용한다. RAW의 이전 `lot_seq`, `wafer_seq` 상태 조회에도 같은 조건을 적용한다.

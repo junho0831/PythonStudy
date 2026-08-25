@@ -58,11 +58,12 @@ class ERDoseEUVRepository:
     def __init__(self, db: PostgresDB):
         self.db = db
 
-    def fetch_source_count(self, target_date: date) -> int:
+    def fetch_source_count(self, target_date: date, distinct: bool = False) -> int:
         start_time = datetime.combine(target_date, datetime.min.time())
         end_time = start_time + timedelta(days=1)
+        count_sql = "count(distinct (r.eq_name, r.code, r.code_occur_time))" if distinct else "count(*)"
         query = f"""
-            select count(*) as row_count
+            select {count_sql} as row_count
             from {EUV_RAW_TABLE} r
             where r.code_occur_time >= :start_time
               and r.code_occur_time < :end_time

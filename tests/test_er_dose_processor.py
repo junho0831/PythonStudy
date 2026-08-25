@@ -37,11 +37,19 @@ class FakeTransaction:
 
 
 class FakeDB:
-    def __init__(self, raw_df, fetch_df_result=None, source_counts=None, target_counts=None):
+    def __init__(
+        self,
+        raw_df,
+        fetch_df_result=None,
+        source_counts=None,
+        target_counts=None,
+        distinct_source_counts=None,
+    ):
         self.raw_df = raw_df
         self.fetch_df_result = raw_df if fetch_df_result is None else fetch_df_result
         self.source_counts = source_counts or {}
         self.target_counts = target_counts or {}
+        self.distinct_source_counts = distinct_source_counts or {}
         self.executed = []
         self.inserted = []
         self.copy_options = []
@@ -53,6 +61,10 @@ class FakeDB:
         self.fetch_query = query
         self.fetch_params = params
         lowered = query.lower()
+        if "count(distinct" in lowered:
+            target_date = params["start_time"].date()
+            row_count = self.distinct_source_counts.get(target_date, self.source_counts.get(target_date, 0))
+            return pd.DataFrame([{"row_count": row_count}])
         if "count(*) as row_count" in lowered:
             target_date = params["start_time"].date()
             if "from mbeat.er_data_raw r" in lowered:
@@ -163,12 +175,17 @@ class ERDoseProcessorTest(unittest.TestCase):
         repo = ERDoseRepository(db)
 
         repo.fetch_source_count(target_date)
+        self.assertIn("count(*) as row_count", db.fetch_query)
         self.assertIn("r.eq_name in", db.fetch_query)
         self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
 
         repo.fetch_target_count(target_date)
+        self.assertIn("count(*) as row_count", db.fetch_query)
         self.assertIn("p.eq_name in", db.fetch_query)
         self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
+
+        repo.fetch_source_count(target_date, distinct=True)
+        self.assertIn("count(distinct (r.eq_name, r.code, r.code_occur_time))", db.fetch_query)
 
     def test_fetch_latest_lot_states_filters_active_nxe_eq_names(self):
         db = FakeDB(
@@ -578,6 +595,7 @@ class ERDoseProcessorTest(unittest.TestCase):
             raw_df,
             source_counts={target_date: 1},
             target_counts={target_date: 0},
+            distinct_source_counts={target_date: 0},
         )
         repo = ERDoseRepository(db)
         processor = ERDoseProcessor(repo)
@@ -598,6 +616,27 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertIsNone(analyze_queries[0][2])
         self.assertIn("lookback_done start_date=2026-05-01 end_date=2026-05-01", stdout.getvalue())
         self.assertIn("checked_dates=1 reloaded_dates=1 source_rows=1 inserted=1", stdout.getvalue())
+
+    def test_run_recent_days_skips_when_only_source_duplicates_differ(self):
+        target_date = datetime(2026, 5, 1).date()
+        db = FakeDB(
+            pd.DataFrame(),
+            source_counts={target_date: 2},
+            target_counts={target_date: 1},
+            distinct_source_counts={target_date: 1},
+        )
+        processor = ERDoseProcessor(ERDoseRepository(db))
+
+        with redirect_stdout(StringIO()) as stdout:
+            processor.run_recent_days(
+                lookback_days=1,
+                reference_date=target_date,
+                chunk_size=100,
+            )
+
+        self.assertEqual(db.executed, [])
+        self.assertEqual(len(db.partition_inserts), 0)
+        self.assertIn("checked_dates=1 reloaded_dates=0 source_rows=0 inserted=0", stdout.getvalue())
 
     def test_run_recent_days_skips_when_counts_match_even_if_specific_row_is_missing(self):
         target_date = datetime(2026, 5, 1).date()

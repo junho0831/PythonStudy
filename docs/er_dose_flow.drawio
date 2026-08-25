@@ -7,7 +7,7 @@
         <mxCell id="title" value="ER Dose Error 적재 구조" style="text;html=1;strokeColor=none;fillColor=none;fontSize=24;fontStyle=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
           <mxGeometry x="60" y="40" width="520" height="40" as="geometry" />
         </mxCell>
-        <mxCell id="note" value="현재 기준: RAW는 수정하지 않는다. ER Dose RAW 기본 실행은 최근 2일을 날짜별로 돌며, 원천 raw 건수와 parsed 건수를 비교한다. 건수가 다르면 해당 날짜 parsed 파티션을 TRUNCATE한 뒤 원천 raw를 처음부터 다시 파싱해 insert하고, 건수가 같으면 skip한다. 명시 날짜/시간 범위 실행은 해당 범위를 chunk streaming 조회하고 code_occur_time 날짜별 파티션으로 COPY 적재한다. er_dose_euv_parsed는 parsed와 무관한 별도 FE 조회용 구조이며, prism_common.er_dose_euv_parsed를 사용한다." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
+        <mxCell id="note" value="현재 기준: ER Dose RAW/EUV 기본 실행은 최근 2일을 날짜별로 돌며, 먼저 원천 raw와 parsed의 전체 건수를 비교한다. 전체 건수가 다르고 parsed 건수가 0보다 클 때만 eq_name, code, code_occur_time 기준 중복 제거 원천 건수를 추가 계산하며, 이 건수가 parsed 건수와 같으면 skip한다. 여전히 다르거나 parsed 건수가 0이면 해당 날짜 parsed 파티션을 TRUNCATE한 뒤 원천 raw를 처음부터 다시 파싱해 insert한다. 명시 날짜/시간 범위 실행은 해당 범위를 chunk streaming 조회하고 code_occur_time 날짜별 파티션으로 COPY 적재한다. er_dose_euv_parsed는 parsed와 무관한 별도 FE 조회용 구조이며, prism_common.er_dose_euv_parsed를 사용한다." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;align=left;spacing=12;" vertex="1" parent="1">
           <mxGeometry x="60" y="95" width="840" height="60" as="geometry" />
         </mxCell>
         <mxCell id="raw" value="mbeat.er_data_raw" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
@@ -61,7 +61,7 @@
         <mxCell id="status" value="chunk 진행 로그&#10;&#10;- start_time / end_time / chunk_size 출력&#10;- chunk별 fetched / parsed / inserted 출력&#10;- partition_date별 row 수 출력&#10;- 최종 fetched / inserted summary 출력" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="1170" y="240" width="300" height="170" as="geometry" />
         </mxCell>
-        <mxCell id="append" value="적재 정책&#10;&#10;- 기본 실행: 최근 2일 확인&#10;- source/target count 비교&#10;- count 다르면 파티션 TRUNCATE&#10;- 해당 날짜 전체 재파싱 insert&#10;- count 같으면 skip&#10;- 명시 범위 실행은 COPY append insert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
+        <mxCell id="append" value="적재 정책&#10;&#10;- 기본 실행: 최근 2일 확인&#10;- source/target 전체 count 비교&#10;- count 다르고 target &gt; 0이면 중복 제거 count&#10;- 중복 제거 count 같으면 skip&#10;- target 0 또는 계속 다르면 TRUNCATE&#10;- 해당 날짜 전체 재파싱 insert&#10;- 명시 범위 실행은 COPY append insert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=14;align=left;spacing=14;" vertex="1" parent="1">
           <mxGeometry x="450" y="610" width="300" height="170" as="geometry" />
         </mxCell>
         <mxCell id="parsed" value="prism_common.er_dose_raw_parsed" style="shape=table;html=1;startSize=34;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;resizeLast=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
