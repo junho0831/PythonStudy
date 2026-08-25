@@ -60,7 +60,7 @@ WHERE r.code_occur_time >= TIMESTAMP '2026-08-13 00:00:00'
   AND r.code_occur_time <  TIMESTAMP '2026-08-14 00:00:00'
   AND r.code IN (
       'DW-3411', 'DW-3425', 'DW-343A', 'DW-343B',
-      'LO-0050', 'LO-0051', 'LO-0061', 'LO-8166', 'LO-8167',
+      'LO-0050', 'LO-0051', 'LO-0052', 'LO-0061', 'LO-8166', 'LO-8167',
       'KE-9103', 'KE-9104'
   )
   AND r.eq_name IN (

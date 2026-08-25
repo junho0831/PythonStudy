@@ -136,6 +136,14 @@ wafer_no=7"""
         self.assertEqual(parsed.lot_name, "HJO449")
         self.assertEqual(parsed.lot_seq, 3997)
 
+    def test_parse_lo_0052_aborted_lot(self):
+        contents = "lot 'jmra22.1_0435_0_mp228027' (id=19789) is aborted by user 'photo'."
+        raw = self._raw(contents, code="LO-0052")
+        parsed = parse_dose_error(raw)
+        self.assertEqual(parsed.lot_id, "jmra22.1_0435_0_mp228027")
+        self.assertEqual(parsed.lot_name, "jmra22")
+        self.assertEqual(parsed.lot_seq, 19789)
+
     def test_parse_lo_0061(self):
         contents = "loading reticle 'gvhbrtb0v8' for lot id 2111."
         raw = self._raw(contents, code="LO-0061")
