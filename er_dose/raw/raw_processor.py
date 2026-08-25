@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -199,7 +198,7 @@ class ERDoseProcessor(CountReloadProcessor):
 
         for row in raw_df.itertuples(index=False):
             raw = self._row_to_raw_log(row._asdict())
-            parsed_dict = asdict(parse_dose_error(raw))
+            parsed_dict = vars(parse_dose_error(raw)).copy()
 
             eq_name = parsed_dict.get("eq_name")
             code = parsed_dict.get("code")
