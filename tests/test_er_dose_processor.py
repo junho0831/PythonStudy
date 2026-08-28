@@ -499,6 +499,50 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertTrue(db.second_fetch_during_insert)
         self.assertEqual(len(db.partition_inserts), 2)
 
+    def test_run_prefetches_next_chunk_while_current_chunk_is_parsing(self):
+        class PrefetchFakeDB(FakeDB):
+            def __init__(self, raw_df):
+                super().__init__(raw_df)
+                self.second_fetch_started = Event()
+
+            def select_in_chunks(self, query, params=None, chunk_size=10000):
+                self.fetch_query = query
+                self.fetch_params = params
+                for start in range(0, len(self.raw_df), chunk_size):
+                    if start > 0:
+                        self.second_fetch_started.set()
+                    yield self.raw_df.iloc[start : start + chunk_size].copy()
+
+        class BlockingParseProcessor(ERDoseProcessor):
+            def __init__(self, repository, second_fetch_started):
+                super().__init__(repository)
+                self.second_fetch_started = second_fetch_started
+                self.first_parse_saw_prefetch = False
+
+            def _parse_chunk(self, raw_df):
+                if not self.first_parse_saw_prefetch:
+                    self.first_parse_saw_prefetch = self.second_fetch_started.wait(timeout=1)
+                return super()._parse_chunk(raw_df)
+
+        raw_df = pd.DataFrame(
+            [
+                self._row(1, "dw-3411", SAMPLE_CONTENTS),
+                self._row(2, "dw-3411", SAMPLE_CONTENTS),
+            ]
+        )
+        db = PrefetchFakeDB(raw_df)
+        processor = BlockingParseProcessor(ERDoseRepository(db), db.second_fetch_started)
+
+        with redirect_stdout(StringIO()):
+            processor.run(
+                start_time=datetime(2026, 5, 1),
+                end_time=datetime(2026, 5, 2),
+                chunk_size=1,
+            )
+
+        self.assertTrue(processor.first_parse_saw_prefetch)
+        self.assertEqual(len(db.partition_inserts), 2)
+
     def test_run_propagates_background_insert_error(self):
         class FailingFakeDB(FakeDB):
             def copy_insert_to_partition_table(self, *args, **kwargs):

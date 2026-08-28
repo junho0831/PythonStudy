@@ -81,15 +81,26 @@ class ERDoseProcessor(CountReloadProcessor):
             f"preloaded_eq={len(self.lot_states)}"
         )
 
-        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="er-dose-insert") as insert_executor:
-            for chunk_index, raw_df in enumerate(
-                self.repository.fetch_raw_logs_in_chunks(
-                    start_time=start_time,
-                    end_time=end_time,
-                    chunk_size=chunk_size,
-                ),
-                start=1,
-            ):
+        raw_chunks = iter(
+            self.repository.fetch_raw_logs_in_chunks(
+                start_time=start_time,
+                end_time=end_time,
+                chunk_size=chunk_size,
+            )
+        )
+
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="er-dose-fetch") as fetch_executor, \
+                ThreadPoolExecutor(max_workers=1, thread_name_prefix="er-dose-insert") as insert_executor:
+            pending_fetch = fetch_executor.submit(next, raw_chunks, None)
+            chunk_index = 0
+
+            while True:
+                raw_df = pending_fetch.result()
+                if raw_df is None:
+                    break
+
+                chunk_index += 1
+                pending_fetch = fetch_executor.submit(next, raw_chunks, None)
                 chunk_fetched = int(len(raw_df))
                 fetched_count += chunk_fetched
                 print(
@@ -100,6 +111,7 @@ class ERDoseProcessor(CountReloadProcessor):
                 )
 
                 parsed_rows = self._parse_chunk(raw_df)
+                del raw_df
                 parsed_count = len(parsed_rows)
                 print(
                     "[ER_DOSE] "
@@ -129,6 +141,7 @@ class ERDoseProcessor(CountReloadProcessor):
                     continue
 
                 parsed_df = pd.DataFrame(parsed_rows)
+                del parsed_rows
                 chunk_occur_time = self._normalize_datetime(parsed_df.iloc[0]["code_occur_time"])
                 if chunk_occur_time is None:
                     raise ValueError("code_occur_time is required")
