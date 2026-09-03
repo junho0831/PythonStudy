@@ -135,8 +135,8 @@ def test_root_cause_table_is_fe_facing_matching_table():
     assert "match_status" not in ddl
     assert "dose_error              numeric(12,7)" not in ddl
     assert "dose_error_detected_in_file text" in ddl
-    assert "min_dose_error          numeric(12,7)" in ddl
-    assert "max_dose_error          numeric(12,7)" in ddl
+    assert "min_dose_error          numeric(20,10)" in ddl
+    assert "max_dose_error          numeric(20,10)" in ddl
     assert "pulses_euv_0_6dt_tot    integer" in ddl
     assert "software_version        text" in ddl
     assert "parser_version" not in ddl
