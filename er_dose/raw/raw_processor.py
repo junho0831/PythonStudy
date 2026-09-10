@@ -22,6 +22,7 @@ EXPOSURE_HANDLE_JUMP_THRESHOLD = 1000
 
 class ERDoseProcessor(CountReloadProcessor):
     log_prefix = "[ER_DOSE]"
+    batch_name = "ER_DOSE_RAW"
 
     def __init__(self, repository: ERDoseRepository):
         self.repository = repository
@@ -57,6 +58,11 @@ class ERDoseProcessor(CountReloadProcessor):
             raise ValueError("chunk_size must be greater than 0")
 
         self._run_window(start_time=start_time, end_time=end_time, chunk_size=chunk_size)
+        self._write_equipment_count_logs(
+            start_time=start_time,
+            end_time=end_time,
+            action="PROCESSED",
+        )
 
     def _run_window(
         self,
@@ -70,7 +76,7 @@ class ERDoseProcessor(CountReloadProcessor):
 
         fetched_count = 0
         insert_count = 0
-        inserted_target_dates: set[str] = set()
+        summary_target_dates = self._window_target_dates(start_time, end_time)
         pending_insert = None
 
         print(
@@ -146,10 +152,10 @@ class ERDoseProcessor(CountReloadProcessor):
                 if chunk_occur_time is None:
                     raise ValueError("code_occur_time is required")
                 chunk_target_date = chunk_occur_time.date().isoformat()
-                inserted_target_dates.add(chunk_target_date)
+                summary_target_dates.add(chunk_target_date)
                 pending_insert = (
                     chunk_index,
-                    insert_executor.submit(self.repository.insert_parsed_df, parsed_df),
+                    insert_executor.submit(self.repository.insert_parsed_df, parsed_df, analyze=False),
                 )
 
             if pending_insert is not None:
@@ -163,10 +169,10 @@ class ERDoseProcessor(CountReloadProcessor):
                     f"inserted_total={insert_count}"
                 )
 
-        for target_date in sorted(inserted_target_dates):
+        for target_date in sorted(summary_target_dates):
             self.repository.analyze_target_partition(target_date, connection=connection)
-            self.repository.upsert_die_yield_daily_summary(target_date, connection=connection)
-            self.repository.upsert_root_cause_daily_summary(target_date, connection=connection)
+            self.repository.replace_die_yield_daily_summary(target_date, connection=connection)
+            self.repository.replace_root_cause_daily_summary(target_date, connection=connection)
             print(
                 "[ER_DOSE] "
                 f"summary updated (die_yield, root_cause) partition_date={target_date}"
@@ -281,6 +287,7 @@ class ERDoseProcessor(CountReloadProcessor):
 
 class ERDoseEUVProcessor(CountReloadProcessor):
     log_prefix = "[ER_DOSE_EUV]"
+    batch_name = "ER_DOSE_EUV"
 
     def __init__(self, repository: ERDoseEUVRepository):
         self.repository = repository
@@ -317,6 +324,11 @@ class ERDoseEUVProcessor(CountReloadProcessor):
             raise ValueError("chunk_size must be greater than 0")
 
         self._run_window(start_time=start_time, end_time=end_time, chunk_size=chunk_size)
+        self._write_equipment_count_logs(
+            start_time=start_time,
+            end_time=end_time,
+            action="PROCESSED",
+        )
 
     def _run_window(
         self,
@@ -327,7 +339,7 @@ class ERDoseEUVProcessor(CountReloadProcessor):
     ) -> int:
         fetched_count = 0
         insert_count = 0
-        inserted_target_dates: set[str] = set()
+        summary_target_dates = self._window_target_dates(start_time, end_time)
 
         print(
             "[ER_DOSE_EUV] "
@@ -371,7 +383,7 @@ class ERDoseEUVProcessor(CountReloadProcessor):
                 continue
 
             parsed_df = pd.DataFrame(parsed_rows)
-            inserted_target_dates.update(
+            summary_target_dates.update(
                 pd.to_datetime(parsed_df["code_occur_time"]).dt.strftime("%Y-%m-%d").dropna().unique()
             )
             chunk_inserted = self.repository.insert_root_causes_df(parsed_df, connection=connection, analyze=False)
@@ -383,9 +395,9 @@ class ERDoseEUVProcessor(CountReloadProcessor):
                 f"inserted_total={insert_count}"
             )
 
-        for target_date in sorted(inserted_target_dates):
+        for target_date in sorted(summary_target_dates):
             self.repository.analyze_target_partition(target_date, connection=connection)
-            self.repository.upsert_root_cause_daily_summary(target_date, connection=connection)
+            self.repository.replace_root_cause_daily_summary(target_date, connection=connection)
             print(
                 "[ER_DOSE_EUV] "
                 f"summary updated (root_cause) partition_date={target_date}"

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from datetime import date, datetime, timedelta
 from typing import Iterator
 
 import pandas as pd
 
+from er_dose.common.batch_log_repository import BatchLogRepository
 from er_dose.common.sql_filters import active_nxe_eq_filter
 from er_dose.infra.postgres_db import PostgresDB
 
@@ -27,9 +29,9 @@ TARGET_CODES = (
 )
 
 
-class ERDoseRepository:
+class ERDoseRepository(BatchLogRepository):
     def __init__(self, db: PostgresDB):
-        self.db = db
+        super().__init__(db)
 
     def fetch_raw_logs_in_chunks(
         self,
@@ -118,6 +120,53 @@ class ERDoseRepository:
         if df is None or df.empty:
             return 0
         return int(df.iloc[0]["row_count"])
+
+    def fetch_equipment_counts(self, target_date: date) -> list[dict[str, str | int]]:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+        target_codes_sql = ", ".join(f"'{code}'" for code in TARGET_CODES)
+        query = f"""
+            with source_counts as (
+                select
+                    r.eq_name,
+                    count(*) as source_count
+                from {MAIN_RAW_TABLE} r
+                where r.code_occur_time >= :start_time
+                  and r.code_occur_time < :end_time
+                  and r.code in ({target_codes_sql})
+                  and {active_nxe_eq_filter("r.eq_name")}
+                group by r.eq_name
+            ),
+            target_counts as (
+                select
+                    p.eq_name,
+                    count(*) as target_count
+                from {PARSED_TABLE} p
+                where p.code_occur_time >= :start_time
+                  and p.code_occur_time < :end_time
+                  and p.code in ({target_codes_sql})
+                  and {active_nxe_eq_filter("p.eq_name")}
+                group by p.eq_name
+            )
+            select
+                coalesce(s.eq_name, t.eq_name) as eq_name,
+                coalesce(s.source_count, 0) as source_count,
+                coalesce(t.target_count, 0) as target_count
+            from source_counts s
+            full outer join target_counts t on t.eq_name = s.eq_name
+            order by eq_name
+        """
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
+        if df is None or df.empty:
+            return []
+        return [
+            {
+                "eq_name": str(row["eq_name"]),
+                "source_count": int(row["source_count"]),
+                "target_count": int(row["target_count"]),
+            }
+            for row in df.to_dict("records")
+        ]
 
     def truncate_target_partition(self, target_date: date, connection=None) -> int:
         parsed_table = self._partition_table_name(PARSED_TABLE, target_date)
@@ -232,13 +281,17 @@ class ERDoseRepository:
         partition_table = f"{PARSED_TABLE}_1_prt_p{target_date.replace('-', '')}"
         return self.db.execute(f"ANALYZE {partition_table}", connection=connection)
 
-    def upsert_die_yield_daily_summary(self, target_date: date | str, connection=None) -> int:
+    def replace_die_yield_daily_summary(self, target_date: date | str, connection=None) -> int:
         if isinstance(target_date, str):
             target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
         start_time = datetime.combine(target_date, datetime.min.time())
         end_time = start_time + timedelta(days=1)
 
-        query = f"""
+        delete_query = """
+            delete from prism_common.de_trend_die_yield_daily
+            where occur_date = %(target_date)s
+        """
+        insert_query = f"""
             insert into prism_common.de_trend_die_yield_daily (
                 occur_date,
                 eq_name,
@@ -256,8 +309,8 @@ class ERDoseRepository:
                     f.lot_seq,
                     f.code_occur_time as finish_time
                 from {PARSED_TABLE} f
-                where f.code_occur_time >= :start_time
-                  and f.code_occur_time < :end_time
+                where f.code_occur_time >= %(start_time)s
+                  and f.code_occur_time < %(end_time)s
                   and f.code = 'LO-0051'
                   and f.lot_seq is not null
             ),
@@ -307,51 +360,27 @@ class ERDoseRepository:
                 sum(case when valid_wafer_yn = 1 then reject_yn else 0 end) as reject_wafer,
                 now() as created_at
             from wafer_code_data
-            group by occur_date, eq_name
-            on conflict (occur_date, eq_name)
-            do update set
-                total_die = excluded.total_die,
-                reject_shot = excluded.reject_shot,
-                to_repair_die = excluded.to_repair_die,
-                repair_nok = excluded.repair_nok,
-                total_wafer = excluded.total_wafer,
-                reject_wafer = excluded.reject_wafer,
-                created_at = now();
+            group by occur_date, eq_name;
         """
-        return self.db.execute(query, params={"start_time": start_time, "end_time": end_time}, connection=connection)
-
-    def upsert_root_cause_daily_summary(self, target_date: date | str, connection=None) -> int:
-        if isinstance(target_date, str):
-            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
-        start_time = datetime.combine(target_date, datetime.min.time())
-        end_time = start_time + timedelta(days=1)
-
-        query = """
-            insert into prism_common.de_trend_root_cause_daily (
-                occur_date,
-                eq_name,
-                root_cause,
-                frequency,
-                created_at
+        connection_context = nullcontext(connection) if connection is not None else self.db.transaction()
+        with connection_context as summary_connection:
+            self.db.execute(
+                delete_query,
+                params={"target_date": target_date},
+                connection=summary_connection,
             )
-            select
-                p.code_occur_time::date as occur_date,
-                p.eq_name,
-                p.root_cause,
-                count(*) as frequency,
-                now() as created_at
-            from prism_common.er_dose_euv_parsed p
-            where p.code_occur_time >= :start_time
-              and p.code_occur_time < :end_time
-              and p.eq_name is not null
-              and p.root_cause is not null
-            group by p.code_occur_time::date, p.eq_name, p.root_cause
-            on conflict (occur_date, eq_name, root_cause)
-            do update set
-                frequency = excluded.frequency,
-                created_at = now();
-        """
-        return self.db.execute(query, params={"start_time": start_time, "end_time": end_time}, connection=connection)
+            return self.db.execute(
+                insert_query,
+                params={"start_time": start_time, "end_time": end_time},
+                connection=summary_connection,
+            )
+
+    def replace_root_cause_daily_summary(self, target_date: date | str, connection=None) -> int:
+        from er_dose.euv.euv_repository import ERDoseEUVRepository
+
+        return ERDoseEUVRepository(self.db).replace_root_cause_daily_summary(
+            target_date, connection=connection,
+        )
 
     def transaction(self):
         return self.db.transaction()

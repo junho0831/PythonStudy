@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import unittest
 from contextlib import redirect_stdout
-from datetime import datetime
+from datetime import date, datetime
 from io import StringIO
 from threading import Event
 
@@ -44,12 +45,14 @@ class FakeDB:
         source_counts=None,
         target_counts=None,
         distinct_source_counts=None,
+        equipment_counts=None,
     ):
         self.raw_df = raw_df
         self.fetch_df_result = raw_df if fetch_df_result is None else fetch_df_result
         self.source_counts = source_counts or {}
         self.target_counts = target_counts or {}
         self.distinct_source_counts = distinct_source_counts or {}
+        self.equipment_counts = equipment_counts or {}
         self.executed = []
         self.inserted = []
         self.copy_options = []
@@ -61,6 +64,18 @@ class FakeDB:
         self.fetch_query = query
         self.fetch_params = params
         lowered = query.lower()
+        if "with source_counts as" in lowered and "full outer join target_counts" in lowered:
+            target_date = params["start_time"].date()
+            rows = self.equipment_counts.get(target_date)
+            if rows is not None:
+                return pd.DataFrame(rows)
+            source_count = self.source_counts.get(target_date, 0)
+            target_count = self.target_counts.get(target_date, 0)
+            if source_count == 0 and target_count == 0:
+                return pd.DataFrame(columns=["eq_name", "source_count", "target_count"])
+            return pd.DataFrame(
+                [{"eq_name": "EQ1", "source_count": source_count, "target_count": target_count}]
+            )
         if "count(distinct" in lowered:
             target_date = params["start_time"].date()
             row_count = self.distinct_source_counts.get(target_date, self.source_counts.get(target_date, 0))
@@ -189,6 +204,12 @@ class ERDoseProcessorTest(unittest.TestCase):
         repo.fetch_source_count(target_date, distinct=True)
         self.assertIn("count(distinct (r.eq_name, r.code, r.code_occur_time))", db.fetch_query)
 
+        equipment_counts = repo.fetch_equipment_counts(target_date)
+        self.assertEqual(equipment_counts, [{"eq_name": "EQ1", "source_count": 1, "target_count": 1}])
+        self.assertIn("group by r.eq_name", db.fetch_query)
+        self.assertIn("group by p.eq_name", db.fetch_query)
+        self.assertIn("full outer join target_counts", db.fetch_query)
+
     def test_fetch_latest_lot_states_filters_active_nxe_eq_names(self):
         db = FakeDB(
             pd.DataFrame(),
@@ -282,8 +303,12 @@ class ERDoseProcessorTest(unittest.TestCase):
         with redirect_stdout(StringIO()):
             processor.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
 
-        delete_queries = [query for query, _, _ in db.executed if query.strip().lower().startswith("delete")]
-        self.assertEqual(delete_queries, [])
+        parsed_delete_queries = [
+            query
+            for query, _, _ in db.executed
+            if query.strip().lower().startswith("delete") and "er_dose_raw_parsed" in query.lower()
+        ]
+        self.assertEqual(parsed_delete_queries, [])
         parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
         self.assertNotIn("parser_version", parsed_insert.columns)
         self.assertNotIn("parsing_status", parsed_insert.columns)
@@ -450,6 +475,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(len(db.inserted[0][1]), 2)
         self.assertEqual(len(db.inserted[1][1]), 1)
         self.assertEqual([option["target_date"] for option in db.copy_options], ["2026-05-01", "2026-05-01"])
+        self.assertTrue(all(not option["analyze"] for option in db.copy_options))
         analyze_queries = [query for query, _, _ in db.executed if query == "ANALYZE prism_common.er_dose_raw_parsed_1_prt_p20260501"]
         self.assertEqual(len(analyze_queries), 1)
 
@@ -597,7 +623,8 @@ class ERDoseProcessorTest(unittest.TestCase):
                 chunk_size=100,
             )
 
-        self.assertEqual(db.executed, [])
+        non_log_queries = [item for item in db.executed if "batch_event_log" not in item[0].lower()]
+        self.assertEqual(non_log_queries, [])
         self.assertEqual(len(db.partition_inserts), 0)
         self.assertIn("lookback_done start_date=2026-05-01 end_date=2026-05-02", stdout.getvalue())
         self.assertIn("checked_dates=2 reloaded_dates=0 source_rows=0 inserted=0", stdout.getvalue())
@@ -627,7 +654,8 @@ class ERDoseProcessorTest(unittest.TestCase):
                 chunk_size=100,
             )
 
-        self.assertEqual(db.executed, [])
+        non_log_queries = [item for item in db.executed if "batch_event_log" not in item[0].lower()]
+        self.assertEqual(non_log_queries, [])
         self.assertEqual(len(db.partition_inserts), 0)
         self.assertIn("lookback_done start_date=2026-05-01 end_date=2026-05-02", stdout.getvalue())
         self.assertIn("checked_dates=2 reloaded_dates=0 source_rows=0 inserted=0", stdout.getvalue())
@@ -680,9 +708,40 @@ class ERDoseProcessorTest(unittest.TestCase):
                 chunk_size=100,
             )
 
-        self.assertEqual(db.executed, [])
+        non_log_queries = [item for item in db.executed if "batch_event_log" not in item[0].lower()]
+        self.assertEqual(non_log_queries, [])
         self.assertEqual(len(db.partition_inserts), 0)
         self.assertIn("checked_dates=1 reloaded_dates=0 source_rows=0 inserted=0", stdout.getvalue())
+
+    def test_run_recent_days_writes_equipment_counts_to_common_log(self):
+        target_date = date(2026, 5, 1)
+        db = FakeDB(
+            pd.DataFrame(),
+            source_counts={target_date: 5},
+            target_counts={target_date: 5},
+            equipment_counts={
+                target_date: [
+                    {"eq_name": "EQ1", "source_count": 3, "target_count": 3},
+                    {"eq_name": "EQ2", "source_count": 2, "target_count": 2},
+                ]
+            },
+        )
+        processor = ERDoseProcessor(ERDoseRepository(db))
+
+        with redirect_stdout(StringIO()):
+            processor.run_recent_days(lookback_days=1, reference_date=target_date)
+
+        log_queries = [item for item in db.executed if "batch_event_log" in item[0].lower()]
+        self.assertEqual(len(log_queries), 1)
+        params = log_queries[0][1]
+        data = json.loads(params["data"])
+        self.assertEqual(params["batch_name"], "ER_DOSE_RAW")
+        self.assertEqual(params["target_date"], target_date)
+        self.assertEqual(params["event_type"], "EQUIPMENT_COUNT")
+        self.assertEqual(data["source_count"], 5)
+        self.assertEqual(data["target_count"], 5)
+        self.assertTrue(data["matched"])
+        self.assertEqual(data["equipment_counts"][1]["eq_name"], "EQ2")
 
     def test_run_recent_days_skips_when_counts_match_even_if_specific_row_is_missing(self):
         target_date = datetime(2026, 5, 1).date()
@@ -822,7 +881,7 @@ class ERDoseProcessorTest(unittest.TestCase):
         raise AssertionError(f"{table_name} was not inserted")
 
 
-    def test_summary_tables_upsert_called(self):
+    def test_summary_tables_delete_then_insert(self):
         raw_df = pd.DataFrame(
             [
                 self._row(1, "dw-3411", SAMPLE_CONTENTS, code_occur_time=datetime(2026, 6, 15, 10, 0, 0)),
@@ -833,12 +892,28 @@ class ERDoseProcessorTest(unittest.TestCase):
         processor = ERDoseProcessor(repo)
         processor.run(start_time=datetime(2026, 6, 15), end_time=datetime(2026, 6, 16), chunk_size=1000)
 
-        executed_queries = [query.lower() for query, _, _ in db.executed]
-        has_die_yield = any("de_trend_die_yield_daily" in q for q in executed_queries)
-        has_root_cause = any("de_trend_root_cause_daily" in q for q in executed_queries)
+        die_yield_queries = [
+            item for item in db.executed if "de_trend_die_yield_daily" in item[0].lower()
+        ]
+        root_cause_queries = [
+            item for item in db.executed if "de_trend_root_cause_daily" in item[0].lower()
+        ]
 
-        self.assertTrue(has_die_yield, "de_trend_die_yield_daily UPSERT was not executed")
-        self.assertTrue(has_root_cause, "de_trend_root_cause_daily UPSERT was not executed")
+        self.assertEqual(len(die_yield_queries), 2)
+        self.assertTrue(die_yield_queries[0][0].strip().lower().startswith("delete"))
+        self.assertTrue(die_yield_queries[1][0].strip().lower().startswith("insert"))
+        self.assertEqual(die_yield_queries[0][1]["target_date"], date(2026, 6, 15))
+        self.assertNotIn("on conflict", die_yield_queries[1][0].lower())
+        self.assertIs(die_yield_queries[0][2], db.connection)
+        self.assertIs(die_yield_queries[1][2], db.connection)
+
+        self.assertEqual(len(root_cause_queries), 2)
+        self.assertTrue(root_cause_queries[0][0].strip().lower().startswith("delete"))
+        self.assertTrue(root_cause_queries[1][0].strip().lower().startswith("insert"))
+        self.assertEqual(root_cause_queries[0][1]["target_date"], date(2026, 6, 15))
+        self.assertNotIn("on conflict", root_cause_queries[1][0].lower())
+        self.assertIs(root_cause_queries[0][2], db.connection)
+        self.assertIs(root_cause_queries[1][2], db.connection)
 
 
 if __name__ == "__main__":

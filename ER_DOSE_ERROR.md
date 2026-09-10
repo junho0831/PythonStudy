@@ -30,6 +30,7 @@ mbeat.er_data_raw_euv
 - `mbeat.er_data_raw_euv`: Root cause source description 후보 RAW. `contents`에 `dose error detected in file`, `root cause`, `exposure id`, 각종 EUV 지표가 들어온다. `er_date`, `er_index`가 없다.
 - `prism_common.er_dose_euv_parsed`: FE 조회용 root cause 결과 테이블. `er_data_raw_euv.contents`를 파싱한 구조화 컬럼과 원문을 저장하며, `er_dose_raw_parsed`와 무관하다.
 - `prism_common.de_trend_root_cause_daily`: EUV Root Cause 일별 발생 빈도 요약 서머리 테이블 (`occur_date`, `eq_name`, `root_cause`, `frequency`).
+- `mbeat.batch_event_log`: 여러 배치가 공통으로 사용하는 이벤트 로그 테이블. `batch_name`, `target_date`, `event_type`, `message`와 가변 상세 데이터인 `data jsonb`를 저장한다.
 
 DDL:
 
@@ -184,7 +185,7 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
    - RAW는 이전 chunk의 `COPY`를 적재 worker 1개에서 실행하는 동안 다음 chunk를 조회·파싱한다. 동시에 대기하는 적재 작업은 1개로 제한해 처리 순서와 메모리 사용량을 유지한다.
 4. 각 `chunk`를 `prism_common.er_dose_raw_parsed` 일별 파티션에 `COPY` append insert
    - 파티션 적재는 공통 `copy_insert_to_partition_table`을 사용하며, DataFrame 컬럼을 테이블 물리 컬럼 순서와 동일하게 정렬한 뒤 `COPY ... FROM STDIN WITH CSV HEADER`를 실행한다.
-5. 적재된 파티션 날짜를 기준으로 DIE Yield 서머리 테이블(`prism_common.de_trend_die_yield_daily`) 및 EUV Root Cause 서머리 테이블(`prism_common.de_trend_root_cause_daily`)에 `UPSERT` 집계 업데이트 실행
+5. 적재된 파티션 날짜를 기준으로 DIE Yield 서머리 테이블(`prism_common.de_trend_die_yield_daily`) 및 EUV Root Cause 서머리 테이블(`prism_common.de_trend_root_cause_daily`)의 기존 데이터를 삭제한 뒤 집계 결과를 다시 INSERT
 
 환경변수 기반 기본 실행에서 target date와 `ER_DOSE_START_TIME`, `ER_DOSE_END_TIME`가 모두 없으면 raw/euv 배치는 최근 2일 lookback 모드로 동작한다.
 
@@ -195,11 +196,12 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 5. 중복 제거 건수가 parsed 건수와 같으면 스킵
 6. 중복 제거 건수도 다르거나 parsed 건수가 0이면 해당 날짜의 parsed 파티션을 `TRUNCATE`
 7. 원천 raw를 해당 날짜 처음부터 다시 조회해 chunk 단위로 파싱 후 insert
-8. 적재 완료 후 해당 날짜의 서머리 테이블 2종을 `UPSERT` 업데이트
+8. 적재 완료 후 해당 날짜의 서머리 테이블 2종을 DELETE 후 INSERT
+9. 최종 원천/parsed 건수를 설비별로 집계해 `batch_event_log`에 `EQUIPMENT_COUNT` 이벤트 한 행으로 기록
 
 `ER_DOSE_EUV_TARGET_DATE`가 있으면 해당 날짜 1일만 같은 방식으로 count 비교 후 필요 시 재적재한다. `ER_DOSE_START_TIME`/`ER_DOSE_END_TIME`으로 시간 범위를 직접 지정하면 count 비교 없이 해당 범위를 처리한다.
 
-`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다. EUV source count도 parsed count와 맞추기 위해 `contents`에 `dose error detected in file:`과 `root cause`가 있는 row만 계산하며, 전체 건수가 다를 때는 RAW와 동일하게 고유 이벤트 count를 추가 비교한다. EUV parsed 결과에는 `eq_name`, `er_type`, `code`, `code_occur_time`, `title`, `contents`, `reason_code`, `task`, `compile_script`와 root cause 파싱 컬럼만 저장하며, 적재 완료 후 `de_trend_root_cause_daily` 서머리 테이블을 `UPSERT` 업데이트한다.
+`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, root cause 형식의 `contents`만 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다. EUV source count도 parsed count와 맞추기 위해 `contents`에 `dose error detected in file:`과 `root cause`가 있는 row만 계산하며, 전체 건수가 다를 때는 RAW와 동일하게 고유 이벤트 count를 추가 비교한다. EUV parsed 결과에는 `eq_name`, `er_type`, `code`, `code_occur_time`, `title`, `contents`, `reason_code`, `task`, `compile_script`와 root cause 파싱 컬럼만 저장하며, 적재 완료 후 `de_trend_root_cause_daily`에서 해당 날짜 데이터를 삭제하고 집계 결과를 다시 INSERT 한다.
 RAW와 EUV 모두 대용량 처리를 위해 전체 결과를 한 번에 메모리로 올리지 않고 `read chunk -> parse -> insert` 방식으로 반복 처리한다.
 또한, 데이터베이스 드라이버 단의 메모리 팽창을 방지하기 위해 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`)를 활성화하여 스트리밍 조회를 수행한다. 다만 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받기 때문에 운영 환경에서 조정이 필요할 수 있다.
 RAW와 EUV 모두 조회 SQL에서 `prism_dev.photo_eqp_info`의 `use_yn = 'Y'`이고 `eqp_model_name like 'NXE%'`인 `eqp_id`를 서브쿼리로 조회해 `eq_name` 필터로 사용한다. RAW의 이전 `lot_seq`, `wafer_seq` 상태 조회에도 같은 조건을 적용한다.
@@ -307,3 +309,5 @@ python -m er_dose.run_er_dose_batch \
   --chunk-size 30000 \
   --dsn 'postgresql://user:password@host:5432/dbname'
 ```
+
+서머리 교체는 날짜별 DELETE와 INSERT를 같은 트랜잭션에서 수행합니다. 처리 범위에 포함된 날짜는 적재 결과가 0건이어도 집계를 다시 계산해 이전 서머리를 제거합니다. RAW와 EUV의 Root Cause 집계는 동일한 EUV 집계 로직(OSD-0200 필터 및 원인명 정규화)을 사용합니다. EUV 파서는 운영 로그의 `Root clause`, `Exposesue I D` 표기도 허용하며 원천 건수 집계에도 `Root clause`를 포함합니다.

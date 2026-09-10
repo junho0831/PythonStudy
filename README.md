@@ -43,9 +43,11 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 `ER_DOSE_RAW`와 `ER_DOSE_EUV`의 processor 기본 실행은 최근 2일 lookback 모드입니다. 실행일 기준 `오늘 포함 최근 2일`을 날짜별로 검사하고, 먼저 원천 raw와 parsed의 전체 건수를 비교합니다. 두 배치 모두 전체 건수가 다르고 parsed 건수가 0보다 클 때만 원천에서 `(eq_name, code, code_occur_time)`이 같은 행을 중복 제거한 건수를 한 번 더 계산합니다. 이 건수가 parsed 건수와 같으면 중복으로 인한 차이이므로 스킵하고, 여전히 다르거나 parsed 건수가 0이면 해당 날짜 parsed 파티션을 `TRUNCATE`한 뒤 원천 raw를 처음부터 다시 파싱해 적재합니다. `ER_DOSE_EUV_TARGET_DATE`를 명시하면 해당 날짜 1일만 같은 방식으로 검사하고, `ER_DOSE_START_TIME`/`ER_DOSE_END_TIME`를 명시하면 count 비교 없이 지정한 시간 범위를 처리합니다. EUV source count는 root cause 파싱 대상인 `contents`만 세어 parsed count와 비교합니다.
 
+날짜별 검사 또는 처리가 끝나면 RAW/EUV 모두 `mbeat.batch_event_log`에 `EQUIPMENT_COUNT` 이벤트를 한 행씩 추가합니다. `batch_name`, `target_date`, `event_type`은 검색 컬럼으로 저장하고, 원천/parsed 전체 건수와 설비별 건수 목록은 `data jsonb`에 저장합니다. 운영 배포 전 [create_batch_event_log.sql](er_dose/sql/create_batch_event_log.sql)을 먼저 적용해야 합니다.
+
 DW 로그에서 `exposure_handle`이 같은 설비의 이전 값보다 `1000` 이상 커지면 테스트샷성 row로 보고 저장은 하되 `use_yn='N'`으로 표시합니다. 일반 분석에서는 `use_yn='Y'` 조건을 사용하면 되고, row 자체는 저장되므로 raw count와 parsed count 비교가 계속 어긋나는 문제를 피할 수 있습니다.
 
-`ER_DOSE_EUV`는 `mbeat.er_data_raw_euv` 기반 root cause 결과용 실행입니다. 대상 결과는 `prism_common.er_dose_euv_parsed`에 저장하며, `er_line`, `belong`, `type`은 저장하지 않습니다. `contents`에서 `dose_error_detected_in_file`, `exposure_id`, `time`, `root_cause`와 각종 EUV metric 컬럼을 파싱해 적재합니다. 컬럼명은 소문자 snake_case 기준으로 공백, `.`, `-`, `<`, `=`를 `_`로 치환하며, 파생 컬럼은 `root_cause_code`만 저장합니다. 파싱 및 적재가 완료되면 `prism_common.de_trend_root_cause_daily` 서머리 테이블에 일별/설비별/원인별 발생 빈도(`frequency`)를 자동 `UPSERT` 합니다.
+`ER_DOSE_EUV`는 `mbeat.er_data_raw_euv` 기반 root cause 결과용 실행입니다. 대상 결과는 `prism_common.er_dose_euv_parsed`에 저장하며, `er_line`, `belong`, `type`은 저장하지 않습니다. `contents`에서 `dose_error_detected_in_file`, `exposure_id`, `time`, `root_cause`와 각종 EUV metric 컬럼을 파싱해 적재합니다. 컬럼명은 소문자 snake_case 기준으로 공백, `.`, `-`, `<`, `=`를 `_`로 치환하며, 파생 컬럼은 `root_cause_code`만 저장합니다. 파싱 및 적재가 완료되면 `prism_common.de_trend_root_cause_daily`에서 해당 날짜 데이터를 삭제한 뒤 일별/설비별/원인별 발생 빈도(`frequency`)를 다시 INSERT 합니다.
 
 상세 스키마와 파싱 규칙은 [ER_DOSE_ERROR.md](ER_DOSE_ERROR.md)를 기준으로 관리합니다.
 
@@ -385,3 +387,5 @@ python3 -m er_dose.run_er_dose_batch \
 - PostgreSQL 전환
 
 자세한 매칭 규칙은 [/Users/parkjunho/PycharmProjects/PythonStudy/IMAGE_TEXT_MATCHING.md](/Users/parkjunho/PycharmProjects/PythonStudy/IMAGE_TEXT_MATCHING.md) 를 참고하면 됩니다.
+
+서머리 교체는 날짜별 DELETE와 INSERT를 같은 트랜잭션에서 수행합니다. 처리 범위에 포함된 날짜는 적재 결과가 0건이어도 집계를 다시 계산해 이전 서머리를 제거합니다. RAW와 EUV의 Root Cause 집계는 동일한 EUV 집계 로직(OSD-0200 필터 및 원인명 정규화)을 사용합니다. EUV 파서는 운영 로그의 `Root clause`, `Exposesue I D` 표기도 허용하며 원천 건수 집계에도 `Root clause`를 포함합니다.

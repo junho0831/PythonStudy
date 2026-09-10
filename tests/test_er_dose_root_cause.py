@@ -72,7 +72,8 @@ def test_parse_euv_root_cause_tolerates_production_label_typos():
         tzinfo=timezone(timedelta(hours=9)),
     )
     assert parsed.exposure_length == Decimal("0.2338")
-    assert parsed.dose_error == Decimal("-1.71")
-    assert parsed.pulses_euv_lt_0_6dt_tot == 3
+    assert parsed.min_dose_error == Decimal("-1.71")
+    assert parsed.max_dose_error == Decimal("-1.71")
+    assert parsed.pulses_euv_0_6dt_tot == 3
     assert parsed.fed_pulses == 3
     assert parsed.software_version == "3.0"

@@ -20,16 +20,16 @@ def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
     if not contents:
         return None
     normalized = normalize_multiline_text(contents)
-    if "dose error detected in file:" not in normalized.lower() or "root cause" not in normalized.lower():
+    if "dose error detected in file:" not in normalized.lower() or not any(label in normalized.lower() for label in ("root cause", "root clause")):
         return None
 
-    root_cause_message = extract_text(normalized, r"\broot\s+cause\s*:\s*(.+)", trim_trailing_period=True)
+    root_cause_message = extract_text(normalized, r"\broot\s+(?:cause|clause)\s*:\s*(.+)", trim_trailing_period=True)
     min_dose_error = extract_decimal(normalized, r"\bmin\.\s*dose\s+error\s*:\s*" + DECIMAL_RE)
     max_dose_error = extract_decimal(normalized, r"\bmax\.\s*dose\s+error\s*:\s*" + DECIMAL_RE)
 
     return ParsedEuvRootCause(
         source_file_name=extract_text(normalized, r"\bdose\s+error\s+detected\s+in\s+file\s*:\s*(.+?)\s*\.?\s*$", trim_trailing_period=True),
-        source_exposure_id=extract_int(normalized, r"\bexposure\s+id\s*:\s*" + INT_RE),
+        source_exposure_id=extract_int(normalized, r"\b(?:exposure|exposesue)\s+i\s*d\s*:\s*" + INT_RE),
         source_code_occur_time=extract_datetime_isoformat(normalized, r"\btime\s*:\s*([^\s]+)"),
         root_cause_code=to_snake_code(root_cause_message),
         root_cause_message=root_cause_message,
