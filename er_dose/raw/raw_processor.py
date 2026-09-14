@@ -8,7 +8,6 @@ from typing import Any
 import pandas as pd
 
 from er_dose.common.reload_processor import CountReloadProcessor
-from er_dose.common.batch_log_repository import write_equipment_count_log
 from er_dose.raw.raw_base import RawErLog
 from er_dose.raw.raw_parser import parse_dose_error
 from er_dose.raw.raw_repository import ERDoseRepository
@@ -179,10 +178,10 @@ class ERDoseProcessor(CountReloadProcessor):
                 self.repository.insert_root_cause_daily_summary, start_time, end_time,
             )
             raw_count_future = executor.submit(
-                write_equipment_count_log, self.repository, self.batch_name, start_time, end_time,
+                self._write_equipment_count_log, self.repository, self.batch_name, start_time, end_time,
             )
             euv_count_future = executor.submit(
-                write_equipment_count_log, ERDoseEUVRepository(self.repository.db),
+                self._write_equipment_count_log, ERDoseEUVRepository(self.repository.db),
                 "ER_DOSE_EUV", start_time, end_time,
             )
             for future in (yield_future, root_future, raw_count_future, euv_count_future):
@@ -195,6 +194,22 @@ class ERDoseProcessor(CountReloadProcessor):
             f"inserted={insert_count}"
         )
         return insert_count
+
+    def _write_equipment_count_log(
+        self,
+        repository,
+        batch_name: str,
+        start_time: datetime,
+        end_time: datetime,
+    ) -> None:
+        counts = repository.fetch_equipment_counts(start_time, end_time)
+        repository.insert_batch_log(
+            batch_name=batch_name,
+            target_date=start_time.date(),
+            event_type="EQUIPMENT_COUNT",
+            message=f"equipment counts start_time={start_time.isoformat()} end_time={end_time.isoformat()}",
+            data={"equipment_counts": counts["equipment_counts"]},
+        )
 
     def _reload_target_date(self, target_date: date, chunk_size: int) -> int:
         start_time = datetime.combine(target_date, datetime.min.time())

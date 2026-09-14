@@ -744,10 +744,8 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(params["batch_name"], "ER_DOSE_RAW")
         self.assertEqual(params["target_date"], target_date)
         self.assertEqual(params["event_type"], "EQUIPMENT_COUNT")
-        self.assertEqual(data["source_count"], 5)
-        self.assertEqual(data["target_count"], 5)
-        self.assertTrue(data["matched"])
-        self.assertEqual(data["equipment_counts"][1]["eq_name"], "EQ2")
+        self.assertEqual(data["equipment_counts"][0], {"eq_name": "EQ1", "source_count": 3, "target_count": 3})
+        self.assertEqual(data["equipment_counts"][1], {"eq_name": "EQ2", "source_count": 2, "target_count": 2})
 
     def test_run_recent_days_skips_when_counts_match_even_if_specific_row_is_missing(self):
         target_date = datetime(2026, 5, 1).date()

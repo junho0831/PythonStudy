@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from datetime import date
 from typing import Any
 
 from er_dose.infra.postgres_db import PostgresDB
@@ -42,24 +42,4 @@ def insert_batch_log(
             "message": message,
             "data": json.dumps(data, ensure_ascii=False, default=str),
         },
-    )
-
-
-def write_equipment_count_log(
-    repository,
-    batch_name: str,
-    start_time: datetime,
-    end_time: datetime,
-) -> None:
-    data = repository.fetch_equipment_counts(start_time, end_time)
-    data.update(action="STATISTICS_RECORDED", start_time=start_time, end_time=end_time)
-    repository.insert_batch_log(
-        batch_name=batch_name,
-        target_date=start_time.date(),
-        event_type="EQUIPMENT_COUNT",
-        message=(
-            f"equipment count source={data['source_count']} "
-            f"target={data['target_count']} matched={str(data['matched']).lower()}"
-        ),
-        data=data,
     )

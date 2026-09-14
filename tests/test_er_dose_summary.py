@@ -38,7 +38,7 @@ def test_empty_window_includes_each_day_but_excludes_end_midnight():
     assert windows == [{'start_time': datetime(2026, 5, 1, 12), 'end_time': datetime(2026, 5, 3)}]
 
 
-def test_summary_failure_still_allows_statistics_but_not_raw_success(capsys):
+def test_summary_failure_can_leave_statistics_but_not_raw_success(capsys):
     import json
 
     db = FakeDB(pd.DataFrame())
@@ -49,7 +49,7 @@ def test_summary_failure_still_allows_statistics_but_not_raw_success(capsys):
         ERDoseProcessor(repo).run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
     logs = [params for query, params, _ in db.executed if 'batch_event_log' in query]
     assert len(logs) == 2
-    assert all(json.loads(log['data'])['action'] == 'STATISTICS_RECORDED' for log in logs)
+    assert all(set(json.loads(log["data"])) == {"equipment_counts"} for log in logs)
     assert '[ER_DOSE] done' not in capsys.readouterr().out
 
 
@@ -101,8 +101,8 @@ def test_raw_logs_both_batches_with_unchanged_time_bounds():
     assert sorted(p['batch_name'] for p in logs) == ['ER_DOSE_EUV', 'ER_DOSE_RAW']
     for log in logs:
         data = json.loads(log['data'])
-        assert data['start_time'] == str(start)
-        assert data['end_time'] == str(end)
+        assert start.isoformat() in log['message']
+        assert end.isoformat() in log['message']
 
 
 def test_log_insert_has_no_return_value():
@@ -126,14 +126,13 @@ def test_all_four_final_tasks_start_before_waiting(monkeypatch):
         assert (start_time, end_time) == (start, end)
         rendezvous.wait()
         completed.append(name)
+        return {"equipment_counts": []}
 
     repo.insert_die_yield_daily_summary = lambda *args: run_task('yield', *args)
     repo.insert_root_cause_daily_summary = lambda *args: run_task('root', *args)
 
-    def write_log(repository, batch_name, start_time, end_time):
-        run_task(batch_name, start_time, end_time)
-
-    monkeypatch.setattr('er_dose.raw.raw_processor.write_equipment_count_log', write_log)
+    repo.fetch_equipment_counts = lambda *args: run_task('ER_DOSE_RAW', *args)
+    monkeypatch.setattr(ERDoseEUVRepository, 'fetch_equipment_counts', lambda self, *args: run_task('ER_DOSE_EUV', *args))
     ERDoseProcessor(repo).run(start_time=start, end_time=end)
     assert sorted(completed) == ['ER_DOSE_EUV', 'ER_DOSE_RAW', 'root', 'yield']
 
@@ -143,11 +142,7 @@ def test_statistics_failure_prevents_successful_raw_completion(monkeypatch, caps
     repo.insert_die_yield_daily_summary = Mock()
     repo.insert_root_cause_daily_summary = Mock()
 
-    def write_log(repository, batch_name, start_time, end_time):
-        if batch_name == 'ER_DOSE_EUV':
-            raise RuntimeError('statistics failed')
-
-    monkeypatch.setattr('er_dose.raw.raw_processor.write_equipment_count_log', write_log)
+    monkeypatch.setattr(ERDoseEUVRepository, 'fetch_equipment_counts', Mock(side_effect=RuntimeError('statistics failed')))
     with pytest.raises(RuntimeError, match='statistics failed'):
         ERDoseProcessor(repo).run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
     assert '[ER_DOSE] done' not in capsys.readouterr().out
@@ -164,7 +159,7 @@ def test_raw_deletes_before_submitting_final_inserts(monkeypatch):
 
     repo.insert_die_yield_daily_summary = insert
     repo.insert_root_cause_daily_summary = insert
-    monkeypatch.setattr('er_dose.raw.raw_processor.write_equipment_count_log', lambda *args: None)
+    monkeypatch.setattr(ERDoseProcessor, '_write_equipment_count_log', lambda *args: None)
     ERDoseProcessor(repo).run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
 
 
@@ -193,3 +188,41 @@ def test_equipment_counts_without_database_json_functions(repository_type):
     assert result['source_count'] == result['target_count'] == 5
     assert result['matched'] is False
     assert len(result['equipment_counts']) == 2
+
+
+def test_raw_and_euv_are_separate_rows_with_equipment_arrays():
+
+    repo = Mock()
+    raw = {"equipment_counts": [
+        {"eq_name": "EQ1", "source_count": 100, "target_count": 99},
+        {"eq_name": "RAW_ONLY", "source_count": 5, "target_count": 5},
+    ]}
+    euv = {"equipment_counts": [
+        {"eq_name": "EQ1", "source_count": 20, "target_count": 20},
+        {"eq_name": "EUV_ONLY", "source_count": 7, "target_count": 6},
+    ]}
+    repo.fetch_equipment_counts.side_effect = [raw, euv]
+    for batch in ['ER_DOSE_RAW', 'ER_DOSE_EUV']:
+        assert ERDoseProcessor(repo)._write_equipment_count_log(repo, batch, datetime(2026,5,1), datetime(2026,5,2)) is None
+    calls = repo.insert_batch_log.call_args_list
+    assert len(calls) == 2
+    assert calls[0].kwargs['batch_name'] == 'ER_DOSE_RAW'
+    assert calls[0].kwargs['data'] == raw
+    assert calls[1].kwargs['batch_name'] == 'ER_DOSE_EUV'
+    assert calls[1].kwargs['data'] == euv
+
+
+def test_common_log_insert_accepts_unrelated_batch_payload():
+    import json
+    from er_dose.common.batch_log_repository import insert_batch_log
+
+    db = Mock()
+    data = {"file_name": "결과.csv", "rows": 12, "details": ["ok"]}
+    insert_batch_log(db, 'OTHER_BATCH', date(2026, 5, 1), 'FILE_EXPORTED', 'export finished', data)
+    db.execute.assert_called_once()
+    params = db.execute.call_args.kwargs['params']
+    assert params['batch_name'] == 'OTHER_BATCH'
+    assert params['event_type'] == 'FILE_EXPORTED'
+    assert params['message'] == 'export finished'
+    assert json.loads(params['data']) == data
+    assert data == {"file_name": "결과.csv", "rows": 12, "details": ["ok"]}

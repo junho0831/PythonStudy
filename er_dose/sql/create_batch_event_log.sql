@@ -10,5 +10,15 @@ create table if not exists mbeat.batch_event_log (
     created_at      timestamp default now() not null
 );
 
-create index if not exists idx_batch_event_log_batch_date
-on mbeat.batch_event_log (batch_name, target_date, created_at desc);
+do $$
+begin
+    if not exists (
+        select 1 from pg_catalog.pg_indexes
+        where schemaname = 'mbeat'
+          and indexname = 'idx_batch_event_log_batch_date'
+    ) then
+        create index idx_batch_event_log_batch_date
+        on mbeat.batch_event_log (batch_name, target_date, created_at desc);
+    end if;
+end
+$$;
