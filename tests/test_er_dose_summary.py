@@ -177,3 +177,19 @@ def test_failed_delete_does_not_start_insert():
         ERDoseProcessor(repo).run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
     repo.insert_die_yield_daily_summary.assert_not_called()
     repo.insert_root_cause_daily_summary.assert_not_called()
+
+
+@pytest.mark.parametrize('repository_type', [ERDoseRepository, ERDoseEUVRepository])
+def test_equipment_counts_without_database_json_functions(repository_type):
+    db = Mock()
+    db.select.return_value = pd.DataFrame([
+        {'eq_name': 'A', 'source_count': 3, 'target_count': 2, 'total_source_count': 5, 'total_target_count': 5, 'matched': 0},
+        {'eq_name': 'B', 'source_count': 2, 'target_count': 3, 'total_source_count': 5, 'total_target_count': 5, 'matched': 0},
+    ])
+    result = repository_type(db).fetch_equipment_counts(datetime(2026, 5, 1), datetime(2026, 5, 2))
+    query = db.select.call_args.args[0].lower()
+    assert 'jsonb_build_object' not in query and 'jsonb_agg' not in query
+    assert 'over ()' in query
+    assert result['source_count'] == result['target_count'] == 5
+    assert result['matched'] is False
+    assert len(result['equipment_counts']) == 2

@@ -58,12 +58,13 @@ class FakeDB:
                 target_count = self.target_counts.get(target_date, 0)
                 rows = ([{"eq_name": "EQ1", "source_count": source_count, "target_count": target_count}]
                         if source_count or target_count else [])
-            return pd.DataFrame([{"data": {
-                "source_count": sum(row["source_count"] for row in rows),
-                "target_count": sum(row["target_count"] for row in rows),
-                "matched": all(row["source_count"] == row["target_count"] for row in rows),
-                "equipment_counts": rows,
-            }}])
+            return pd.DataFrame([
+                {**row,
+                 "total_source_count": sum(item["source_count"] for item in rows),
+                 "total_target_count": sum(item["target_count"] for item in rows),
+                 "matched": int(all(item["source_count"] == item["target_count"] for item in rows))}
+                for row in rows
+            ])
         if "count(distinct" in lowered:
             target_date = params["start_time"].date()
             row_count = self.distinct_source_counts.get(target_date, self.source_counts.get(target_date, 0))

@@ -162,26 +162,30 @@ class ERDoseRepository:
                   and {active_nxe_eq_filter("p.eq_name")}
                 group by p.eq_name
             )
-            select jsonb_build_object(
-                'source_count', coalesce(sum(coalesce(s.source_count, 0)), 0),
-                'target_count', coalesce(sum(coalesce(t.target_count, 0)), 0),
-                'matched', coalesce(bool_and(coalesce(s.source_count, 0) = coalesce(t.target_count, 0)), true),
-                'equipment_counts', coalesce(
-                    jsonb_agg(
-                        jsonb_build_object(
-                            'eq_name', coalesce(s.eq_name, t.eq_name),
-                            'source_count', coalesce(s.source_count, 0),
-                            'target_count', coalesce(t.target_count, 0)
-                        ) order by coalesce(s.eq_name, t.eq_name)
-                    ),
-                    '[]'::jsonb
-                )
-            ) as data
+            select
+                coalesce(s.eq_name, t.eq_name) as eq_name,
+                coalesce(s.source_count, 0) as source_count,
+                coalesce(t.target_count, 0) as target_count,
+                sum(coalesce(s.source_count, 0)) over () as total_source_count,
+                sum(coalesce(t.target_count, 0)) over () as total_target_count,
+                min(case when coalesce(s.source_count, 0) = coalesce(t.target_count, 0)
+                         then 1 else 0 end) over () as matched
             from source_counts s
             full outer join target_counts t on t.eq_name = s.eq_name
+            order by eq_name
         """
         df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
-        return df.iloc[0]["data"]
+        if df is None or df.empty:
+            return {"source_count": 0, "target_count": 0, "matched": True, "equipment_counts": []}
+        return {
+            "source_count": int(df.iloc[0]["total_source_count"]),
+            "target_count": int(df.iloc[0]["total_target_count"]),
+            "matched": bool(df.iloc[0]["matched"]),
+            "equipment_counts": [
+                {"eq_name": row.eq_name, "source_count": int(row.source_count), "target_count": int(row.target_count)}
+                for row in df.itertuples(index=False)
+            ],
+        }
 
     def truncate_target_partition(self, target_date: date, connection=None) -> int:
         parsed_table = self._partition_table_name(PARSED_TABLE, target_date)
