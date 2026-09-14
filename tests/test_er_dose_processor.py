@@ -282,7 +282,10 @@ class ERDoseProcessorTest(unittest.TestCase):
         with redirect_stdout(StringIO()):
             processor.run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
 
-        delete_queries = [query for query, _, _ in db.executed if query.strip().lower().startswith("delete")]
+        delete_queries = [
+            query for query, _, _ in db.executed
+            if query.strip().lower().startswith("delete") and "er_dose_raw_parsed" in query.lower()
+        ]
         self.assertEqual(delete_queries, [])
         parsed_insert = self._inserted_df(db, "prism_common.er_dose_raw_parsed")
         self.assertNotIn("parser_version", parsed_insert.columns)

@@ -232,13 +232,25 @@ class ERDoseRepository:
         partition_table = f"{PARSED_TABLE}_1_prt_p{target_date.replace('-', '')}"
         return self.db.execute(f"ANALYZE {partition_table}", connection=connection)
 
-    def upsert_die_yield_daily_summary(self, target_date: date | str, connection=None) -> int:
+    def replace_die_yield_daily_summary(self, target_date: date | str) -> None:
+        self.delete_die_yield_daily_summary(target_date)
+        self.insert_die_yield_daily_summary(target_date)
+
+    def delete_die_yield_daily_summary(self, target_date: date | str) -> None:
+        if isinstance(target_date, str):
+            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+        delete_query = """
+            delete from prism_common.de_trend_die_yield_daily
+            where occur_date = :target_date
+        """
+        self.db.execute(delete_query, params={"target_date": target_date})
+
+    def insert_die_yield_daily_summary(self, target_date: date | str) -> None:
         if isinstance(target_date, str):
             target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
         start_time = datetime.combine(target_date, datetime.min.time())
         end_time = start_time + timedelta(days=1)
-
-        query = f"""
+        insert_query = f"""
             insert into prism_common.de_trend_die_yield_daily (
                 occur_date,
                 eq_name,
@@ -307,26 +319,29 @@ class ERDoseRepository:
                 sum(case when valid_wafer_yn = 1 then reject_yn else 0 end) as reject_wafer,
                 now() as created_at
             from wafer_code_data
-            group by occur_date, eq_name
-            on conflict (occur_date, eq_name)
-            do update set
-                total_die = excluded.total_die,
-                reject_shot = excluded.reject_shot,
-                to_repair_die = excluded.to_repair_die,
-                repair_nok = excluded.repair_nok,
-                total_wafer = excluded.total_wafer,
-                reject_wafer = excluded.reject_wafer,
-                created_at = now();
+            group by occur_date, eq_name;
         """
-        return self.db.execute(query, params={"start_time": start_time, "end_time": end_time}, connection=connection)
+        self.db.execute(insert_query, params={"start_time": start_time, "end_time": end_time})
 
-    def upsert_root_cause_daily_summary(self, target_date: date | str, connection=None) -> int:
+    def replace_root_cause_daily_summary(self, target_date: date | str) -> None:
+        self.delete_root_cause_daily_summary(target_date)
+        self.insert_root_cause_daily_summary(target_date)
+
+    def delete_root_cause_daily_summary(self, target_date: date | str) -> None:
+        if isinstance(target_date, str):
+            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+        delete_query = """
+            delete from prism_common.de_trend_root_cause_daily
+            where occur_date = :target_date
+        """
+        self.db.execute(delete_query, params={"target_date": target_date})
+
+    def insert_root_cause_daily_summary(self, target_date: date | str) -> None:
         if isinstance(target_date, str):
             target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
         start_time = datetime.combine(target_date, datetime.min.time())
         end_time = start_time + timedelta(days=1)
-
-        query = """
+        insert_query = """
             insert into prism_common.de_trend_root_cause_daily (
                 occur_date,
                 eq_name,
@@ -345,13 +360,9 @@ class ERDoseRepository:
               and p.code_occur_time < :end_time
               and p.eq_name is not null
               and p.root_cause is not null
-            group by p.code_occur_time::date, p.eq_name, p.root_cause
-            on conflict (occur_date, eq_name, root_cause)
-            do update set
-                frequency = excluded.frequency,
-                created_at = now();
+            group by p.code_occur_time::date, p.eq_name, p.root_cause;
         """
-        return self.db.execute(query, params={"start_time": start_time, "end_time": end_time}, connection=connection)
+        self.db.execute(insert_query, params={"start_time": start_time, "end_time": end_time})
 
     def transaction(self):
         return self.db.transaction()

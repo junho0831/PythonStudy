@@ -118,7 +118,7 @@ class ERDoseEUVProcessor(CountReloadProcessor):
 
         for target_date in sorted(inserted_target_dates):
             self.repository.analyze_target_partition(target_date, connection=connection)
-            self.repository.upsert_root_cause_daily_summary(target_date, connection=connection)
+            self.repository.replace_root_cause_daily_summary(target_date)
             print(
                 "[ER_DOSE_EUV] "
                 f"summary updated (root_cause) partition_date={target_date}"

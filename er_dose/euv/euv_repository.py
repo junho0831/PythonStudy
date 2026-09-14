@@ -224,13 +224,25 @@ class ERDoseEUVRepository:
         partition_table = f"{ROOT_CAUSE_TABLE}_1_prt_p{target_date.replace('-', '')}"
         return self.db.execute(f"ANALYZE {partition_table}", connection=connection)
 
-    def upsert_root_cause_daily_summary(self, target_date: date | str, connection=None) -> int:
+    def replace_root_cause_daily_summary(self, target_date: date | str) -> None:
+        self.delete_root_cause_daily_summary(target_date)
+        self.insert_root_cause_daily_summary(target_date)
+
+    def delete_root_cause_daily_summary(self, target_date: date | str) -> None:
+        if isinstance(target_date, str):
+            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+        delete_query = """
+            delete from prism_common.de_trend_root_cause_daily
+            where occur_date = :target_date
+        """
+        self.db.execute(delete_query, params={"target_date": target_date})
+
+    def insert_root_cause_daily_summary(self, target_date: date | str) -> None:
         if isinstance(target_date, str):
             target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
         start_time = datetime.combine(target_date, datetime.min.time())
         end_time = start_time + timedelta(days=1)
-
-        query = f"""
+        insert_query = f"""
             insert into prism_common.de_trend_root_cause_daily (
                 occur_date,
                 eq_name,
@@ -274,13 +286,9 @@ class ERDoseEUVRepository:
             from root_cause_data
             where root_cause is not null
               and root_cause != ''
-            group by occur_date, eq_name, root_cause
-            on conflict (occur_date, eq_name, root_cause)
-            do update set
-                frequency = excluded.frequency,
-                created_at = now();
+            group by occur_date, eq_name, root_cause;
         """
-        return self.db.execute(query, params={"start_time": start_time, "end_time": end_time}, connection=connection)
+        self.db.execute(insert_query, params={"start_time": start_time, "end_time": end_time})
 
     def transaction(self):
         return self.db.transaction()
