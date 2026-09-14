@@ -193,6 +193,17 @@ class PostgresDB:
         return len(normalized_df)
 
     def execute(self, query: str, params=None, connection=None) -> int:
+        # Keep repository SQL in SQLAlchemy's :name style, as in select().
+        # Only translate named binds; existing native driver calls stay valid.
+        if isinstance(params, dict):
+            from sqlalchemy import text
+            from sqlalchemy.dialects.postgresql.psycopg2 import dialect
+
+            compiled = text(query).compile(dialect=dialect())
+            if compiled.params:
+                query = str(compiled)
+                params = compiled.construct_params(params)
+
         own_connection = connection is None
         conn = connection or self._connect_raw()
         try:

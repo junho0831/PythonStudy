@@ -102,3 +102,32 @@ class PostgresDBTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_execute_adapts_named_parameters_without_interpolating_values():
+    from datetime import date
+
+    db = PostgresDB(dsn='postgresql://unused')
+    connection = FakeConnection()
+    connection.cursor_obj.rowcount = 2
+    value = "x'; DROP TABLE example; --"
+    result = db.execute(
+        "update example set value = :value where day::date = :day and label like '%test%'",
+        {'value': value, 'day': date(2026, 5, 1)}, connection=connection,
+    )
+    query, params = connection.cursor_obj.executed[0]
+    assert query == "update example set value = %(value)s where day::date = %(day)s and label like '%%test%%'"
+    assert params == {'value': value, 'day': date(2026, 5, 1)}
+    assert value not in query
+    assert result == 2
+    assert not connection.committed
+    assert not connection.closed
+
+
+def test_execute_preserves_native_driver_parameters():
+    db = PostgresDB(dsn='postgresql://unused')
+    connection = FakeConnection()
+    connection.cursor_obj.rowcount = 1
+    query = 'delete from example where id = %(id)s'
+    db.execute(query, {'id': 7}, connection=connection)
+    assert connection.cursor_obj.executed == [(query, {'id': 7})]
