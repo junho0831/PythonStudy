@@ -42,10 +42,10 @@ def test_non_root_cause_contents_are_skipped():
     assert parse_root_cause("system info: normal message") is None
 
 
-def test_parse_euv_root_cause_tolerates_production_label_typos():
+def test_parse_euv_root_cause_with_decimal_pulse_counts():
     contents = r"""Dose error detected in file: ADECetdcData_FDD_LC_EEI_SCANNER_DOSE_ERROR_EVENT_20260614_235011_0399+0900.zip.
-\nRoot clause        : Low dose margin
-\nExposesue I D      : 47737
+\nRoot cause        : Low dose margin
+\nExposure ID      : 47737
 \nTime               : 2026-06-14T23:50:10.953142+09:00
 \nExposure length    : 0.2338 [s]
 \nDuty cycle         : 99.62 [perc]
@@ -72,7 +72,8 @@ def test_parse_euv_root_cause_tolerates_production_label_typos():
         tzinfo=timezone(timedelta(hours=9)),
     )
     assert parsed.exposure_length == Decimal("0.2338")
-    assert parsed.dose_error == Decimal("-1.71")
-    assert parsed.pulses_euv_lt_0_6dt_tot == 3
+    assert parsed.min_dose_error == Decimal("-1.71")
+    assert parsed.max_dose_error == Decimal("-1.71")
+    assert parsed.pulses_euv_0_6dt_tot == 3
     assert parsed.fed_pulses == 3
     assert parsed.software_version == "3.0"

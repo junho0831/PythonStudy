@@ -9,6 +9,7 @@ RAW_EUV_DDL_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "cr
 ROOT_CAUSE_DDL_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "create_er_dose_euv_parsed.sql"
 ROOT_CAUSE_RENAME_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "rename_er_dose_euv_parsed_columns.sql"
 ROOT_CAUSE_MIGRATION_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "migrate_er_dose_euv_parsed_schema.sql"
+BATCH_EVENT_LOG_DDL_PATH = Path(__file__).resolve().parents[1] / "er_dose" / "sql" / "create_batch_event_log.sql"
 
 
 def _ddl() -> str:
@@ -33,6 +34,10 @@ def _root_cause_rename_sql() -> str:
 
 def _root_cause_migration_sql() -> str:
     return ROOT_CAUSE_MIGRATION_PATH.read_text(encoding="utf-8").lower()
+
+
+def _batch_event_log_ddl() -> str:
+    return BATCH_EVENT_LOG_DDL_PATH.read_text(encoding="utf-8").lower()
 
 
 def test_parsed_table_primary_key_matches_documented_partition_key():
@@ -174,3 +179,15 @@ def test_root_cause_rename_sql_renames_existing_columns():
     assert "call rename_column_if_exists('prism_common.er_dose_euv_parsed', 'pulses_euv_lt_0_6dt_tot', 'pulses_euv_0_6dt_tot')" in sql
     assert "call rename_column_if_exists('prism_common.er_dose_euv_parsed', 'software version', 'software_version')" in sql
     assert "from pg_inherits" in sql
+
+
+def test_batch_event_log_is_generic_and_json_based():
+    ddl = _batch_event_log_ddl()
+
+    assert "create table if not exists mbeat.batch_event_log" in ddl
+    assert "batch_name      varchar(100) not null" in ddl
+    assert "target_date     date" in ddl
+    assert "event_type      varchar(50) not null" in ddl
+    assert "message         text" in ddl
+    assert "data            jsonb not null" in ddl
+    assert "idx_batch_event_log_batch_date" in ddl

@@ -8,6 +8,7 @@ from typing import Any
 import pandas as pd
 
 from er_dose.common.reload_processor import CountReloadProcessor
+from er_dose.common.batch_log_repository import write_equipment_count_log
 from er_dose.raw.raw_base import RawErLog
 from er_dose.raw.raw_parser import parse_dose_error
 from er_dose.raw.raw_repository import ERDoseRepository
@@ -22,6 +23,7 @@ EXPOSURE_HANDLE_JUMP_THRESHOLD = 1000
 
 class ERDoseProcessor(CountReloadProcessor):
     log_prefix = "[ER_DOSE]"
+    batch_name = "ER_DOSE_RAW"
 
     def __init__(self, repository: ERDoseRepository):
         self.repository = repository
@@ -165,12 +167,27 @@ class ERDoseProcessor(CountReloadProcessor):
 
         for target_date in sorted(inserted_target_dates):
             self.repository.analyze_target_partition(target_date, connection=connection)
-            self.repository.replace_die_yield_daily_summary(target_date)
-            self.repository.replace_root_cause_daily_summary(target_date)
-            print(
-                "[ER_DOSE] "
-                f"summary updated (die_yield, root_cause) partition_date={target_date}"
+
+        self.repository.delete_die_yield_daily_summary(start_time, end_time)
+        self.repository.delete_root_cause_daily_summary(start_time, end_time)
+
+        with ThreadPoolExecutor(max_workers=4, thread_name_prefix="er-dose-summary") as executor:
+            yield_future = executor.submit(
+                self.repository.insert_die_yield_daily_summary, start_time, end_time,
             )
+            root_future = executor.submit(
+                self.repository.insert_root_cause_daily_summary, start_time, end_time,
+            )
+            raw_count_future = executor.submit(
+                write_equipment_count_log, self.repository, self.batch_name, start_time, end_time,
+            )
+            euv_count_future = executor.submit(
+                write_equipment_count_log, ERDoseEUVRepository(self.repository.db),
+                "ER_DOSE_EUV", start_time, end_time,
+            )
+            for future in (yield_future, root_future, raw_count_future, euv_count_future):
+                future.result()
+        print("[ER_DOSE] summary updated (die_yield, root_cause, equipment_count)")
 
         print(
             "[ER_DOSE] "
@@ -385,11 +402,6 @@ class ERDoseEUVProcessor(CountReloadProcessor):
 
         for target_date in sorted(inserted_target_dates):
             self.repository.analyze_target_partition(target_date, connection=connection)
-            self.repository.replace_root_cause_daily_summary(target_date)
-            print(
-                "[ER_DOSE_EUV] "
-                f"summary updated (root_cause) partition_date={target_date}"
-            )
 
         print(
             "[ER_DOSE_EUV] "

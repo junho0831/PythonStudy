@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Iterator
+from typing import Any, Iterator
 
 import pandas as pd
 
+from er_dose.common.batch_log_repository import insert_batch_log
 from er_dose.common.sql_filters import active_nxe_eq_filter
 from er_dose.infra.postgres_db import PostgresDB
 
@@ -30,6 +31,23 @@ TARGET_CODES = (
 class ERDoseRepository:
     def __init__(self, db: PostgresDB):
         self.db = db
+
+    def insert_batch_log(
+        self,
+        batch_name: str,
+        target_date: date,
+        event_type: str,
+        message: str,
+        data: dict[str, Any],
+    ) -> None:
+        insert_batch_log(
+            self.db,
+            batch_name=batch_name,
+            target_date=target_date,
+            event_type=event_type,
+            message=message,
+            data=data,
+        )
 
     def fetch_raw_logs_in_chunks(
         self,
@@ -118,6 +136,52 @@ class ERDoseRepository:
         if df is None or df.empty:
             return 0
         return int(df.iloc[0]["row_count"])
+
+    def fetch_equipment_counts(self, start_time: datetime, end_time: datetime) -> dict[str, Any]:
+        target_codes_sql = ", ".join(f"'{code}'" for code in TARGET_CODES)
+        query = f"""
+            with source_counts as (
+                select
+                    r.eq_name,
+                    count(*) as source_count
+                from {MAIN_RAW_TABLE} r
+                where r.code_occur_time >= :start_time
+                  and r.code_occur_time < :end_time
+                  and r.code in ({target_codes_sql})
+                  and {active_nxe_eq_filter("r.eq_name")}
+                group by r.eq_name
+            ),
+            target_counts as (
+                select
+                    p.eq_name,
+                    count(*) as target_count
+                from {PARSED_TABLE} p
+                where p.code_occur_time >= :start_time
+                  and p.code_occur_time < :end_time
+                  and p.code in ({target_codes_sql})
+                  and {active_nxe_eq_filter("p.eq_name")}
+                group by p.eq_name
+            )
+            select jsonb_build_object(
+                'source_count', coalesce(sum(coalesce(s.source_count, 0)), 0),
+                'target_count', coalesce(sum(coalesce(t.target_count, 0)), 0),
+                'matched', coalesce(bool_and(coalesce(s.source_count, 0) = coalesce(t.target_count, 0)), true),
+                'equipment_counts', coalesce(
+                    jsonb_agg(
+                        jsonb_build_object(
+                            'eq_name', coalesce(s.eq_name, t.eq_name),
+                            'source_count', coalesce(s.source_count, 0),
+                            'target_count', coalesce(t.target_count, 0)
+                        ) order by coalesce(s.eq_name, t.eq_name)
+                    ),
+                    '[]'::jsonb
+                )
+            ) as data
+            from source_counts s
+            full outer join target_counts t on t.eq_name = s.eq_name
+        """
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
+        return df.iloc[0]["data"]
 
     def truncate_target_partition(self, target_date: date, connection=None) -> int:
         parsed_table = self._partition_table_name(PARSED_TABLE, target_date)
@@ -232,24 +296,15 @@ class ERDoseRepository:
         partition_table = f"{PARSED_TABLE}_1_prt_p{target_date.replace('-', '')}"
         return self.db.execute(f"ANALYZE {partition_table}", connection=connection)
 
-    def replace_die_yield_daily_summary(self, target_date: date | str) -> None:
-        self.delete_die_yield_daily_summary(target_date)
-        self.insert_die_yield_daily_summary(target_date)
-
-    def delete_die_yield_daily_summary(self, target_date: date | str) -> None:
-        if isinstance(target_date, str):
-            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+    def delete_die_yield_daily_summary(self, start_time: datetime, end_time: datetime) -> None:
         delete_query = """
             delete from prism_common.de_trend_die_yield_daily
-            where occur_date = :target_date
+            where occur_date >= cast(:start_time as date)
+              and occur_date < :end_time
         """
-        self.db.execute(delete_query, params={"target_date": target_date})
+        self.db.execute(delete_query, params={"start_time": start_time, "end_time": end_time})
 
-    def insert_die_yield_daily_summary(self, target_date: date | str) -> None:
-        if isinstance(target_date, str):
-            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
-        start_time = datetime.combine(target_date, datetime.min.time())
-        end_time = start_time + timedelta(days=1)
+    def insert_die_yield_daily_summary(self, start_time: datetime, end_time: datetime) -> None:
         insert_query = f"""
             insert into prism_common.de_trend_die_yield_daily (
                 occur_date,
@@ -323,24 +378,15 @@ class ERDoseRepository:
         """
         self.db.execute(insert_query, params={"start_time": start_time, "end_time": end_time})
 
-    def replace_root_cause_daily_summary(self, target_date: date | str) -> None:
-        self.delete_root_cause_daily_summary(target_date)
-        self.insert_root_cause_daily_summary(target_date)
-
-    def delete_root_cause_daily_summary(self, target_date: date | str) -> None:
-        if isinstance(target_date, str):
-            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+    def delete_root_cause_daily_summary(self, start_time: datetime, end_time: datetime) -> None:
         delete_query = """
             delete from prism_common.de_trend_root_cause_daily
-            where occur_date = :target_date
+            where occur_date >= cast(:start_time as date)
+              and occur_date < :end_time
         """
-        self.db.execute(delete_query, params={"target_date": target_date})
+        self.db.execute(delete_query, params={"start_time": start_time, "end_time": end_time})
 
-    def insert_root_cause_daily_summary(self, target_date: date | str) -> None:
-        if isinstance(target_date, str):
-            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
-        start_time = datetime.combine(target_date, datetime.min.time())
-        end_time = start_time + timedelta(days=1)
+    def insert_root_cause_daily_summary(self, start_time: datetime, end_time: datetime) -> None:
         insert_query = """
             insert into prism_common.de_trend_root_cause_daily (
                 occur_date,

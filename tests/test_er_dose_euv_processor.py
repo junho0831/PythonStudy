@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import unittest
 from contextlib import redirect_stdout
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from io import StringIO
 
 import pandas as pd
@@ -24,11 +25,19 @@ class FakeTransaction:
 
 
 class FakeDB:
-    def __init__(self, raw_df, source_counts=None, target_counts=None, distinct_source_counts=None):
+    def __init__(
+        self,
+        raw_df,
+        source_counts=None,
+        target_counts=None,
+        distinct_source_counts=None,
+        equipment_counts=None,
+    ):
         self.raw_df = raw_df
         self.source_counts = source_counts or {}
         self.target_counts = target_counts or {}
         self.distinct_source_counts = distinct_source_counts or {}
+        self.equipment_counts = equipment_counts or {}
         self.fetch_query = None
         self.fetch_params = None
         self.executed = []
@@ -37,10 +46,24 @@ class FakeDB:
         self.connection = object()
         self.partition_inserts = []
 
-    def select(self, query, params=None):
+    def select(self, query, params=None, connection=None):
         self.fetch_query = query
         self.fetch_params = params
         lowered = query.lower()
+        if "with source_counts as" in lowered and "full outer join target_counts" in lowered:
+            target_date = params["start_time"].date()
+            rows = self.equipment_counts.get(target_date)
+            if rows is None:
+                source_count = self.source_counts.get(target_date, 0)
+                target_count = self.target_counts.get(target_date, 0)
+                rows = ([{"eq_name": "EQ1", "source_count": source_count, "target_count": target_count}]
+                        if source_count or target_count else [])
+            return pd.DataFrame([{"data": {
+                "source_count": sum(row["source_count"] for row in rows),
+                "target_count": sum(row["target_count"] for row in rows),
+                "matched": all(row["source_count"] == row["target_count"] for row in rows),
+                "equipment_counts": rows,
+            }}])
         if "count(distinct" in lowered:
             target_date = params["start_time"].date()
             row_count = self.distinct_source_counts.get(target_date, self.source_counts.get(target_date, 0))
@@ -182,6 +205,10 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         self.assertEqual([option["analyze"] for option in db.copy_options], [False])
         analyze_queries = [query for query, _, _ in db.executed if query == "ANALYZE prism_common.er_dose_euv_parsed_1_prt_p20260504"]
         self.assertEqual(len(analyze_queries), 1)
+        summary_queries = [
+            item for item in db.executed if "de_trend_root_cause_daily" in item[0].lower()
+        ]
+        self.assertEqual(summary_queries, [])
         self.assertNotIn("er_line", inserted_df.columns)
         self.assertNotIn("belong", inserted_df.columns)
         self.assertNotIn("type", inserted_df.columns)
@@ -215,6 +242,12 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         repo.fetch_source_count(target_date, distinct=True)
         self.assertIn("count(distinct (r.eq_name, r.code, r.code_occur_time))", db.fetch_query)
 
+        equipment_counts = repo.fetch_equipment_counts(datetime.combine(target_date, datetime.min.time()), datetime.combine(target_date + timedelta(days=1), datetime.min.time()))
+        self.assertEqual(equipment_counts, {"source_count": 1, "target_count": 1, "matched": True, "equipment_counts": [{"eq_name": "EQ1", "source_count": 1, "target_count": 1}]})
+        self.assertIn("group by r.eq_name", db.fetch_query)
+        self.assertIn("group by p.eq_name", db.fetch_query)
+        self.assertIn("full outer join target_counts", db.fetch_query)
+
     def test_run_recent_days_skips_when_counts_match(self):
         target_date = date(2026, 5, 4)
         raw_df = pd.DataFrame(
@@ -247,7 +280,8 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
                 chunk_size=100,
             )
 
-        self.assertEqual(db.executed, [])
+        non_log_queries = [item for item in db.executed if "batch_event_log" not in item[0].lower()]
+        self.assertEqual(non_log_queries, [])
         self.assertEqual(len(db.partition_inserts), 0)
         self.assertIn("lookback_done start_date=2026-05-04 end_date=2026-05-04", stdout.getvalue())
         self.assertIn("checked_dates=1 reloaded_dates=0 source_rows=0 inserted=0", stdout.getvalue())
@@ -312,9 +346,34 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
                 chunk_size=100,
             )
 
-        self.assertEqual(db.executed, [])
+        non_log_queries = [item for item in db.executed if "batch_event_log" not in item[0].lower()]
+        self.assertEqual(non_log_queries, [])
         self.assertEqual(len(db.partition_inserts), 0)
         self.assertIn("checked_dates=1 reloaded_dates=0 source_rows=0 inserted=0", stdout.getvalue())
+
+    def test_euv_run_does_not_write_summary_logs(self):
+        target_date = date(2026, 5, 4)
+        db = FakeDB(
+            pd.DataFrame(),
+            source_counts={target_date: 7},
+            target_counts={target_date: 7},
+            equipment_counts={
+                target_date: [
+                    {"eq_name": "EQ1", "source_count": 7, "target_count": 7},
+                ]
+            },
+        )
+        processor = ERDoseEUVProcessor(ERDoseEUVRepository(db))
+
+        with redirect_stdout(StringIO()):
+            processor.run(
+                start_time=datetime.combine(target_date, datetime.min.time()),
+                end_time=datetime.combine(target_date + timedelta(days=1), datetime.min.time()),
+            )
+
+        log_queries = [item for item in db.executed if "batch_event_log" in item[0].lower()]
+        self.assertEqual(log_queries, [])
+
 
 
 if __name__ == "__main__":

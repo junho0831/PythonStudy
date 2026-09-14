@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Iterator
+from typing import Any, Iterator
 
 import pandas as pd
 
+from er_dose.common.batch_log_repository import insert_batch_log
 from er_dose.common.sql_filters import active_nxe_eq_filter
 from er_dose.infra.postgres_db import PostgresDB
 
@@ -58,6 +59,23 @@ class ERDoseEUVRepository:
     def __init__(self, db: PostgresDB):
         self.db = db
 
+    def insert_batch_log(
+        self,
+        batch_name: str,
+        target_date: date,
+        event_type: str,
+        message: str,
+        data: dict[str, Any],
+    ) -> None:
+        insert_batch_log(
+            self.db,
+            batch_name=batch_name,
+            target_date=target_date,
+            event_type=event_type,
+            message=message,
+            data=data,
+        )
+
     def fetch_source_count(self, target_date: date, distinct: bool = False) -> int:
         start_time = datetime.combine(target_date, datetime.min.time())
         end_time = start_time + timedelta(days=1)
@@ -90,6 +108,51 @@ class ERDoseEUVRepository:
         if df is None or df.empty:
             return 0
         return int(df.iloc[0]["row_count"])
+
+    def fetch_equipment_counts(self, start_time: datetime, end_time: datetime) -> dict[str, Any]:
+        query = f"""
+            with source_counts as (
+                select
+                    r.eq_name,
+                    count(*) as source_count
+                from {EUV_RAW_TABLE} r
+                where r.code_occur_time >= :start_time
+                  and r.code_occur_time < :end_time
+                  and lower(r.contents) like '%dose error detected in file:%'
+                  and lower(r.contents) like '%root cause%'
+                  and {active_nxe_eq_filter("r.eq_name")}
+                group by r.eq_name
+            ),
+            target_counts as (
+                select
+                    p.eq_name,
+                    count(*) as target_count
+                from {ROOT_CAUSE_TABLE} p
+                where p.code_occur_time >= :start_time
+                  and p.code_occur_time < :end_time
+                  and {active_nxe_eq_filter("p.eq_name")}
+                group by p.eq_name
+            )
+            select jsonb_build_object(
+                'source_count', coalesce(sum(coalesce(s.source_count, 0)), 0),
+                'target_count', coalesce(sum(coalesce(t.target_count, 0)), 0),
+                'matched', coalesce(bool_and(coalesce(s.source_count, 0) = coalesce(t.target_count, 0)), true),
+                'equipment_counts', coalesce(
+                    jsonb_agg(
+                        jsonb_build_object(
+                            'eq_name', coalesce(s.eq_name, t.eq_name),
+                            'source_count', coalesce(s.source_count, 0),
+                            'target_count', coalesce(t.target_count, 0)
+                        ) order by coalesce(s.eq_name, t.eq_name)
+                    ),
+                    '[]'::jsonb
+                )
+            ) as data
+            from source_counts s
+            full outer join target_counts t on t.eq_name = s.eq_name
+        """
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
+        return df.iloc[0]["data"]
 
     def truncate_target_partition(self, target_date: date, connection=None) -> int:
         parsed_table = self._partition_table_name(ROOT_CAUSE_TABLE, target_date)
@@ -223,72 +286,6 @@ class ERDoseEUVRepository:
     def analyze_target_partition(self, target_date: str, connection=None) -> int:
         partition_table = f"{ROOT_CAUSE_TABLE}_1_prt_p{target_date.replace('-', '')}"
         return self.db.execute(f"ANALYZE {partition_table}", connection=connection)
-
-    def replace_root_cause_daily_summary(self, target_date: date | str) -> None:
-        self.delete_root_cause_daily_summary(target_date)
-        self.insert_root_cause_daily_summary(target_date)
-
-    def delete_root_cause_daily_summary(self, target_date: date | str) -> None:
-        if isinstance(target_date, str):
-            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
-        delete_query = """
-            delete from prism_common.de_trend_root_cause_daily
-            where occur_date = :target_date
-        """
-        self.db.execute(delete_query, params={"target_date": target_date})
-
-    def insert_root_cause_daily_summary(self, target_date: date | str) -> None:
-        if isinstance(target_date, str):
-            target_date = datetime.strptime(target_date, "%Y-%m-%d").date()
-        start_time = datetime.combine(target_date, datetime.min.time())
-        end_time = start_time + timedelta(days=1)
-        insert_query = f"""
-            insert into prism_common.de_trend_root_cause_daily (
-                occur_date,
-                eq_name,
-                root_cause,
-                frequency,
-                created_at
-            )
-            with root_cause_data as (
-                select
-                    e.code_occur_time::date as occur_date,
-                    e.eq_name,
-                    replace(
-                        trim(
-                            split_part(
-                                case
-                                    when e.root_cause like '%CE & MP%' then replace(e.root_cause, 'CE & MP', 'CE @ MP')
-                                    when e.root_cause like '%l2Dx & l2Dy%' then replace(e.root_cause, 'L2Dx & L2Dy', 'L2Dx @ L2Dx')
-                                    when e.root_cause like '%E&T%' then replace(e.root_cause, 'E&T', 'E@T')
-                                    else e.root_cause
-                                end,
-                                '&',
-                                1
-                            )
-                        ),
-                        '@',
-                        '&'
-                    ) as root_cause
-                from {ROOT_CAUSE_TABLE} e
-                where e.code_occur_time >= :start_time
-                  and e.code_occur_time < :end_time
-                  and e.code = 'OSD-0200'
-                  and e.root_cause is not null
-                  and trim(e.root_cause) != ''
-            )
-            select
-                occur_date,
-                eq_name,
-                root_cause,
-                count(*) as frequency,
-                now() as created_at
-            from root_cause_data
-            where root_cause is not null
-              and root_cause != ''
-            group by occur_date, eq_name, root_cause;
-        """
-        self.db.execute(insert_query, params={"start_time": start_time, "end_time": end_time})
 
     def transaction(self):
         return self.db.transaction()

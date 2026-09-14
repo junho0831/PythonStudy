@@ -43,9 +43,11 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 `ER_DOSE_RAW`와 `ER_DOSE_EUV`의 processor 기본 실행은 최근 2일 lookback 모드입니다. 실행일 기준 `오늘 포함 최근 2일`을 날짜별로 검사하고, 먼저 원천 raw와 parsed의 전체 건수를 비교합니다. 두 배치 모두 전체 건수가 다르고 parsed 건수가 0보다 클 때만 원천에서 `(eq_name, code, code_occur_time)`이 같은 행을 중복 제거한 건수를 한 번 더 계산합니다. 이 건수가 parsed 건수와 같으면 중복으로 인한 차이이므로 스킵하고, 여전히 다르거나 parsed 건수가 0이면 해당 날짜 parsed 파티션을 `TRUNCATE`한 뒤 원천 raw를 처음부터 다시 파싱해 적재합니다. `ER_DOSE_EUV_TARGET_DATE`를 명시하면 해당 날짜 1일만 같은 방식으로 검사하고, `ER_DOSE_START_TIME`/`ER_DOSE_END_TIME`를 명시하면 count 비교 없이 지정한 시간 범위를 처리합니다. EUV source count는 root cause 파싱 대상인 `contents`만 세어 parsed count와 비교합니다.
 
+RAW 마지막 서머리 단계에서 RAW/EUV 건수를 `select()`로 각각 조회하고 `mbeat.batch_event_log`에 `EQUIPMENT_COUNT` 이벤트를 저장합니다. `batch_name`, `target_date`, `event_type`은 검색 컬럼이며 원천/parsed 건수와 설비별 목록 및 처리 시간 범위는 `data jsonb`에 저장합니다. 운영 배포 전 [create_batch_event_log.sql](er_dose/sql/create_batch_event_log.sql)을 적용해야 합니다.
+
 DW 로그에서 `exposure_handle`이 같은 설비의 이전 값보다 `1000` 이상 커지면 테스트샷성 row로 보고 저장은 하되 `use_yn='N'`으로 표시합니다. 일반 분석에서는 `use_yn='Y'` 조건을 사용하면 되고, row 자체는 저장되므로 raw count와 parsed count 비교가 계속 어긋나는 문제를 피할 수 있습니다.
 
-`ER_DOSE_EUV`는 `mbeat.er_data_raw_euv` 기반 root cause 결과용 실행입니다. 대상 결과는 `prism_common.er_dose_euv_parsed`에 저장하며, `er_line`, `belong`, `type`은 저장하지 않습니다. `contents`에서 `dose_error_detected_in_file`, `exposure_id`, `time`, `root_cause`와 각종 EUV metric 컬럼을 파싱해 적재합니다. 컬럼명은 소문자 snake_case 기준으로 공백, `.`, `-`, `<`, `=`를 `_`로 치환하며, 파생 컬럼은 `root_cause_code`만 저장합니다. 파싱 및 적재가 완료되면 `prism_common.de_trend_root_cause_daily` 서머리 테이블에 일별/설비별/원인별 발생 빈도(`frequency`)를 자동 `UPSERT` 합니다.
+`ER_DOSE_EUV`는 `mbeat.er_data_raw_euv` 기반 root cause 결과용 실행입니다. 대상 결과는 `prism_common.er_dose_euv_parsed`에 저장하며, `er_line`, `belong`, `type`은 저장하지 않습니다. `contents`에서 `dose_error_detected_in_file`, `exposure_id`, `time`, `root_cause`와 각종 EUV metric 컬럼을 파싱해 적재합니다. 컬럼명은 소문자 snake_case 기준으로 공백, `.`, `-`, `<`, `=`를 `_`로 치환하며, 파생 컬럼은 `root_cause_code`만 저장합니다. EUV 적재 결과의 일별/설비별/원인별 발생 빈도(`frequency`)는 이후 RAW 마지막 단계에서 DELETE 후 INSERT합니다.
 
 상세 스키마와 파싱 규칙은 [ER_DOSE_ERROR.md](ER_DOSE_ERROR.md)를 기준으로 관리합니다.
 
@@ -385,3 +387,9 @@ python3 -m er_dose.run_er_dose_batch \
 - PostgreSQL 전환
 
 자세한 매칭 규칙은 [/Users/parkjunho/PycharmProjects/PythonStudy/IMAGE_TEXT_MATCHING.md](/Users/parkjunho/PycharmProjects/PythonStudy/IMAGE_TEXT_MATCHING.md) 를 참고하면 됩니다.
+
+서머리는 전달받은 시간 범위로 집계하며 해당 범위의 일별 데이터를 DELETE한 뒤 INSERT합니다. DELETE와 INSERT는 별도 메서드에서 각각 실행하고, 결과가 0건이어도 기존 집계는 제거합니다. RAW의 기존 집계 조건을 유지하며 processor에서 각 `delete_*_daily_summary`, `insert_*_daily_summary` 메서드를 직접 호출합니다.
+
+EUV 적재가 RAW 마지막 집계 전에 완료되는 운영 순서를 전제로, DIE Yield·Root Cause 서머리와 RAW/EUV 건수 로그는 RAW 마지막 단계에서 모두 저장합니다. EUV는 파싱·적재와 파티션 ANALYZE만 수행합니다. 서머리와 로그 조회에는 전달받은 `start_time`, `end_time`을 그대로 사용하며 별도 날짜 순회나 시간 범위 재계산을 하지 않습니다. RAW 마지막에 두 DELETE 메서드를 직접 실행한 뒤, INSERT 2개와 통계 2개를 병렬 실행합니다. DELETE와 INSERT를 하나의 트랜잭션으로 묶지 않습니다. 서머리 2개와 RAW/EUV 통계 2개를 작업자 4개의 실행 풀에 모두 제출한 뒤 마지막에 완료를 기다립니다. 통계 로그의 `action=STATISTICS_RECORDED`는 통계 저장을 의미하며 전체 배치 성공을 의미하지 않습니다. 다른 작업이 실패해도 이미 저장된 통계 로그는 남을 수 있고, 하나라도 실패하면 RAW를 정상 완료로 처리하지 않습니다. 각 작업은 `select()`로 합계·설비별 일치 여부·상세 목록을 한 행으로 조회하고 그대로 로그에 INSERT합니다. 서머리·통계 호출에는 커넥션 매개변수를 전달하지 않습니다. 서머리와 로그 INSERT 함수는 반환값이 없습니다. 로그 `target_date`는 범위 시작일이며 정확한 범위는 `data.start_time`, `data.end_time`에 저장합니다. `created_at`은 DB 기본값으로 기록됩니다. 기존 리로드 판단은 유지합니다.
+
+실행 진입점은 RAW와 EUV 중 하나를 선택하므로 EUV 완료를 기다리는 동기화는 코드에 없습니다. 운영 배치 순서에서 이 전제를 보장해야 합니다. 로컬 검증과 시간 비교는 [검증 기록](docs/pr/er_dose_final_statistics_validation.md)에 정리했습니다.
