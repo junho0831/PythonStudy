@@ -1,29 +1,46 @@
-from datetime import date
-from unittest.mock import Mock
-import pytest
-from er_dose.raw.raw_repository import ERDoseRepository
-from er_dose.euv.euv_repository import ERDoseEUVRepository
+from datetime import datetime
 
-@pytest.mark.parametrize("repository_type,kind", [(ERDoseRepository,"die_yield"),(ERDoseRepository,"root_cause"),(ERDoseEUVRepository,"root_cause")])
-@pytest.mark.parametrize("failure", [None,"delete","insert"])
-def test_summary_uses_separate_statements(repository_type, kind, failure):
-    db = Mock()
-    events = []
-    def execute(query, params):
-        action = query.strip().split()[0].lower()
-        events.append(action)
-        if action == failure:
-            raise RuntimeError(action)
-    db.execute.side_effect = execute
+import pytest
+
+from er_dose.raw.raw_repository import ERDoseRepository
+
+
+@pytest.mark.parametrize("repository_type,method,table", [
+    (ERDoseRepository, "die_yield_daily_summary", "de_trend_die_yield_daily"),
+    (ERDoseRepository, "root_cause_daily_summary", "de_trend_root_cause_daily"),
+])
+@pytest.mark.parametrize("fail_insert", [False, True])
+def test_summary_delete_and_insert_are_separate_calls(repository_type, method, table, fail_insert):
+    class DB:
+        def __init__(self):
+            self.connection = object()
+            self.events = []
+            self.calls = []
+
+        def transaction(self):
+            raise AssertionError("summary must not create a shared transaction")
+
+        def execute(self, query, params):
+            self.calls.append((query, params))
+            action = query.strip().split()[0].lower()
+            self.events.append(action)
+            if action == "insert" and fail_insert:
+                raise RuntimeError("insert failed")
+            return None
+
+    db = DB()
     repo = repository_type(db)
-    method = getattr(repo, 'replace_' + kind + '_daily_summary')
-    if failure:
-        with pytest.raises(RuntimeError, match=failure):
-            method(date(2026,5,1))
+    start, end = datetime(2026, 5, 1), datetime(2026, 5, 2)
+    assert getattr(repo, "delete_" + method)(start, end) is None
+    if fail_insert:
+        with pytest.raises(RuntimeError, match="insert failed"):
+            getattr(repo, "insert_" + method)(start, end)
     else:
-        assert method(date(2026,5,1)) is None
-    assert events == (['delete'] if failure == 'delete' else ['delete','insert'])
-    db.transaction.assert_not_called()
-    for call in db.execute.call_args_list:
-        assert 'connection' not in call.kwargs
-        assert 'on conflict' not in call.args[0].lower()
+        assert getattr(repo, "insert_" + method)(start, end) is None
+    expected = ["delete", "insert"]
+    assert db.events == expected
+    delete_query, params = db.calls[0]
+    assert table in delete_query
+    assert "where occur_date >= cast(:start_time as date)" in delete_query
+    assert params == {"start_time": datetime(2026, 5, 1), "end_time": datetime(2026, 5, 2)}
+    assert "on conflict" not in db.calls[1][0].lower()

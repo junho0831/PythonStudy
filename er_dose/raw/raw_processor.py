@@ -8,6 +8,7 @@ from typing import Any
 import pandas as pd
 
 from er_dose.common.reload_processor import CountReloadProcessor
+from er_dose.common.equipment_count_repository import write_equipment_count_log
 from er_dose.raw.raw_base import RawErLog
 from er_dose.raw.raw_parser import parse_dose_error
 from er_dose.raw.raw_repository import ERDoseRepository
@@ -165,12 +166,17 @@ class ERDoseProcessor(CountReloadProcessor):
 
         for target_date in sorted(inserted_target_dates):
             self.repository.analyze_target_partition(target_date, connection=connection)
-            self.repository.replace_die_yield_daily_summary(target_date)
-            self.repository.replace_root_cause_daily_summary(target_date)
-            print(
-                "[ER_DOSE] "
-                f"summary updated (die_yield, root_cause) partition_date={target_date}"
-            )
+
+        self.repository.delete_die_yield_daily_summary(start_time, end_time)
+        self.repository.delete_root_cause_daily_summary(start_time, end_time)
+
+        self.repository.insert_die_yield_daily_summary(start_time, end_time)
+        self.repository.insert_root_cause_daily_summary(start_time, end_time)
+        write_equipment_count_log(self.repository, start_time, end_time)
+        write_equipment_count_log(
+            ERDoseEUVRepository(self.repository.db), start_time, end_time,
+        )
+        print("[ER_DOSE] summary updated (die_yield, root_cause, equipment_count)")
 
         print(
             "[ER_DOSE] "
@@ -385,11 +391,6 @@ class ERDoseEUVProcessor(CountReloadProcessor):
 
         for target_date in sorted(inserted_target_dates):
             self.repository.analyze_target_partition(target_date, connection=connection)
-            self.repository.replace_root_cause_daily_summary(target_date)
-            print(
-                "[ER_DOSE_EUV] "
-                f"summary updated (root_cause) partition_date={target_date}"
-            )
 
         print(
             "[ER_DOSE_EUV] "
