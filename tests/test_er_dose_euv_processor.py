@@ -128,7 +128,7 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         self.assertEqual(db.fetch_params["start_time"], start_time)
         self.assertEqual(db.fetch_params["end_time"], end_time)
 
-    def test_fetch_raw_logs_filters_active_nxe_eq_names(self):
+    def test_fetch_raw_logs_filters_osd_0200(self):
         db = FakeDB(pd.DataFrame())
         repo = ERDoseEUVRepository(db)
         start_time = datetime(2026, 5, 1)
@@ -142,10 +142,8 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
             )
         )
 
-        self.assertIn("r.eq_name in", db.fetch_query)
-        self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
-        self.assertIn("eqp.use_yn = 'Y'", db.fetch_query)
-        self.assertIn("eqp.eqp_model_name like 'NXE%'", db.fetch_query)
+        self.assertNotIn("photo_eqp_info", db.fetch_query)
+        self.assertIn("r.code = 'OSD-0200'", db.fetch_query)
 
     def test_run_inserts_parsed_root_cause_rows(self):
         raw_df = pd.DataFrame(
@@ -215,7 +213,7 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         self.assertEqual(inserted_df.loc[1, "contents"], "system info: normal message")
         self.assertTrue(pd.isna(inserted_df.loc[1, "root_cause"]))
 
-    def test_fetch_counts_filter_active_nxe_without_contents_filter(self):
+    def test_fetch_counts_filter_osd_0200_without_contents_filter(self):
         target_date = date(2026, 5, 4)
         db = FakeDB(
             pd.DataFrame(),
@@ -228,12 +226,14 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         self.assertIn("count(*) as row_count", db.fetch_query)
         self.assertIn("from mbeat.er_data_raw_euv r", db.fetch_query)
         self.assertNotIn("r.contents", db.fetch_query)
-        self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
+        self.assertNotIn("photo_eqp_info", db.fetch_query)
+        self.assertIn("r.code = 'OSD-0200'", db.fetch_query)
 
         self.assertEqual(repo.fetch_target_count(target_date), 1)
         self.assertIn("count(*) as row_count", db.fetch_query)
         self.assertIn("from prism_common.er_dose_euv_parsed p", db.fetch_query)
-        self.assertIn("from prism_dev.photo_eqp_info eqp", db.fetch_query)
+        self.assertNotIn("photo_eqp_info", db.fetch_query)
+        self.assertIn("p.code = 'OSD-0200'", db.fetch_query)
 
         repo.fetch_source_count(target_date, distinct=True)
         self.assertIn("count(distinct (r.eq_name, r.code, r.code_occur_time))", db.fetch_query)
@@ -241,6 +241,9 @@ class ERDoseEUVProcessorTest(unittest.TestCase):
         equipment_counts = repo.fetch_equipment_counts(datetime.combine(target_date, datetime.min.time()), datetime.combine(target_date + timedelta(days=1), datetime.min.time()))
         self.assertEqual(equipment_counts, [{"eq_name": "EQ1", "source_count": 1, "target_count": 1}])
         self.assertNotIn("r.contents", db.fetch_query)
+        self.assertIn("r.code = 'OSD-0200'", db.fetch_query)
+        self.assertIn("p.code = 'OSD-0200'", db.fetch_query)
+        self.assertNotIn("photo_eqp_info", db.fetch_query)
         self.assertIn("group by r.eq_name", db.fetch_query)
         self.assertIn("group by p.eq_name", db.fetch_query)
         self.assertIn("full outer join target_counts", db.fetch_query)

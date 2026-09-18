@@ -6,7 +6,6 @@ from typing import Any, Iterator
 import pandas as pd
 
 from er_dose.common.equipment_count_repository import insert_equipment_count
-from er_dose.common.sql_filters import active_nxe_eq_filter
 from er_dose.infra.postgres_db import PostgresDB
 
 
@@ -80,7 +79,7 @@ class ERDoseEUVRepository:
             from {EUV_RAW_TABLE} r
             where r.code_occur_time >= :start_time
               and r.code_occur_time < :end_time
-              and {active_nxe_eq_filter("r.eq_name")}
+              and r.code = 'OSD-0200'
         """
         df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
         if df is None or df.empty:
@@ -95,7 +94,7 @@ class ERDoseEUVRepository:
             from {ROOT_CAUSE_TABLE} p
             where p.code_occur_time >= :start_time
               and p.code_occur_time < :end_time
-              and {active_nxe_eq_filter("p.eq_name")}
+              and p.code = 'OSD-0200'
         """
         df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
         if df is None or df.empty:
@@ -111,7 +110,7 @@ class ERDoseEUVRepository:
                 from {EUV_RAW_TABLE} r
                 where r.code_occur_time >= :start_time
                   and r.code_occur_time < :end_time
-                  and {active_nxe_eq_filter("r.eq_name")}
+                  and r.code = 'OSD-0200'
                 group by r.eq_name
             ),
             target_counts as (
@@ -121,7 +120,7 @@ class ERDoseEUVRepository:
                 from {ROOT_CAUSE_TABLE} p
                 where p.code_occur_time >= :start_time
                   and p.code_occur_time < :end_time
-                  and {active_nxe_eq_filter("p.eq_name")}
+                  and p.code = 'OSD-0200'
                 group by p.eq_name
             )
             select
@@ -168,7 +167,7 @@ class ERDoseEUVRepository:
             from {EUV_RAW_TABLE} r
             where r.code_occur_time >= :start_time
               and r.code_occur_time < :end_time
-              and {active_nxe_eq_filter("r.eq_name")}
+              and r.code = 'OSD-0200'
             order by r.code_occur_time, r.eq_name, r.er_line
         """
         return self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)

@@ -202,10 +202,10 @@ Mermaid ERD는 렌더링 호환성을 위해 타입 표기를 단순화했다. �
 
 `ER_DOSE_EUV_TARGET_DATE`가 있으면 해당 날짜 1일만 같은 방식으로 count 비교 후 필요 시 재적재한다. `ER_DOSE_START_TIME`/`ER_DOSE_END_TIME`으로 시간 범위를 직접 지정하면 count 비교 없이 해당 범위를 처리한다.
 
-`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, 두 특정 문구의 포함 여부로 제외하지 않고 비어 있지 않은 `contents`를 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다. EUV source count와 설비별 원천 건수는 본문 문구 조건 없이 기간·활성 NXE 설비 조건으로 계산하며, 전체 건수가 다를 때는 RAW와 동일하게 고유 이벤트 count를 추가 비교한다. EUV parsed 결과에는 `eq_name`, `er_type`, `code`, `code_occur_time`, `title`, `contents`, `reason_code`, `task`, `compile_script`와 root cause 파싱 컬럼만 저장하며, Root Cause 집계와 건수 로그는 이후 RAW 마지막 단계에서 저장한다.
+`ER_DOSE_EUV` 배치는 `mbeat.er_data_raw_euv`를 기간 조건으로 `chunk` 조회하고, 두 특정 문구의 포함 여부로 제외하지 않고 비어 있지 않은 `contents`를 파싱해 `prism_common.er_dose_euv_parsed`에 적재한다. EUV source count와 설비별 원천 건수는 본문 문구 조건 없이 기간 및 `code = 'OSD-0200'` 조건으로 계산하며, 전체 건수가 다를 때는 RAW와 동일하게 고유 이벤트 count를 추가 비교한다. EUV parsed 결과에는 `eq_name`, `er_type`, `code`, `code_occur_time`, `title`, `contents`, `reason_code`, `task`, `compile_script`와 root cause 파싱 컬럼만 저장하며, Root Cause 집계와 건수 로그는 이후 RAW 마지막 단계에서 저장한다.
 RAW와 EUV 모두 대용량 처리를 위해 전체 결과를 한 번에 메모리로 올리지 않고 `read chunk -> parse -> insert` 방식으로 반복 처리한다.
 또한, 데이터베이스 드라이버 단의 메모리 팽창을 방지하기 위해 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`)를 활성화하여 스트리밍 조회를 수행한다. 다만 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받기 때문에 운영 환경에서 조정이 필요할 수 있다.
-RAW와 EUV 모두 조회 SQL에서 `prism_dev.photo_eqp_info`의 `use_yn = 'Y'`이고 `eqp_model_name like 'NXE%'`인 `eqp_id`를 서브쿼리로 조회해 `eq_name` 필터로 사용한다. RAW의 이전 `lot_seq`, `wafer_seq` 상태 조회에도 같은 조건을 적용한다.
+RAW는 조회 SQL에서 `prism_dev.photo_eqp_info`의 `use_yn = 'Y'`이고 `eqp_model_name like 'NXE%'`인 `eqp_id`를 서브쿼리로 조회해 `eq_name` 필터로 사용한다. RAW의 이전 `lot_seq`, `wafer_seq` 상태 조회에도 같은 조건을 적용한다. EUV repository의 원천 조회와 원천·parsed 건수 조회는 설비 필터 대신 `code = 'OSD-0200'`을 적용한다.
 
 RAW의 청크 파싱·적재 파이프라인 적용 전후 운영 실측값과 파싱 객체 변환 벤치마크는 [DB 스트리밍 및 RAW 성능 개선 문서](docs/db_streaming_optimization.md#5-er-dose-raw-파싱적재-파이프라인-실측)를 기준으로 관리한다.
 
