@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
+import pytest
+
 from er_dose.euv.euv_parser import parse_root_cause
 
 
@@ -38,8 +40,26 @@ def test_parse_euv_root_cause_contents():
     assert parsed.software_version == "2.0 [nxe3400 mv 250w]"
 
 
-def test_non_root_cause_contents_are_skipped():
-    assert parse_root_cause("system info: normal message") is None
+@pytest.mark.parametrize("contents", [
+    "exposure id : 123",
+    "dose error detected in file: sample.zip\nexposure id : 123",
+    "root cause : Low dose margin\nexposure id : 123",
+])
+def test_contents_without_required_phrases_are_parsed(contents):
+    parsed = parse_root_cause(contents)
+    assert parsed is not None
+    assert parsed.source_exposure_id == 123
+
+
+def test_contents_without_matching_fields_are_retained():
+    parsed = parse_root_cause("system info: normal message")
+    assert parsed is not None
+    assert parsed.root_cause_message is None
+    assert parsed.source_file_name is None
+
+
+def test_empty_contents_are_skipped():
+    assert parse_root_cause("") is None
 
 
 def test_parse_euv_root_cause_with_decimal_pulse_counts():

@@ -54,6 +54,7 @@ class FakeDB:
         self.distinct_source_counts = distinct_source_counts or {}
         self.equipment_counts = equipment_counts or {}
         self.executed = []
+        self.bulk_inserted = []
         self.inserted = []
         self.copy_options = []
         self.connection = object()
@@ -98,6 +99,10 @@ class FakeDB:
     def execute(self, query, params=None, connection=None):
         self.executed.append((query, params, connection))
         return 0
+
+    def bulk_insert_df(self, table_name, df, connection=None):
+        self.bulk_inserted.append((table_name, df.copy()))
+        return len(df)
 
     def copy_insert_df(self, table_name, df, connection=None):
         self.insert_table_name = table_name
@@ -731,14 +736,13 @@ class ERDoseProcessorTest(unittest.TestCase):
                 end_time=datetime.combine(target_date + timedelta(days=1), datetime.min.time()),
             )
 
-        log_queries = [item for item in db.executed if "equipment_count_log" in item[0].lower()]
-        self.assertEqual(len(log_queries), 2)
+        self.assertEqual(len(db.bulk_inserted), 2)
         for table in ("er_dose_raw_equipment_count_log", "er_dose_euv_equipment_count_log"):
-            rows = [params for query, params, _ in log_queries if table in query]
-            self.assertEqual(len(rows), 1)
-            params = rows[0]
-            self.assertEqual([(params[f"eq_name_{i}"], params[f"source_count_{i}"], params[f"target_count_{i}"])
-                              for i in range(2)], [("EQ1", 3, 3), ("EQ2", 2, 2)])
+            frames = [df for name, df in db.bulk_inserted if name == f"mbeat.{table}"]
+            self.assertEqual(len(frames), 1)
+            rows = frames[0].to_dict("records")
+            self.assertEqual([(r["eq_name"], r["source_count"], r["target_count"])
+                              for r in rows], [("EQ1", 3, 3), ("EQ2", 2, 2)])
             self.assertTrue(all(r["target_date"] == target_date for r in rows))
             self.assertTrue(all("data" not in r and "message" not in r for r in rows))
 

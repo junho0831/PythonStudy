@@ -80,8 +80,6 @@ class ERDoseEUVRepository:
             from {EUV_RAW_TABLE} r
             where r.code_occur_time >= :start_time
               and r.code_occur_time < :end_time
-              and lower(r.contents) like '%dose error detected in file:%'
-              and lower(r.contents) like '%root cause%'
               and {active_nxe_eq_filter("r.eq_name")}
         """
         df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
@@ -113,8 +111,6 @@ class ERDoseEUVRepository:
                 from {EUV_RAW_TABLE} r
                 where r.code_occur_time >= :start_time
                   and r.code_occur_time < :end_time
-                  and lower(r.contents) like '%dose error detected in file:%'
-                  and lower(r.contents) like '%root cause%'
                   and {active_nxe_eq_filter("r.eq_name")}
                 group by r.eq_name
             ),

@@ -20,8 +20,6 @@ def parse_root_cause(contents: str) -> ParsedEuvRootCause | None:
     if not contents:
         return None
     normalized = normalize_multiline_text(contents)
-    if "dose error detected in file:" not in normalized.lower() or "root cause" not in normalized.lower():
-        return None
 
     root_cause_message = extract_text(normalized, r"\broot\s+cause\s*:\s*(.+)", trim_trailing_period=True)
     min_dose_error = extract_decimal(normalized, r"\bmin\.\s*dose\s+error\s*:\s*" + DECIMAL_RE)

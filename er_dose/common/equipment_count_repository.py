@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
+import pandas as pd
+
 from er_dose.infra.postgres_db import PostgresDB
 
 
@@ -15,25 +17,9 @@ def insert_equipment_count(
     if not rows:
         return
 
-    values = []
-    params = {"target_date": target_date}
-    for index, row in enumerate(rows):
-        values.append(
-            f"(:target_date, :eq_name_{index}, :source_count_{index}, :target_count_{index})"
-        )
-        params[f"eq_name_{index}"] = row["eq_name"]
-        params[f"source_count_{index}"] = row["source_count"]
-        params[f"target_count_{index}"] = row["target_count"]
-
-    query = f"""
-        insert into {table_name} (
-            target_date,
-            eq_name,
-            source_count,
-            target_count
-        ) values {", ".join(values)}
-    """
-    db.execute(query, params=params)
+    df = pd.DataFrame(rows, columns=["eq_name", "source_count", "target_count"])
+    df.insert(0, "target_date", target_date)
+    db.bulk_insert_df(table_name, df)
 
 
 def write_equipment_count_log(

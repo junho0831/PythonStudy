@@ -45,7 +45,7 @@ def test_summary_failure_stops_following_summary_and_statistics(capsys):
     repo.insert_root_cause_daily_summary = Mock()
     with pytest.raises(RuntimeError, match='summary failed'):
         ERDoseProcessor(repo).run(start_time=datetime(2026, 5, 1), end_time=datetime(2026, 5, 2))
-    logs = [params for query, params, _ in db.executed if 'equipment_count_log' in query]
+    logs = db.bulk_inserted
     assert logs == []
     repo.insert_root_cause_daily_summary.assert_not_called()
     assert '[ER_DOSE] done' not in capsys.readouterr().out
@@ -93,21 +93,23 @@ def test_raw_logs_both_batches_with_unchanged_time_bounds():
     summaries = [(q, p) for q, p, _ in db.executed if 'de_trend_' in q]
     assert len(summaries) == 4
     assert all(p == {'start_time': start, 'end_time': end} for _, p in summaries)
-    logs = [p for q, p, _ in db.executed if 'equipment_count_log' in q]
-    assert len(logs) == 2
-    assert any('mbeat.er_dose_raw_equipment_count_log' in q for q, _, _ in db.executed)
-    assert any('mbeat.er_dose_euv_equipment_count_log' in q for q, _, _ in db.executed)
-    for log in logs:
-        assert log['target_date'] == start.date()
-        assert log['eq_name_0'] == 'EQ1'
-        assert set(log) == {'target_date', 'eq_name_0', 'source_count_0', 'target_count_0'}
+    assert {table for table, _ in db.bulk_inserted} == {
+        'mbeat.er_dose_raw_equipment_count_log',
+        'mbeat.er_dose_euv_equipment_count_log',
+    }
+    assert len(db.bulk_inserted) == 2
+    for _, df in db.bulk_inserted:
+        assert df.to_dict('records') == [{
+            'target_date': start.date(), 'eq_name': 'EQ1',
+            'source_count': 3, 'target_count': 2,
+        }]
 
 
 def test_log_insert_has_no_return_value():
     from er_dose.common.equipment_count_repository import insert_equipment_count
 
     db = Mock()
-    db.execute.return_value = 7
+    db.bulk_insert_df.return_value = 7
     assert insert_equipment_count(db, 'mbeat.er_dose_raw_equipment_count_log', date(2026, 5, 1), [{'eq_name': 'EQ1', 'source_count': 3, 'target_count': 2}]) is None
 
 
@@ -120,19 +122,16 @@ def test_eighty_equipment_rows_use_one_parameterized_insert(repository_type, tab
     repo = repository_type(db)
     rows = [{'eq_name': f"EQ'{i}%", 'source_count': 2**40 + i, 'target_count': i} for i in range(80)]
     assert repo.insert_equipment_count(date(2026, 5, 1), rows) is None
-    db.execute.assert_called_once()
-    query = db.execute.call_args.args[0]
-    params = db.execute.call_args.kwargs['params']
-    assert f'insert into {table}' in query
-    assert query.count('(:target_date,') == 80
-    for i, row in enumerate(rows):
-        assert row['eq_name'] not in query
-        assert params[f'eq_name_{i}'] == row['eq_name']
-        assert params[f'source_count_{i}'] == row['source_count']
-        assert params[f'target_count_{i}'] == row['target_count']
+    db.bulk_insert_df.assert_called_once()
+    actual_table, df = db.bulk_insert_df.call_args.args
+    assert actual_table == table
+    assert df.to_dict('records') == [
+        {'target_date': date(2026, 5, 1), **row} for row in rows
+    ]
+    db.execute.assert_not_called()
     db.reset_mock()
     repo.insert_equipment_count(date(2026, 5, 1), [])
-    db.execute.assert_not_called()
+    db.bulk_insert_df.assert_not_called()
 
 
 @pytest.mark.parametrize('repository_type', [ERDoseRepository, ERDoseEUVRepository])

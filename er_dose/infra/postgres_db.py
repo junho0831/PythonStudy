@@ -152,6 +152,34 @@ class PostgresDB:
                     break
                 yield pd.DataFrame(rows, columns=columns)
 
+    def bulk_insert_df(self, table_name: str, df, connection=None) -> int:
+        if df.empty:
+            return 0
+
+        from psycopg2.extras import execute_values
+
+        normalized_df = df.astype(object).where(pd.notna(df), None)
+        table_sql = self._quote_identifier_path(table_name)
+        column_sql = ", ".join(self._quote_identifier(column) for column in df.columns)
+        query = f"insert into {table_sql} ({column_sql}) values %s"
+        rows = list(normalized_df.itertuples(index=False, name=None))
+
+        own_connection = connection is None
+        conn = connection or self._connect_raw()
+        try:
+            with conn.cursor() as cur:
+                execute_values(cur, query, rows)
+            if own_connection:
+                conn.commit()
+        except Exception:
+            if own_connection:
+                conn.rollback()
+            raise
+        finally:
+            if own_connection:
+                conn.close()
+        return len(rows)
+
     def copy_insert_df(self, table_name: str, df, connection=None) -> int:
         if df.empty:
             return 0

@@ -88,8 +88,6 @@ source_counts as (
     from mbeat.er_data_raw_euv r
     where r.code_occur_time >= (current_date - 6)::timestamp
       and r.code_occur_time < (current_date + 1)::timestamp
-      and lower(r.contents) like '%dose error detected in file:%'
-      and lower(r.contents) like '%root cause%'
       and r.eq_name in (
           select eqp.eqp_id
           from prism_dev.photo_eqp_info eqp
