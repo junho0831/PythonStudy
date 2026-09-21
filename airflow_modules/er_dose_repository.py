@@ -1,17 +1,17 @@
+"""Airflow-owned queries. Deploy independently of the remote parser project."""
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Any, Iterator
+from typing import Any
 
 import pandas as pd
 
-from er_dose.common.equipment_count_repository import insert_equipment_count
-from er_dose.common.sql_filters import active_nxe_eq_filter
-from er_dose.infra.postgres_db import PostgresDB
-
+from airflow_modules.er_dose_db import PostgresDB
 
 MAIN_RAW_TABLE = "mbeat.er_data_raw"
 PARSED_TABLE = "prism_common.er_dose_raw_parsed"
+EUV_RAW_TABLE = "mbeat.er_data_raw_euv"
+ROOT_CAUSE_TABLE = "prism_common.er_dose_euv_parsed"
 TARGET_CODES = (
     "DW-3411",
     "DW-3425",
@@ -26,6 +26,40 @@ TARGET_CODES = (
     "KE-9103",
     "KE-9104",
 )
+
+
+def active_nxe_eq_filter(column_name: str) -> str:
+    return f"""{column_name} in (
+                  select eqp.eqp_id
+                  from prism_dev.photo_eqp_info eqp
+                  where eqp.use_yn = 'Y'
+                    and eqp.eqp_model_name like 'NXE%'
+              )"""
+
+
+def insert_equipment_count(
+    db: PostgresDB,
+    table_name: str,
+    target_date: date,
+    rows: list[dict[str, Any]],
+) -> None:
+    if not rows:
+        return
+
+    df = pd.DataFrame(rows, columns=["eq_name", "source_count", "target_count"])
+    df.insert(0, "target_date", target_date)
+    db.bulk_insert_df(table_name, df)
+
+
+def write_equipment_count_log(
+    repository,
+    start_time: datetime,
+    end_time: datetime,
+) -> None:
+    rows = repository.fetch_equipment_counts(start_time, end_time)
+    repository.delete_equipment_count(target_date=start_time.date())
+    if rows:
+        repository.insert_equipment_count(target_date=start_time.date(), rows=rows)
 
 
 class ERDoseRepository:
@@ -50,59 +84,6 @@ class ERDoseRepository:
             target_date=target_date,
             rows=rows,
         )
-
-    def fetch_raw_logs_in_chunks(
-        self,
-        start_time: datetime,
-        end_time: datetime,
-        chunk_size: int = 10000,
-    ) -> Iterator[pd.DataFrame]:
-        current_start = start_time
-        while current_start < end_time:
-            next_day_start = datetime.combine(current_start.date() + timedelta(days=1), datetime.min.time())
-            current_end = min(next_day_start, end_time)
-
-            query, params = self._build_fetch_raw_logs_query(
-                start_time=current_start,
-                end_time=current_end,
-            )
-            yield from self.db.select_in_chunks(query, params=params, chunk_size=chunk_size)
-
-            current_start = current_end
-
-    def fetch_latest_lot_states(self, start_time: datetime) -> dict[str, dict[str, int | str | None]]:
-        previous_day_start = datetime.combine((start_time - timedelta(days=1)).date(), datetime.min.time())
-        query = f"""
-            select distinct on (p.eq_name)
-                p.eq_name,
-                p.lot_id,
-                p.lot_name,
-                p.lot_seq,
-                p.wafer_seq
-            from {PARSED_TABLE} p
-            where p.code_occur_time >= :previous_day_start
-              and p.code_occur_time < :start_time
-              and p.eq_name is not null
-              and (p.lot_id is not null or p.lot_name is not null or p.lot_seq is not null or p.wafer_seq is not null)
-              and {active_nxe_eq_filter("p.eq_name")}
-            order by p.eq_name, p.code_occur_time desc
-        """
-        df = self.db.select(query, params={"previous_day_start": previous_day_start, "start_time": start_time})
-        if df is None or df.empty:
-            return {}
-
-        lot_states: dict[str, dict[str, int | str | None]] = {}
-        for _, row in df.iterrows():
-            eq_name = row["eq_name"]
-            if pd.isna(eq_name):
-                continue
-            lot_states[str(eq_name)] = {
-                "lot_id": None if pd.isna(row.get("lot_id")) else str(row["lot_id"]),
-                "lot_name": None if pd.isna(row.get("lot_name")) else str(row["lot_name"]),
-                "lot_seq": None if pd.isna(row.get("lot_seq")) else int(row["lot_seq"]),
-                "wafer_seq": None if pd.isna(row.get("wafer_seq")) else int(row["wafer_seq"]),
-            }
-        return lot_states
 
     def fetch_source_count(self, target_date: date, distinct: bool = False) -> int:
         start_time = datetime.combine(target_date, datetime.min.time())
@@ -179,119 +160,6 @@ class ERDoseRepository:
             {"eq_name": row.eq_name, "source_count": int(row.source_count), "target_count": int(row.target_count)}
             for row in df.itertuples(index=False)
         ]
-
-    def truncate_target_partition(self, target_date: date, connection=None) -> int:
-        parsed_table = self._partition_table_name(PARSED_TABLE, target_date)
-        return self.db.execute(f"truncate table {parsed_table}", connection=connection)
-
-    def _build_fetch_raw_logs_query(
-        self,
-        start_time: datetime,
-        end_time: datetime,
-    ) -> tuple[str, dict[str, datetime]]:
-        params = {
-            "start_time": start_time,
-            "end_time": end_time,
-        }
-
-        target_codes_sql = ", ".join(f"'{code}'" for code in TARGET_CODES)
-        raw_table = self._partition_table_name(MAIN_RAW_TABLE, start_time.date())
-
-        query = f"""
-            select
-                r.eq_name,
-                r.code,
-                r.code_occur_time,
-                r.title,
-                r.contents
-            from {raw_table} r
-            where r.code_occur_time >= :start_time
-              and r.code_occur_time < :end_time
-              and r.code in ({target_codes_sql})
-              and {active_nxe_eq_filter("r.eq_name")}
-            order by r.code_occur_time, r.eq_name, r.er_date, r.er_index
-        """
-        return query, params
-
-
-    def _partition_table_name(self, table_name: str, target_date: date) -> str:
-        return f'{table_name}_1_prt_p{target_date.strftime("%Y%m%d")}'
-
-
-    def insert_parsed_df(self, df: pd.DataFrame, connection=None, analyze: bool = True) -> int:
-        if df is None or df.empty:
-            return 0
-
-        # prism_common.er_dose_raw_parsed 에 존재하는 컬럼만 적재한다.
-        table_columns = [
-            "eq_name",
-            "code",
-            "code_occur_time",
-            "title",
-            "contents",
-            "exposure_handle",
-            "action_handle",
-            "lot_id",
-            "lot_name",
-            "lot_seq",
-            "wafer_seq",
-            "de_err",
-            "n_slit",
-            "created_at",
-            "use_yn",
-        ]
-
-        df_to_insert = df.copy()
-        if "created_at" not in df_to_insert.columns:
-            df_to_insert["created_at"] = datetime.now()
-        if "use_yn" not in df_to_insert.columns:
-            df_to_insert["use_yn"] = "Y"
-
-        # COPY 대상 테이블 컬럼과 정확히 맞춘다.
-        insert_columns = [col for col in table_columns if col in df_to_insert.columns]
-        df_to_insert = df_to_insert[insert_columns].copy()
-
-        int_columns = [
-            "exposure_handle",
-            "action_handle",
-            "lot_seq",
-            "wafer_seq",
-            "n_slit",
-        ]
-        for column in int_columns:
-            if column in df_to_insert.columns:
-                df_to_insert[column] = pd.to_numeric(df_to_insert[column], errors="coerce").astype("Int64")
-
-        # 파티션 날짜별로 나눠 적재한다.
-        df_to_insert["_target_date"] = (
-            pd.to_datetime(df_to_insert["code_occur_time"]).dt.strftime("%Y-%m-%d")
-        )
-
-        schema, table_name = PARSED_TABLE.split(".", maxsplit=1)
-
-        inserted_count = 0
-        for target_date, group_df in df_to_insert.groupby("_target_date"):
-            group_df_clean = group_df.drop(columns=["_target_date"])
-            print(
-                "[ER_DOSE] "
-                f"partition_date={target_date} "
-                f"rows={len(group_df_clean)}"
-            )
-            self.db.copy_insert_to_partition_table(
-                schema=schema,
-                table_name=table_name,
-                target_date=target_date,
-                df=group_df_clean,
-                connection=connection,
-                analyze=analyze,
-            )
-            inserted_count += len(group_df_clean)
-
-        return inserted_count
-
-    def analyze_target_partition(self, target_date: str, connection=None) -> int:
-        partition_table = f"{PARSED_TABLE}_1_prt_p{target_date.replace('-', '')}"
-        return self.db.execute(f"ANALYZE {partition_table}", connection=connection)
 
     def delete_die_yield_daily_summary(self, start_time: datetime, end_time: datetime) -> None:
         delete_query = """
@@ -407,5 +275,96 @@ class ERDoseRepository:
         """
         self.db.execute(insert_query, params={"start_time": start_time, "end_time": end_time})
 
-    def transaction(self):
-        return self.db.transaction()
+
+
+class ERDoseEUVRepository:
+    def __init__(self, db: PostgresDB):
+        self.db = db
+
+    def delete_equipment_count(self, target_date: date) -> None:
+        query = """
+            delete from mbeat.er_dose_euv_equipment_count_log
+            where target_date = :target_date
+        """
+        self.db.execute(query, params={"target_date": target_date})
+
+    def insert_equipment_count(
+        self,
+        target_date: date,
+        rows: list[dict[str, Any]],
+    ) -> None:
+        insert_equipment_count(
+            self.db,
+            table_name="mbeat.er_dose_euv_equipment_count_log",
+            target_date=target_date,
+            rows=rows,
+        )
+
+    def fetch_source_count(self, target_date: date, distinct: bool = False) -> int:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+        count_sql = "count(distinct (r.eq_name, r.code, r.code_occur_time))" if distinct else "count(*)"
+        query = f"""
+            select {count_sql} as row_count
+            from {EUV_RAW_TABLE} r
+            where r.code_occur_time >= :start_time
+              and r.code_occur_time < :end_time
+              and r.code = 'OSD-0200'
+        """
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
+        if df is None or df.empty:
+            return 0
+        return int(df.iloc[0]["row_count"])
+
+    def fetch_target_count(self, target_date: date) -> int:
+        start_time = datetime.combine(target_date, datetime.min.time())
+        end_time = start_time + timedelta(days=1)
+        query = f"""
+            select count(*) as row_count
+            from {ROOT_CAUSE_TABLE} p
+            where p.code_occur_time >= :start_time
+              and p.code_occur_time < :end_time
+              and p.code = 'OSD-0200'
+        """
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
+        if df is None or df.empty:
+            return 0
+        return int(df.iloc[0]["row_count"])
+
+    def fetch_equipment_counts(self, start_time: datetime, end_time: datetime) -> list[dict[str, Any]]:
+        query = f"""
+            with source_counts as (
+                select
+                    r.eq_name,
+                    count(*) as source_count
+                from {EUV_RAW_TABLE} r
+                where r.code_occur_time >= :start_time
+                  and r.code_occur_time < :end_time
+                  and r.code = 'OSD-0200'
+                group by r.eq_name
+            ),
+            target_counts as (
+                select
+                    p.eq_name,
+                    count(*) as target_count
+                from {ROOT_CAUSE_TABLE} p
+                where p.code_occur_time >= :start_time
+                  and p.code_occur_time < :end_time
+                  and p.code = 'OSD-0200'
+                group by p.eq_name
+            )
+            select
+                coalesce(s.eq_name, t.eq_name) as eq_name,
+                coalesce(s.source_count, 0) as source_count,
+                coalesce(t.target_count, 0) as target_count
+            from source_counts s
+            full outer join target_counts t on t.eq_name = s.eq_name
+            order by eq_name
+        """
+        df = self.db.select(query, params={"start_time": start_time, "end_time": end_time})
+        if df is None or df.empty:
+            return []
+        return [
+            {"eq_name": row.eq_name, "source_count": int(row.source_count), "target_count": int(row.target_count)}
+            for row in df.itertuples(index=False)
+        ]

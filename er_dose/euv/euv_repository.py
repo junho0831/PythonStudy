@@ -58,6 +58,13 @@ class ERDoseEUVRepository:
     def __init__(self, db: PostgresDB):
         self.db = db
 
+    def delete_equipment_count(self, target_date: date) -> None:
+        query = """
+            delete from mbeat.er_dose_euv_equipment_count_log
+            where target_date = :target_date
+        """
+        self.db.execute(query, params={"target_date": target_date})
+
     def insert_equipment_count(
         self,
         target_date: date,

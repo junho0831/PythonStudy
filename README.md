@@ -37,17 +37,21 @@ RUBI 텍스트와 RUIP 이미지를 수집 및 매칭하여 reticle backside 오
 
 ## ER Dose Error 배치
 
-`ER_DOSE_RAW` 배치는 `mbeat.er_data_raw`의 dose warning 로그를 파싱해 `prism_common.er_dose_raw_parsed`에 적재하며, 수집 완료 후 `prism_common.de_trend_die_yield_daily` 일별 DIE Yield 서머리 테이블을 갱신합니다. parsed 테이블에는 `eq_name`, `code`, `code_occur_time`, `title`, `contents`와 `contents`에서 실제로 필요한 `exposure_handle`, `action_handle`, `lot_id`, `lot_name`, `lot_seq`, `wafer_seq`, `de_err`, `n_slit`, `use_yn`을 저장합니다. 조회 대상 `code`는 `DW-3411`, `DW-3425`, `DW-343A`, `DW-343B`, `LO-0050`, `LO-0051`, `LO-0052`, `LO-0061`, `LO-8166`, `LO-8167`, `KE-9103`, `KE-9104`이며, 코드 값은 DB에 저장된 원본 형식 그대로 비교합니다.
+[er_dose_daily_dag.py](dags/er_dose_daily_dag.py) 하나에 날짜별 Run을 생성합니다. 실행 명령과 Grid 날짜 표시·SSH·서머리 순서는 [운영 안내](docs/er_dose_airflow.md)를 참고하세요.
+
+**Airflow DAG와 파서는 별도 프로젝트**이며, 이 저장소에는 편의상 함께 두었습니다. DAG는 자체 DB 연결·쿼리를 사용하고, 파서는 Linux 서버에서 SSH 명령으로 실행합니다. 프로젝트별 배포 파일, DB 설정, 날짜별 Run과 XCom 구조는 [프로젝트 분리 및 운영 안내](docs/er_dose_airflow.md#프로젝트-경계)를 참고하세요.
+
+`ER_DOSE_RAW` 배치는 `mbeat.er_data_raw`의 dose warning 로그를 파싱해 `prism_common.er_dose_raw_parsed`에 적재하며, 서머리는 파싱 완료 후 Airflow에서 별도로 갱신합니다. parsed 테이블에는 `eq_name`, `code`, `code_occur_time`, `title`, `contents`와 `contents`에서 실제로 필요한 `exposure_handle`, `action_handle`, `lot_id`, `lot_name`, `lot_seq`, `wafer_seq`, `de_err`, `n_slit`, `use_yn`을 저장합니다. 조회 대상 `code`는 `DW-3411`, `DW-3425`, `DW-343A`, `DW-343B`, `LO-0050`, `LO-0051`, `LO-0052`, `LO-0061`, `LO-8166`, `LO-8167`, `KE-9103`, `KE-9104`이며, 코드 값은 DB에 저장된 원본 형식 그대로 비교합니다.
 
 배치는 `code_occur_time` 기간 조건으로 조회한 후보를 한 번에 메모리로 올리지 않고, `chunk` 단위로 읽어서 파싱 후 바로 `COPY` 적재합니다. 파티션 적재는 공통 `copy_insert_to_partition_table`을 사용하며, 적재 전에 DataFrame 컬럼을 테이블의 물리 컬럼 순서와 동일하게 정렬한 뒤 `COPY ... FROM STDIN WITH CSV HEADER`를 실행합니다. 현재 기본 `chunk` 크기는 `ER_DOSE_RAW` 및 `ER_DOSE_EUV` 배치 모두 `30000`이며 실행 시 조정할 수 있습니다. 조회는 SQLAlchemy 서버사이드 커서(`stream_results=True`, `max_row_buffer=chunk_size`) 기반 스트리밍으로 수행되지만, 실제 메모리 사용량은 `chunk` 크기와 raw `contents` 크기에 영향을 받으므로 운영 환경에 맞게 조정해야 합니다. 청크 단위로 처리되더라도 설비(`eq_name`)별로 이전에 파싱한 `lot_seq`와 `wafer_seq`를 기억하여 지속 적용합니다. `ER_DOSE_RAW`은 적재 worker 1개를 사용해 이전 청크의 `COPY`와 다음 청크의 조회·파싱을 겹쳐 실행하며, 대기 중인 DataFrame은 최대 1개로 제한합니다. 이 변경의 운영 실측 결과는 [DB 스트리밍 및 RAW 성능 개선 문서](docs/db_streaming_optimization.md#5-er-dose-raw-파싱적재-파이프라인-실측)에 기록합니다.
 
-`ER_DOSE_RAW`와 `ER_DOSE_EUV`의 processor 기본 실행은 최근 2일 lookback 모드입니다. 실행일 기준 `오늘 포함 최근 2일`을 날짜별로 검사하고, 먼저 원천 raw와 parsed의 전체 건수를 비교합니다. 두 배치 모두 전체 건수가 다르고 parsed 건수가 0보다 클 때만 원천에서 `(eq_name, code, code_occur_time)`이 같은 행을 중복 제거한 건수를 한 번 더 계산합니다. 이 건수가 parsed 건수와 같으면 중복으로 인한 차이이므로 스킵하고, 여전히 다르거나 parsed 건수가 0이면 해당 날짜 parsed 파티션을 `TRUNCATE`한 뒤 원천 raw를 처음부터 다시 파싱해 적재합니다. `ER_DOSE_EUV_TARGET_DATE`를 명시하면 해당 날짜 1일만 같은 방식으로 검사하고, `ER_DOSE_START_TIME`/`ER_DOSE_END_TIME`를 명시하면 count 비교 없이 지정한 시간 범위를 처리합니다. EUV source count는 root cause 파싱 대상인 `contents`만 세어 parsed count와 비교합니다.
+날짜 판단과 실행 관리는 [Airflow DAG](docs/er_dose_airflow.md)가 맡습니다. Run의 logical date를 XCom `date` 키로 저장한 `YYYY-MM-DD` 날짜의 원천·parsed 건수를 비교하고, 불일치하면서 parsed가 0보다 클 때만 DISTINCT 건수를 추가 비교합니다. 확정된 날짜·기간·RAW/EUV 처리 여부를 XCom의 `ER_DOSE_PLAN` 키에 리스트로 저장하고 전달받은 날짜의 EUV → RAW 순서로 SSH 파싱을 실행합니다. `er_dose_runs` 명령이 10일 전부터 어제까지 날짜별 `er_dose_daily` Run을 순차 생성합니다. 각 Run의 logical date가 실제 처리 날짜이며 이전 날짜의 집계까지 성공해야 다음 날짜를 제출합니다. 파서는 받은 날짜를 건수 비교 없이 TRUNCATE 후 재적재하며 서머리·통계를 실행하지 않습니다. 날짜 또는 시간 범위 없는 실행은 허용하지 않습니다. EUV 조회는 `OSD-0200` 조건을 유지합니다.
 
-RAW 마지막 서머리 단계에서 RAW/EUV 건수를 `select()`로 각각 조회하고 RAW는 `mbeat.er_dose_raw_equipment_count_log`, EUV는 `mbeat.er_dose_euv_equipment_count_log`에 저장합니다. 각 테이블은 `target_date`, `eq_name`, `source_count`, `target_count`, `created_at` 컬럼으로 설비별 한 행을 저장합니다. `message`와 `data`는 사용하지 않습니다. 운영 배포 전 [create_er_dose_equipment_count_logs.sql](er_dose/sql/create_er_dose_equipment_count_logs.sql)을 적용해야 합니다.
+Airflow의 날짜별 통계 작업에서 RAW/EUV 건수를 `select()`로 각각 조회하고 RAW는 `mbeat.er_dose_raw_equipment_count_log`, EUV는 `mbeat.er_dose_euv_equipment_count_log`에 저장합니다. 각 테이블은 `target_date`, `eq_name`, `source_count`, `target_count`, `created_at` 컬럼으로 설비별 한 행을 저장합니다. `message`와 `data`는 사용하지 않습니다. 운영 배포 전 [create_er_dose_equipment_count_logs.sql](er_dose/sql/create_er_dose_equipment_count_logs.sql)을 적용해야 합니다.
 
 DW 로그에서 `exposure_handle`이 같은 설비의 이전 값보다 `1000` 이상 커지면 테스트샷성 row로 보고 저장은 하되 `use_yn='N'`으로 표시합니다. 일반 분석에서는 `use_yn='Y'` 조건을 사용하면 되고, row 자체는 저장되므로 raw count와 parsed count 비교가 계속 어긋나는 문제를 피할 수 있습니다.
 
-`ER_DOSE_EUV`는 `mbeat.er_data_raw_euv` 기반 root cause 결과용 실행입니다. 대상 결과는 `prism_common.er_dose_euv_parsed`에 저장하며, `er_line`, `belong`, `type`은 저장하지 않습니다. `contents`에서 `dose_error_detected_in_file`, `exposure_id`, `time`, `root_cause`와 각종 EUV metric 컬럼을 파싱해 적재합니다. 컬럼명은 소문자 snake_case 기준으로 공백, `.`, `-`, `<`, `=`를 `_`로 치환하며, 파생 컬럼은 `root_cause_code`만 저장합니다. EUV 적재 결과의 일별/설비별/원인별 발생 빈도(`frequency`)는 이후 RAW 마지막 단계에서 DELETE 후 INSERT합니다.
+`ER_DOSE_EUV`는 `mbeat.er_data_raw_euv` 기반 root cause 결과용 실행입니다. 대상 결과는 `prism_common.er_dose_euv_parsed`에 저장하며, `er_line`, `belong`, `type`은 저장하지 않습니다. `contents`에서 `dose_error_detected_in_file`, `exposure_id`, `time`, `root_cause`와 각종 EUV metric 컬럼을 파싱해 적재합니다. 컬럼명은 소문자 snake_case 기준으로 공백, `.`, `-`, `<`, `=`를 `_`로 치환하며, 파생 컬럼은 `root_cause_code`만 저장합니다. EUV 적재 결과의 일별/설비별/원인별 발생 빈도(`frequency`)는 이후 Airflow의 원인 서머리 작업에서 DELETE 후 INSERT합니다.
 
 상세 스키마와 파싱 규칙은 [ER_DOSE_ERROR.md](ER_DOSE_ERROR.md)를 기준으로 관리합니다.
 
@@ -221,7 +225,7 @@ ER_DOSE_DB_DSN=postgresql://user:password@host:5432/dbname
 - `ER_DOSE_RAW_TARGET_DATE`: ER Dose raw 대상 날짜, `YYYY-MM-DD`
 - `ER_DOSE_EUV_TARGET_DATE`: ER Dose EUV 대상 날짜, `YYYY-MM-DD`
 - `ER_DOSE_CHUNK_SIZE`: ER Dose raw/euv fetch chunk 크기
-- `ER_DOSE_LOOKBACK_DAYS`: `ER_DOSE_RAW` 기본 lookback 일수, 기본값 `2`
+- 대상 날짜: 날짜별 DAG Run의 logical date와 XCom `date`에서 관리
 - `INPUT_DATE`: `RBI_INPUT_DATE` 대체값
 - `ER_DOSE_TARGET_DATE`: raw 레거시 대상 날짜 이름
 - `TARGET_DATE`: `ER_DOSE_TARGET_DATE` 레거시 대체값
@@ -246,7 +250,7 @@ pip3 install --target .vendor SQLAlchemy psycopg2-binary
 - 내부적으로 `ER_DOSE_RAW`는 `ER_DOSE_RAW_TARGET_DATE`, `ER_DOSE_EUV`는 `ER_DOSE_EUV_TARGET_DATE`를 사용합니다.
 - raw/euv processor 모두 대상 날짜 기준으로 하루 범위를 계산합니다.
 - `BATCH_TARGET=ER_DOSE_RAW`가 현재 raw 배치의 기본 이름입니다. 레거시 `ER_DOSE`도 계속 지원합니다.
-- `BATCH_TARGET=ER_DOSE_RAW` 또는 `BATCH_TARGET=ER_DOSE_EUV`를 환경변수만으로 실행하고 날짜 인자를 주지 않으면 최근 2일 lookback + 날짜별 count 비교 기반 재적재 전략이 적용됩니다. 두 배치 모두 전체 count가 다를 때만 고유 이벤트 count를 추가로 비교합니다.
+- RAW/EUV 파서는 명시적인 날짜 또는 시간 범위가 필요합니다. 날짜 설정은 DAG Run의 logical date에서, 재처리 분기는 Airflow에서 수행합니다.
 - 인자 없이 `main.py`를 실행하면 기존과 동일하게 환경변수 기반 실행입니다.
 
 ### DB 초기화
@@ -314,13 +318,7 @@ ER_DOSE_DB_DSN='postgresql://user:password@host:5432/dbname' \
 
 직접 ER Dose 실행 스크립트를 사용할 수도 있습니다.
 
-`ER_DOSE_RAW`를 날짜 없이 실행하면 최근 2일 lookback 모드로 동작합니다.
-
-```bash
-python3 -m er_dose.run_er_dose_batch \
-  --parser ER_DOSE_RAW \
-  --dsn 'postgresql://user:password@host:5432/dbname'
-```
+파서 단독 실행은 날짜 또는 시간 범위를 지정하며, 서머리·통계는 실행하지 않습니다.
 
 ```bash
 python3 -m er_dose.run_er_dose_batch \
@@ -388,10 +386,10 @@ python3 -m er_dose.run_er_dose_batch \
 
 자세한 매칭 규칙은 [/Users/parkjunho/PycharmProjects/PythonStudy/IMAGE_TEXT_MATCHING.md](/Users/parkjunho/PycharmProjects/PythonStudy/IMAGE_TEXT_MATCHING.md) 를 참고하면 됩니다.
 
-서머리는 전달받은 시간 범위로 집계하며 해당 범위의 일별 데이터를 DELETE한 뒤 INSERT합니다. DELETE와 INSERT는 별도 메서드에서 각각 실행하고, 결과가 0건이어도 기존 집계는 제거합니다. RAW의 기존 집계 조건을 유지하며 processor에서 각 `delete_*_daily_summary`, `insert_*_daily_summary` 메서드를 직접 호출합니다.
+서머리는 전달받은 시간 범위로 집계하며 해당 범위의 일별 데이터를 DELETE한 뒤 INSERT합니다. DELETE와 INSERT는 별도 메서드에서 각각 실행하고, 결과가 0건이어도 기존 집계는 제거합니다. RAW의 기존 집계 조건을 유지하며 Airflow 작업에서 각 `delete_*_daily_summary`, `insert_*_daily_summary` 메서드를 직접 호출합니다.
 
-EUV 적재가 RAW 마지막 집계 전에 완료되는 운영 순서를 전제로, DIE Yield·Root Cause 서머리와 RAW/EUV 건수 로그는 RAW 마지막 단계에서 저장합니다. EUV는 파싱·적재와 파티션 ANALYZE만 수행합니다. 서머리와 로그 조회에는 전달받은 `start_time`, `end_time`을 그대로 사용합니다. RAW 마지막에 두 DELETE 메서드를 실행한 뒤 DIE Yield INSERT → Root Cause INSERT → RAW 통계 → EUV 통계를 호출 스레드에서 순서대로 실행합니다. 서머리·통계용 스레드 풀은 사용하지 않습니다. DELETE와 INSERT는 별도 커밋이며 하나의 트랜잭션으로 묶지 않습니다. 중간 작업이 실패하면 이후 작업을 실행하지 않고 RAW를 정상 완료로 처리하지 않습니다. 실패 전에 커밋한 결과는 남습니다. 기존 리로드 판단은 유지합니다.
+날짜별 Run의 EUV → RAW·서머리 실행 순서, 재시도와 장애 복구는 [Airflow 운영 안내](docs/er_dose_airflow.md)를 참고하세요.
 
-로그 테이블은 `mbeat.er_dose_raw_equipment_count_log`와 `mbeat.er_dose_euv_equipment_count_log`로 분리했습니다. 테이블명으로 구분하므로 `batch_name`, `event_type` 컬럼은 없으며 `message`, `data`도 사용하지 않습니다. 두 테이블 모두 `id`, `target_date`, `eq_name`, `source_count`(원천), `target_count`(parsed), `created_at` 컬럼을 가집니다. `target_date`는 범위 시작일이며 `created_at`은 DB 기본값입니다. 원천에만 있거나 parsed에만 있는 설비도 저장하고 반대편 건수는 0입니다. 양쪽 모두 설비가 없으면 로그 행을 생성하지 않습니다. 조회는 기존 필터로 `GROUP BY eq_name`한 결과를 `select()`로 가져오며 PostgreSQL 9.4 미지원 JSON 생성 함수를 사용하지 않습니다. 조회된 설비 목록은 DataFrame으로 만들어 테이블별 `bulk_insert_df()`로 저장하고 한 번 커밋합니다. 내부에서는 psycopg2의 `execute_values()`로 값을 안전하게 전달하며 약 80행은 INSERT 한 번으로 처리합니다. 빈 목록은 DB에 연결하지 않습니다. 한 행이 실패하면 해당 INSERT 전체가 실패합니다. RAW/EUV는 각각 별도로 저장하며, 서머리 DELETE·INSERT의 별도 커밋은 유지합니다. INSERT 함수는 반환값이 없습니다.
+로그 테이블은 `mbeat.er_dose_raw_equipment_count_log`와 `mbeat.er_dose_euv_equipment_count_log`로 분리했습니다. 테이블명으로 구분하므로 `batch_name`, `event_type` 컬럼은 없으며 `message`, `data`도 사용하지 않습니다. 두 테이블 모두 `id`, `target_date`, `eq_name`, `source_count`(원천), `target_count`(parsed), `created_at` 컬럼을 가집니다. `target_date`는 범위 시작일이며 `created_at`은 DB 기본값입니다. 원천에만 있거나 parsed에만 있는 설비도 저장하고 반대편 건수는 0입니다. 양쪽 모두 설비가 없으면 로그 행을 생성하지 않습니다. 조회는 기존 필터로 `GROUP BY eq_name`한 결과를 `select()`로 가져오며 PostgreSQL 9.4 미지원 JSON 생성 함수를 사용하지 않습니다. 조회된 설비 목록은 DataFrame으로 만들어 테이블별 `bulk_insert_df()`로 저장하고 한 번 커밋합니다. 내부에서는 psycopg2의 `execute_values()`로 값을 안전하게 전달하며 약 80행은 INSERT 한 번으로 처리합니다. 통계 조회가 성공하면 해당 테이블의 같은 `target_date` 스냅샷을 삭제하고 저장합니다. 빈 목록도 이전 스냅샷은 삭제하며 INSERT만 생략합니다. 한 행이 실패하면 해당 INSERT 전체가 실패합니다. RAW/EUV는 각각 별도로 저장하며, 서머리 DELETE·INSERT의 별도 커밋은 유지합니다. INSERT 함수는 반환값이 없습니다.
 
 배포 전 [생성 SQL](er_dose/sql/create_er_dose_equipment_count_logs.sql)을 적용합니다. 기존 `batch_event_log`가 있으면 기록 작업을 중지한 상태에서 [테이블 분리 SQL](er_dose/sql/migrate_er_dose_equipment_count_logs.sql)을 이어서 적용합니다. JSON 형식과 설비별 컬럼 형식 모두 지원하며, RAW/EUV의 `EQUIPMENT_COUNT` 기록만 각각 새 테이블로 옮깁니다. 날짜·설비·건수·저장 시각은 보존하고 새 ID를 부여합니다. 메시지·JSON 부가 정보와 빈 배열 기록은 옮기지 않습니다. 기존 테이블에 다른 배치/이벤트가 남으면 그대로 보존하고, 비어 있으면 제거합니다. 이전한 원본 기록을 삭제하므로 전환 SQL을 다시 실행해도 중복 이전되지 않습니다. 지원하지 않는 RAW/EUV JSON 형태는 원본을 변경하지 않고 오류로 종료합니다. 운영 DB에는 자동 적용하지 않습니다.

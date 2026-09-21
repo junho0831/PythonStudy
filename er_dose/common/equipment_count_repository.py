@@ -28,5 +28,6 @@ def write_equipment_count_log(
     end_time: datetime,
 ) -> None:
     rows = repository.fetch_equipment_counts(start_time, end_time)
+    repository.delete_equipment_count(target_date=start_time.date())
     if rows:
         repository.insert_equipment_count(target_date=start_time.date(), rows=rows)

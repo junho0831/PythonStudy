@@ -23,31 +23,18 @@ class ERDoseEUVProcessor(CountReloadProcessor):
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         chunk_size: int = 10000,
-        lookback_days: int = 2,
-        reference_date: date | None = None,
         target_date: date | None = None,
     ) -> None:
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be greater than 0")
         if target_date is not None:
-            self.run_recent_days(
-                lookback_days=1,
-                reference_date=target_date,
-                chunk_size=chunk_size,
-            )
+            self._reload_target_date(target_date=target_date, chunk_size=chunk_size)
             return
 
-        if start_time is None and end_time is None:
-            self.run_recent_days(
-                lookback_days=lookback_days,
-                reference_date=reference_date,
-                chunk_size=chunk_size,
-            )
-            return
         if start_time is None or end_time is None:
             raise ValueError("start_time and end_time are required")
         if start_time >= end_time:
             raise ValueError("start_time must be earlier than end_time")
-        if chunk_size <= 0:
-            raise ValueError("chunk_size must be greater than 0")
 
         self._run_window(start_time=start_time, end_time=end_time, chunk_size=chunk_size)
 

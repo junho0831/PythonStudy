@@ -600,177 +600,6 @@ class ERDoseProcessorTest(unittest.TestCase):
         self.assertEqual(db.fetch_params["start_time"], datetime(2026, 5, 1, 0, 0, 0))
         self.assertEqual(db.fetch_params["end_time"], datetime(2026, 5, 2, 0, 0, 0))
 
-    def test_run_without_window_uses_recent_days_lookback(self):
-        raw_df = pd.DataFrame([
-            self._row(1, "dw-3411", SAMPLE_CONTENTS, code_occur_time=datetime(2026, 5, 2, 10, 0, 0))
-        ])
-        db = FakeDB(
-            raw_df,
-            source_counts={
-                datetime(2026, 5, 1).date(): 0,
-                datetime(2026, 5, 2).date(): 1,
-            },
-            target_counts={
-                datetime(2026, 5, 1).date(): 0,
-                datetime(2026, 5, 2).date(): 1,
-            },
-        )
-        repo = ERDoseRepository(db)
-        processor = ERDoseProcessor(repo)
-
-        with redirect_stdout(StringIO()) as stdout:
-            processor.run(
-                lookback_days=2,
-                reference_date=datetime(2026, 5, 2).date(),
-                chunk_size=100,
-            )
-
-        non_log_queries = [item for item in db.executed if "equipment_count_log" not in item[0].lower()]
-        self.assertEqual(non_log_queries, [])
-        self.assertEqual(len(db.partition_inserts), 0)
-        self.assertIn("lookback_done start_date=2026-05-01 end_date=2026-05-02", stdout.getvalue())
-        self.assertIn("checked_dates=2 reloaded_dates=0 source_rows=0 inserted=0", stdout.getvalue())
-
-    def test_run_recent_days_skips_when_counts_match(self):
-        raw_df = pd.DataFrame([
-            self._row(1, "dw-3411", SAMPLE_CONTENTS, code_occur_time=datetime(2026, 5, 2, 10, 0, 0))
-        ])
-        db = FakeDB(
-            raw_df,
-            source_counts={
-                datetime(2026, 5, 1).date(): 0,
-                datetime(2026, 5, 2).date(): 1,
-            },
-            target_counts={
-                datetime(2026, 5, 1).date(): 0,
-                datetime(2026, 5, 2).date(): 1,
-            },
-        )
-        repo = ERDoseRepository(db)
-        processor = ERDoseProcessor(repo)
-
-        with redirect_stdout(StringIO()) as stdout:
-            processor.run_recent_days(
-                lookback_days=2,
-                reference_date=datetime(2026, 5, 2).date(),
-                chunk_size=100,
-            )
-
-        non_log_queries = [item for item in db.executed if "equipment_count_log" not in item[0].lower()]
-        self.assertEqual(non_log_queries, [])
-        self.assertEqual(len(db.partition_inserts), 0)
-        self.assertIn("lookback_done start_date=2026-05-01 end_date=2026-05-02", stdout.getvalue())
-        self.assertIn("checked_dates=2 reloaded_dates=0 source_rows=0 inserted=0", stdout.getvalue())
-
-    def test_run_recent_days_truncates_and_reloads_when_counts_differ(self):
-        target_date = datetime(2026, 5, 1).date()
-        raw_df = pd.DataFrame([
-            self._row(1, "dw-3411", SAMPLE_CONTENTS)
-        ])
-        db = FakeDB(
-            raw_df,
-            source_counts={target_date: 1},
-            target_counts={target_date: 0},
-            distinct_source_counts={target_date: 0},
-        )
-        repo = ERDoseRepository(db)
-        processor = ERDoseProcessor(repo)
-
-        with redirect_stdout(StringIO()) as stdout:
-            processor.run_recent_days(
-                lookback_days=1,
-                reference_date=target_date,
-                chunk_size=100,
-            )
-
-        truncate_queries = [query for query, _, _ in db.executed if query.strip().upper().startswith("TRUNCATE")]
-        self.assertEqual(truncate_queries, ["truncate table prism_common.er_dose_raw_parsed_1_prt_p20260501"])
-        self.assertEqual(len(db.partition_inserts), 1)
-        self.assertIsNone(db.executed[0][2])
-        analyze_queries = [item for item in db.executed if item[0] == "ANALYZE prism_common.er_dose_raw_parsed_1_prt_p20260501"]
-        self.assertEqual(len(analyze_queries), 1)
-        self.assertIsNone(analyze_queries[0][2])
-        self.assertIn("lookback_done start_date=2026-05-01 end_date=2026-05-01", stdout.getvalue())
-        self.assertIn("checked_dates=1 reloaded_dates=1 source_rows=1 inserted=1", stdout.getvalue())
-
-    def test_run_recent_days_skips_when_only_source_duplicates_differ(self):
-        target_date = datetime(2026, 5, 1).date()
-        db = FakeDB(
-            pd.DataFrame(),
-            source_counts={target_date: 2},
-            target_counts={target_date: 1},
-            distinct_source_counts={target_date: 1},
-        )
-        processor = ERDoseProcessor(ERDoseRepository(db))
-
-        with redirect_stdout(StringIO()) as stdout:
-            processor.run_recent_days(
-                lookback_days=1,
-                reference_date=target_date,
-                chunk_size=100,
-            )
-
-        non_log_queries = [item for item in db.executed if "equipment_count_log" not in item[0].lower()]
-        self.assertEqual(non_log_queries, [])
-        self.assertEqual(len(db.partition_inserts), 0)
-        self.assertIn("checked_dates=1 reloaded_dates=0 source_rows=0 inserted=0", stdout.getvalue())
-
-    def test_run_writes_equipment_counts_to_common_log(self):
-        target_date = date(2026, 5, 1)
-        db = FakeDB(
-            pd.DataFrame(),
-            source_counts={target_date: 5},
-            target_counts={target_date: 5},
-            equipment_counts={
-                target_date: [
-                    {"eq_name": "EQ1", "source_count": 3, "target_count": 3},
-                    {"eq_name": "EQ2", "source_count": 2, "target_count": 2},
-                ]
-            },
-        )
-        processor = ERDoseProcessor(ERDoseRepository(db))
-
-        with redirect_stdout(StringIO()):
-            processor.run(
-                start_time=datetime.combine(target_date, datetime.min.time()),
-                end_time=datetime.combine(target_date + timedelta(days=1), datetime.min.time()),
-            )
-
-        self.assertEqual(len(db.bulk_inserted), 2)
-        for table in ("er_dose_raw_equipment_count_log", "er_dose_euv_equipment_count_log"):
-            frames = [df for name, df in db.bulk_inserted if name == f"mbeat.{table}"]
-            self.assertEqual(len(frames), 1)
-            rows = frames[0].to_dict("records")
-            self.assertEqual([(r["eq_name"], r["source_count"], r["target_count"])
-                              for r in rows], [("EQ1", 3, 3), ("EQ2", 2, 2)])
-            self.assertTrue(all(r["target_date"] == target_date for r in rows))
-            self.assertTrue(all("data" not in r and "message" not in r for r in rows))
-
-    def test_run_recent_days_skips_when_counts_match_even_if_specific_row_is_missing(self):
-        target_date = datetime(2026, 5, 1).date()
-        raw_df = pd.DataFrame([
-            self._row(1, "dw-3411", SAMPLE_CONTENTS)
-        ])
-        db = FakeDB(
-            raw_df,
-            source_counts={target_date: 1},
-            target_counts={target_date: 1},
-        )
-        repo = ERDoseRepository(db)
-        processor = ERDoseProcessor(repo)
-
-        with redirect_stdout(StringIO()) as stdout:
-            processor.run_recent_days(
-                lookback_days=1,
-                reference_date=target_date,
-                chunk_size=100,
-            )
-
-        truncate_queries = [query for query, _, _ in db.executed if query.strip().upper().startswith("TRUNCATE")]
-        self.assertEqual(truncate_queries, [])
-        self.assertEqual(len(db.partition_inserts), 0)
-        self.assertIn("lookback_done start_date=2026-05-01 end_date=2026-05-01", stdout.getvalue())
-        self.assertIn("checked_dates=1 reloaded_dates=0 source_rows=0 inserted=0", stdout.getvalue())
 
     def test_insert_parsed_df_keeps_integer_columns_as_nullable_int(self):
         db = FakeDB(pd.DataFrame())
@@ -884,39 +713,33 @@ class ERDoseProcessorTest(unittest.TestCase):
         raise AssertionError(f"{table_name} was not inserted")
 
 
-    def test_summary_tables_delete_then_insert(self):
-        raw_df = pd.DataFrame(
-            [
-                self._row(1, "dw-3411", SAMPLE_CONTENTS, code_occur_time=datetime(2026, 6, 15, 10, 0, 0)),
-            ]
+    def test_explicit_date_truncates_and_reloads(self):
+        target_date = datetime(2026, 5, 1).date()
+        raw_df = pd.DataFrame([
+            self._row(1, "dw-3411", SAMPLE_CONTENTS)
+        ])
+        db = FakeDB(
+            raw_df,
+            source_counts={target_date: 1},
+            target_counts={target_date: 0},
+            distinct_source_counts={target_date: 0},
         )
-        db = FakeDB(raw_df)
         repo = ERDoseRepository(db)
         processor = ERDoseProcessor(repo)
-        processor.run(start_time=datetime(2026, 6, 15), end_time=datetime(2026, 6, 16), chunk_size=1000)
 
-        die_yield_queries = [
-            item for item in db.executed if "de_trend_die_yield_daily" in item[0].lower()
-        ]
-        root_cause_queries = [
-            item for item in db.executed if "de_trend_root_cause_daily" in item[0].lower()
-        ]
+        with redirect_stdout(StringIO()) as stdout:
+            processor.run(
+                target_date=target_date,
+                chunk_size=100,
+            )
 
-        self.assertEqual(len(die_yield_queries), 2)
-        self.assertTrue(die_yield_queries[0][0].strip().lower().startswith("delete"))
-        self.assertTrue(die_yield_queries[1][0].strip().lower().startswith("insert"))
-        self.assertEqual(die_yield_queries[0][1]["start_time"], datetime(2026, 6, 15))
-        self.assertNotIn("on conflict", die_yield_queries[1][0].lower())
-        self.assertIsNone(die_yield_queries[0][2])
-        self.assertIsNone(die_yield_queries[1][2])
-
-        self.assertEqual(len(root_cause_queries), 2)
-        self.assertTrue(root_cause_queries[0][0].strip().lower().startswith("delete"))
-        self.assertTrue(root_cause_queries[1][0].strip().lower().startswith("insert"))
-        self.assertEqual(root_cause_queries[0][1]["start_time"], datetime(2026, 6, 15))
-        self.assertNotIn("on conflict", root_cause_queries[1][0].lower())
-        self.assertIsNone(root_cause_queries[0][2])
-        self.assertIsNone(root_cause_queries[1][2])
+        truncate_queries = [query for query, _, _ in db.executed if query.strip().upper().startswith("TRUNCATE")]
+        self.assertEqual(truncate_queries, ["truncate table prism_common.er_dose_raw_parsed_1_prt_p20260501"])
+        self.assertEqual(len(db.partition_inserts), 1)
+        self.assertIsNone(db.executed[0][2])
+        analyze_queries = [item for item in db.executed if item[0] == "ANALYZE prism_common.er_dose_raw_parsed_1_prt_p20260501"]
+        self.assertEqual(len(analyze_queries), 1)
+        self.assertIsNone(analyze_queries[0][2])
 
 
 if __name__ == "__main__":

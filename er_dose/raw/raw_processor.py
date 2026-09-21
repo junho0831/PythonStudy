@@ -8,7 +8,6 @@ from typing import Any
 import pandas as pd
 
 from er_dose.common.reload_processor import CountReloadProcessor
-from er_dose.common.equipment_count_repository import write_equipment_count_log
 from er_dose.raw.raw_base import RawErLog
 from er_dose.raw.raw_parser import parse_dose_error
 from er_dose.raw.raw_repository import ERDoseRepository
@@ -36,26 +35,17 @@ class ERDoseProcessor(CountReloadProcessor):
         end_time: datetime | None = None,
         chunk_size: int = 10000,
         target_date: date | None = None,
-        lookback_days: int = 2,
-        reference_date: date | None = None,
     ) -> None:
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be greater than 0")
         if target_date is not None:
-            start_time = datetime.combine(target_date, datetime.min.time())
-            end_time = start_time + timedelta(days=1)
-
-        if start_time is None and end_time is None:
-            self.run_recent_days(
-                lookback_days=lookback_days,
-                reference_date=reference_date,
-                chunk_size=chunk_size,
-            )
+            self._reload_target_date(target_date=target_date, chunk_size=chunk_size)
             return
+
         if start_time is None or end_time is None:
             raise ValueError("start_time and end_time are required")
         if start_time >= end_time:
             raise ValueError("start_time must be earlier than end_time")
-        if chunk_size <= 0:
-            raise ValueError("chunk_size must be greater than 0")
 
         self._run_window(start_time=start_time, end_time=end_time, chunk_size=chunk_size)
 
@@ -166,17 +156,6 @@ class ERDoseProcessor(CountReloadProcessor):
 
         for target_date in sorted(inserted_target_dates):
             self.repository.analyze_target_partition(target_date, connection=connection)
-
-        self.repository.delete_die_yield_daily_summary(start_time, end_time)
-        self.repository.delete_root_cause_daily_summary(start_time, end_time)
-
-        self.repository.insert_die_yield_daily_summary(start_time, end_time)
-        self.repository.insert_root_cause_daily_summary(start_time, end_time)
-        write_equipment_count_log(self.repository, start_time, end_time)
-        write_equipment_count_log(
-            ERDoseEUVRepository(self.repository.db), start_time, end_time,
-        )
-        print("[ER_DOSE] summary updated (die_yield, root_cause, equipment_count)")
 
         print(
             "[ER_DOSE] "
@@ -296,31 +275,18 @@ class ERDoseEUVProcessor(CountReloadProcessor):
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         chunk_size: int = 10000,
-        lookback_days: int = 2,
-        reference_date: date | None = None,
         target_date: date | None = None,
     ) -> None:
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be greater than 0")
         if target_date is not None:
-            self.run_recent_days(
-                lookback_days=1,
-                reference_date=target_date,
-                chunk_size=chunk_size,
-            )
+            self._reload_target_date(target_date=target_date, chunk_size=chunk_size)
             return
 
-        if start_time is None and end_time is None:
-            self.run_recent_days(
-                lookback_days=lookback_days,
-                reference_date=reference_date,
-                chunk_size=chunk_size,
-            )
-            return
         if start_time is None or end_time is None:
             raise ValueError("start_time and end_time are required")
         if start_time >= end_time:
             raise ValueError("start_time must be earlier than end_time")
-        if chunk_size <= 0:
-            raise ValueError("chunk_size must be greater than 0")
 
         self._run_window(start_time=start_time, end_time=end_time, chunk_size=chunk_size)
 
